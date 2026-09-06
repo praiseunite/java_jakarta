@@ -233,6 +233,9 @@ mvn clean package
 Copy `target/server-ejb.war` to `$WILDFLY_HOME/standalone/deployments/`.
 
 ### In IntelliJ IDEA:
+
+![IntelliJ IDEA WildFly Configuration and Deployment](../assets/images/intellij_wildfly_setup.jpg)
+
 1. Open the `server-ejb` project.
 2. Go to **Run > Edit Configurations...**
 3. Click `+` and select **JBoss / WildFly Server > Local**.

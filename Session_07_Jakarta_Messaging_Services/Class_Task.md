@@ -304,7 +304,14 @@ public class AppMain {
 
 ## 🧪 Verification & Expected Output
 
-Run `AppMain.java` in **IntelliJ IDEA** or **Eclipse IDE**:
+### Running in IntelliJ IDEA:
+
+![IntelliJ IDEA Execution and Project View](../assets/images/intellij_wildfly_setup.jpg)
+
+#### IntelliJ Navigation Flow:
+1. **Navigate to Main Class:** In the **Project** window on the left, expand `src/main/java/com/jms/lab/` and double-click `AppMain.java`.
+2. **Execute:** Right-click inside `AppMain.java` (or click the green **Play** triangle in the left editor gutter next to line `public static void main`) and select **Run 'AppMain.main()'** (Keyboard shortcut: `Ctrl + Shift + F10` on Windows/Linux, `Ctrl + Shift + R` on macOS).
+3. **Inspect Output:** Watch the bottom **Run** terminal output to observe the active embedded broker start up, the asynchronous listener register, and the messages get consumed in real-time.
 
 ```
 =================================================

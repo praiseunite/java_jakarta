@@ -154,13 +154,22 @@ public class UppercaseDemo extends HttpServlet {
 }
 ```
 
-### Step 4: Deploy and Test
+### Step 4: Deploy and Test in IntelliJ IDEA
 
-1. Build your project and deploy the EAR file to WildFly.
-2. Open the WildFly server log. Ensure you see a line stating the JNDI bindings for `UpperCase` were successful. It should look something like:
-   `java:global/GlobalBankApp/GlobalBankEJB/UpperCase!demo.jndi.UpperCaseRemote`
-3. Open your web browser.
-4. Navigate to: `http://localhost:8080/GlobalBankWeb/UppercaseDemo` *(Adjust URL if your web context root is different).*
+![IntelliJ IDEA WildFly Configuration and Deployment](../assets/images/intellij_wildfly_setup.jpg)
+
+#### IntelliJ Navigation Flow:
+1. **Open Run Configurations:** At the top right of the IntelliJ toolbar, click the configuration dropdown (next to the green Run button) and choose **Edit Configurations...**
+2. **Confirm Deployment:** Select **WildFly Server > Local**, switch to the **Deployment** tab, and verify that your `war` / `ear` artifact is listed under **Deploy at the server startup**.
+3. **Run the Server:** Click the green **Play (Run)** icon (or press `Shift + F10`).
+4. **Inspect Console Logs:** At the bottom of IntelliJ, open the **Services** or **Terminal** tab. Watch the WildFly server log and verify the JNDI binding line appears:
+   ```
+   java:global/GlobalBankApp/GlobalBankEJB/UpperCase!demo.jndi.UpperCaseRemote
+   ```
+5. **Open Browser:** Navigate to:
+   ```
+   http://localhost:8080/GlobalBankWeb/UppercaseDemo
+   ```
 
 **Expected Output on Screen:**
 ```

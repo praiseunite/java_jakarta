@@ -84,14 +84,18 @@ public class TransferBean {
 }
 ```
 
-### Step 3: Test the Rollback Behavior
+### Step 3: Test the Rollback Behavior in IntelliJ IDEA
 
-1. Create a simple Servlet or a REST endpoint to call `TransferBean.transferFunds()`.
-2. Deploy the application to WildFly.
-3. Trigger the method.
-4. **Observe the WildFly Server Console Log.**
+![IntelliJ IDEA WildFly Configuration and Deployment](../assets/images/intellij_wildfly_setup.jpg)
 
-**What you should see in the logs:**
+#### IntelliJ Navigation Flow:
+1. **Verify Run Configuration:** In the top toolbar, ensure the target configuration is set to your **WildFly** instance.
+2. **Deploy & Run:** Click the green **Run** arrow (or press `Shift + F10`). IntelliJ automatically builds the artifact, packages the WAR/EAR, and deploys it to WildFly.
+3. **Open Terminal / Services Console:** At the bottom dock of IntelliJ, select the **Services** or **Terminal** tab to view the live WildFly log.
+4. **Trigger the Servlet:** Open your browser and access `http://localhost:8080/GlobalBankWeb/transfer` to execute `transferFunds()`.
+5. **Inspect the Console Output:**
+   Notice the independent commit of `AuditLogBean` followed by the rollback of `TransferBean`:
+
 ```
 Starting transfer transaction...
 >>> AUDIT SECURE LOG: Saved to database: Attempting transfer of $500.0 from ACC123

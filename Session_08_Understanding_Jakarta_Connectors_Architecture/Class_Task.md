@@ -403,7 +403,15 @@ public class AppMain {
 
 ## 🧪 Verification & Expected Output
 
-Run `AppMain.java` inside **IntelliJ IDEA** or **Eclipse IDE**:
+### Running in IntelliJ IDEA:
+
+![IntelliJ IDEA Execution and Project View](../assets/images/intellij_wildfly_setup.jpg)
+
+#### IntelliJ Navigation Flow:
+1. **Open Project:** Open `Session_08_JDBC_Lab` in IntelliJ IDEA.
+2. **Locate Main Class:** In the **Project** tool window on the left, navigate to `src/main/java/com/connector/lab/` and double-click `AppMain.java`.
+3. **Execute:** Click the green **Play** triangle in the left editor gutter next to `public static void main(String[] args)` and select **Run 'AppMain.main()'** (or press `Ctrl + Shift + F10` / `Ctrl + Shift + R`).
+4. **View Results:** In the bottom **Run** panel, observe the full JDBC lifecycle execute: table initialization (DDL), insertions with generated keys, query mappings, update, and deletion.
 
 ```
 =================================================

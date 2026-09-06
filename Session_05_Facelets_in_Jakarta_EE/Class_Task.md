@@ -1,8 +1,8 @@
-# Session 6 — Class Task (TIY - Try It Yourself)
+# Session 5 — Class Task (TIY - Try It Yourself)
 ## Facelets: Student Frontend Page
 
 **Course:** Enterprise Application Development in Jakarta EE
-**TL Session:** TL1 (Session 6)
+**TL Session:** TL1 (Session 5)
 **Duration:** 45 minutes
 
 ---
@@ -127,13 +127,21 @@ Now, we will create the XHTML page that uses JSF components (`h:inputText`, `h:c
 </html>
 ```
 
-### Step 3: Deployment and Testing
+### Step 3: Deployment and Testing in IntelliJ IDEA
 
-1. Ensure your `web.xml` is configured to map `FacesServlet` to `*.xhtml` (as shown in the Theory guide).
-2. Deploy the application to WildFly.
-3. Visit `http://localhost:8080/YourAppName/student_registration.xhtml`.
-4. Fill out the form and click "Register Student".
-5. Observe the UI updating with the success message without writing any Javascript or Manual Servlet `doPost()` logic! 
+![IntelliJ IDEA WildFly Configuration and Deployment](../assets/images/intellij_wildfly_setup.jpg)
+
+#### IntelliJ Navigation Flow:
+1. **Configure Web Artifact:** In IntelliJ IDEA, verify `web.xml` maps `FacesServlet` to `*.xhtml` (under `src/main/webapp/WEB-INF/web.xml`).
+2. **Open Run Configuration:** Select your **WildFly** configuration in the top right dropdown and ensure your `war` artifact is deployed.
+3. **Run Server:** Click the green **Run** button (or press `Shift + F10`).
+4. **Inspect Deployment Console:** In the bottom **Services / Terminal** tab, ensure WildFly starts and deploys the `.war` successfully without context errors.
+5. **Visit in Browser:** Open:
+   ```
+   http://localhost:8080/YourAppName/student_registration.xhtml
+   ```
+6. **Test the Form:** Fill out the input fields (Name, Last Name, Email, Future Goals) and click **Register Student**.
+7. **Observe UI State:** Notice how JSF automatically decodes the form parameters, invokes `registerStudent()`, and re-renders the component tree with your success message! 
 
 ---
 

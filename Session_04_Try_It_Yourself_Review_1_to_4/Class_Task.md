@@ -159,13 +159,21 @@ public class CheckoutServlet extends HttpServlet {
 }
 ```
 
-### Step 4: Deployment and Observation
+### Step 4: Deployment and Observation in IntelliJ IDEA
 
-1. Build and deploy your application.
-2. Watch the WildFly console carefully. 
-   - Note the JNDI names printed. Update your Servlet if necessary.
-   - Note if WildFly complains about the `@RolesAllowed` annotation (if you haven't configured a security domain, it might throw an `EJBAccessException`. If this happens, temporarily comment out `@RolesAllowed` just to test the transaction and stateful logic, then uncomment it).
-3. Visit `http://localhost:8080/GlobalBankWeb/Checkout` in your browser.
+![IntelliJ IDEA WildFly Configuration and Deployment](../assets/images/intellij_wildfly_setup.jpg)
+
+#### IntelliJ Navigation Flow:
+1. **Open Run Configurations:** At the top right of the IntelliJ toolbar, click the configuration dropdown (next to the green Run button) and choose **Edit Configurations...**
+2. **Confirm Deployment Artifact:** Select **WildFly Server > Local**, switch to the **Deployment** tab, and verify that `GlobalBankApp:ear` or `GlobalBankWeb:war` is selected under **Deploy at server startup**.
+3. **Run the Server:** Click the green **Play (Run)** icon (or press `Shift + F10`).
+4. **Watch the Console:** Open the bottom **Services** tab:
+   - Note the JNDI names printed in the console log. Update your Servlet if necessary.
+   - Note if WildFly reports `@RolesAllowed` security warnings (if you haven't configured users in `mgmt-users.properties`, temporarily comment out `@RolesAllowed` to test transaction logic).
+5. **Open Browser:** Visit:
+   ```
+   http://localhost:8080/GlobalBankWeb/Checkout
+   ```
 
 ---
 
