@@ -1,0 +1,300 @@
+<title>Programming From Zero</title>
+<meta name="description" content="Every word you need before the Jakarta EE course starts — programs, Java, classes, objects, methods, and more.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "00-foundations";</script>
+
+<main class="page">
+
+  <h1>Unit 00 · Programming from absolute zero</h1>
+  <p class="lede">The original course assumes you already know Java classes, objects, interfaces
+    and annotations. If you don’t — this unit gives you every term you’ll meet, each with a
+    one-line picture. Skim it now; come back whenever a word stops making sense.</p>
+
+  <div class="callout callout--key">
+    <span class="callout__i">🎯</span>
+    <div class="callout__b">
+      <b>Goal of this unit</b>
+      After this page, sentences like “an <em>enterprise bean</em> is a <em>class</em> with an
+      <em>annotation</em>, managed by a <em>container</em> on a <em>server</em>” should feel readable —
+      even if you can’t yet write one.
+    </div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>1. What is a program?</h2>
+  <p>A <strong>program</strong> is a list of precise instructions a computer follows, top to bottom.
+    A computer never guesses. If you don’t say it, it doesn’t happen.</p>
+  <div class="callout callout--analogy">
+    <span class="callout__i">🍳</span>
+    <div class="callout__b"><b>Analogy</b>
+      A recipe. “Heat pan. Add oil. Wait 30 seconds. Add egg.” Swap two steps and breakfast is ruined.
+      Code is a recipe with zero tolerance for vague steps.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>2. What is Java? What is the JVM?</h2>
+  <p><strong>Java</strong> is a programming language — a fixed vocabulary and grammar for writing those
+    instructions. You write Java in plain text files ending in <code>.java</code>.</p>
+  <p>The computer can’t run <code>.java</code> text directly. Two steps turn it into something that runs:</p>
+  <ol>
+    <li><strong>Compile</strong> — a tool called <code>javac</code> (the <em>Java compiler</em>) reads your
+      <code>.java</code> file and produces a <code>.class</code> file full of <strong>bytecode</strong>
+      (a compact instruction format).</li>
+    <li><strong>Run</strong> — a program called the <strong>JVM</strong> (Java Virtual Machine), launched
+      with the <code>java</code> command, reads the bytecode and actually does the work.</li>
+  </ol>
+  <div class="callout callout--analogy">
+    <span class="callout__i">🌍</span>
+    <div class="callout__b"><b>Why a “virtual machine”?</b>
+      The JVM is a pretend computer that behaves identically on Windows, macOS and Linux. Write once,
+      the same <code>.class</code> file runs everywhere there’s a JVM. That portability is a big reason
+      banks picked Java decades ago and still use it.</div>
+  </div>
+
+  <span class="eyebrow">try it</span>
+  <h2>3. Your first “it works” moment</h2>
+  <p>Here is a complete Java program. <code>System.out.println(...)</code> prints a line of text.
+    Press <strong>Run</strong> — the panel shows what the JVM would print. Then change the numbers and run again.</p>
+
+  <div class="bench" data-run="calc">
+    <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">live — edit the numbers</span></div>
+    <pre class="bench__code" contenteditable="true" spellcheck="false"><code>public class Demo {
+    public static void main(String[] args) {
+        int a = 10;
+        int b = 4;
+        // this course's calculator: add, subtract, multiply, divide
+        System.out.println("see the output below");
+    }
+}</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run</button>
+      <button class="btn-ghost" type="button" data-reset>Reset</button>
+      <span class="bench__hint">Set <code>b = 0</code> and run — watch the divide fail on purpose. (Ctrl+Enter also runs.)</span>
+    </div>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+  <p style="font-size:.9rem;color:var(--ink-faint)">This panel runs a JavaScript twin of the logic so
+    your edits really recompute. It is not a real JVM — but the behaviour matches.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>4. The building blocks, smallest to largest</h2>
+
+  <h3>Variable</h3>
+  <p>A named box that holds one value. <code>int score = 5;</code> makes a box called <code>score</code>
+    holding the number 5. Later <code>score = 6;</code> replaces what’s in the box.</p>
+
+  <h3>Type</h3>
+  <p>What kind of value a box may hold. Common ones: <code>int</code> (whole number),
+    <code>double</code> (decimal number), <code>boolean</code> (<code>true</code>/<code>false</code>),
+    <code>String</code> (text, always in double quotes: <code>"hello"</code>).
+    Java checks types before running, so <code>int x = "hello";</code> won’t even compile.</p>
+
+  <h3>Method</h3>
+  <p>A named, reusable block of steps — often taking some input and giving back a result.</p>
+  <pre><code>// name: add   inputs: two ints   gives back: an int
+int add(int a, int b) {
+    return a + b;      // "return" hands the answer back to whoever called add(...)
+}</code></pre>
+  <p>You <em>call</em> it by name: <code>add(2, 3)</code> produces <code>5</code>.</p>
+
+  <h3>Class</h3>
+  <p>A blueprint that groups related data and methods under one name. A <code>BankAccount</code> class
+    might hold a <code>balance</code> and offer <code>deposit(...)</code> and <code>withdraw(...)</code> methods.</p>
+
+  <h3>Object (a.k.a. instance)</h3>
+  <p>An actual thing built from a class blueprint, created with the <code>new</code> keyword:
+    <code>BankAccount acc = new BankAccount();</code>. One class, many objects — like one cookie
+    cutter, many cookies. Each object has its own copy of the data.</p>
+  <div class="callout">
+    <span class="callout__i">🔑</span>
+    <div class="callout__b"><b>Remember this pair</b>
+      <strong>Class</strong> = the plan. <strong>Object</strong> = a real item made from the plan.
+      Almost everything in Java is an object created from some class.</div>
+  </div>
+
+  <h3>Interface</h3>
+  <p>A promise about <em>what</em> methods exist, with no code for <em>how</em> they work. It’s a contract.</p>
+  <pre><code>interface Greeter {
+    String greet(String name);   // any Greeter MUST provide this method
+}</code></pre>
+  <p>A class then <em>implements</em> the interface and supplies the real code:
+    <code>class FriendlyGreeter implements Greeter { ... }</code>. Other code can say “give me any
+    <code>Greeter</code>” without caring which one. This is how Jakarta EE lets your code talk to a
+    bean without knowing the bean’s real class.</p>
+
+  <h3>Inheritance (lightly)</h3>
+  <p><code>class Cat extends Animal</code> means <code>Cat</code> gets everything <code>Animal</code>
+    has, plus its own extras. You’ll mostly see this as <code>extends HttpServlet</code> — “my class
+    is a kind of servlet”.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>5. Packages &amp; imports</h2>
+  <p>Real projects have thousands of classes, so they’re filed into <strong>packages</strong> — like
+    folders, written with dots: <code>com.globalbank.accounts</code>. The first line of a file declares
+    its package. To use a class from another package you <code>import</code> it:</p>
+  <pre><code>package com.globalbank.web;
+
+import jakarta.ejb.Stateless;   // "let me use the Stateless class from jakarta.ejb"</code></pre>
+  <div class="callout callout--mistake">
+    <span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>You will meet <code>jakarta.*</code> and <code>javax.*</code></b>
+      Years ago these packages were named <code>javax.*</code>. Most were renamed to
+      <code>jakarta.*</code>. A few kept the old name on purpose — <code>javax.sql</code>,
+      <code>javax.naming</code>. So <code>import javax.naming.InitialContext;</code> is <em>correct</em>,
+      but <code>import jakarta.naming.InitialContext;</code> does <em>not exist</em>. Unit 05 flags this.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>6. Annotations — the <code>@</code> things</h2>
+  <p>An <strong>annotation</strong> is a label you stick on a class or method that some tool reads later
+    to change how the code is treated. It’s not instructions that “run”; it’s a sticky note with meaning.</p>
+  <pre><code>@Stateless                 // sticky note: "server, treat this as a stateless bean"
+public class CalculatorBean implements CalculatorRemote {
+    @Override               // sticky note to the compiler: "this replaces a method from the interface"
+    public int add(int a, int b) { return a + b; }
+}</code></pre>
+  <p>The whole of Jakarta EE is basically: <em>write a normal class, add a few annotations, and the
+    server does the heavy lifting the annotations describe</em> (transactions, security, pooling…).</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>7. Collections &amp; generics</h2>
+  <p>You rarely have exactly one of something. A <strong>collection</strong> holds many values.</p>
+  <ul>
+    <li><code>List&lt;String&gt;</code> — an ordered sequence of Strings. <code>list.add("a")</code>,
+      <code>list.get(0)</code>.</li>
+    <li><code>Map&lt;String, Integer&gt;</code> — lookup by key. <code>map.get("apples")</code> → the count.</li>
+  </ul>
+  <p>The <code>&lt; &gt;</code> part is <strong>generics</strong>: it tells Java what’s inside, so
+    <code>List&lt;String&gt;</code> only accepts Strings and you never have to guess the type coming out.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>8. Exceptions &amp; stack traces</h2>
+  <p>When something goes wrong at runtime, Java <strong>throws an exception</strong> — it stops the
+    current work and reports an error object (e.g. <code>NullPointerException</code>,
+    <code>ArithmeticException</code>). You can <code>try { ... } catch (Exception e) { ... }</code> to
+    handle it instead of crashing.</p>
+  <p>The printout that follows an error is a <strong>stack trace</strong>: the chain of method calls that
+    led to the failure, most recent first. Reading skill you’ll use forever:</p>
+  <pre><code>java.lang.ArithmeticException: / by zero
+    at com.example.CalculatorBean.divide(CalculatorBean.java:42)   &lt;-- the real culprit line
+    at com.example.Main.main(Main.java:11)
+Caused by: ...                                                     &lt;-- look here for the ROOT cause</code></pre>
+  <p>Rule: scroll to the <strong>first line of your own code</strong> in the trace, and read any
+    <strong>“Caused by:”</strong> at the bottom. Unit 16 practises this.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>9. Libraries, JARs &amp; “an API”</h2>
+  <p>A <strong>library</strong> is someone else’s prewritten code you reuse. Java libraries ship as
+    <strong>JAR</strong> files (a <code>.jar</code> is just a zip of <code>.class</code> files).</p>
+  <p>An <strong>API</strong> (Application Programming Interface) is the set of classes and methods a
+    library offers you to call — its “control panel”. “The JMS API” means “the classes you use to do
+    messaging”. You’ll hear *API* constantly; it just means *the callable surface of some component*.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>10. Build tools &amp; <code>pom.xml</code></h2>
+  <p>Typing <code>javac</code> by hand for hundreds of files, downloading every JAR manually — no.
+    A <strong>build tool</strong> does it. This course uses <strong>Maven</strong>.</p>
+  <p>You describe the project once in a file called <code>pom.xml</code>:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tag</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>groupId</code></td><td>Your organisation, e.g. <code>com.globalbank</code>.</td></tr>
+      <tr><td><code>artifactId</code></td><td>This project’s name, e.g. <code>accounts-ejb</code>.</td></tr>
+      <tr><td><code>version</code></td><td>e.g. <code>1.0.0</code>.</td></tr>
+      <tr><td><code>packaging</code></td><td>What to build: <code>jar</code>, <code>war</code> (web app), or <code>ear</code> (enterprise bundle).</td></tr>
+      <tr><td><code>dependency</code></td><td>A library you need. Maven downloads it for you.</td></tr>
+      <tr><td><code>&lt;scope&gt;provided&lt;/scope&gt;</code></td><td>“Don’t bundle this — the server already has it.” Used for the Jakarta EE API.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Then <code>mvn clean package</code> builds everything into a <code>target/</code> folder. Try it:</p>
+
+  <div class="terminal" data-terminal="setup">
+    <div class="terminal__bar"></div>
+    <div class="terminal__screen"></div>
+    <div class="terminal__inputline"></div>
+  </div>
+  <p style="font-size:.9rem;color:var(--ink-faint)">Try: <code>help</code>, then <code>java -version</code>,
+    <code>cat pom.xml</code>, <code>mvn clean package</code>. Use ↑ to repeat a command.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>11. Servers, clients, HTTP</h2>
+  <p>A <strong>server</strong> is a program that stays running and waits for requests. A
+    <strong>client</strong> is whatever sends a request (a browser, a phone app, another program).</p>
+  <p><strong>HTTP</strong> is the request/response language of the web. A client sends a
+    <em>request</em> (“GET me the page at <code>/accounts/123</code>”); the server sends back a
+    <em>response</em> (some HTML or data, plus a status code like <code>200 OK</code> or
+    <code>404 Not Found</code>). Web addresses starting <code>http://localhost:8080</code> mean
+    “a server on this same machine, listening on port 8080” — which is exactly where WildFly runs.</p>
+  <div class="callout callout--analogy">
+    <span class="callout__i">🏪</span>
+    <div class="callout__b"><b>Analogy</b>
+      Server = a shop that’s always open. Client = a customer. HTTP = the language they order in.
+      Port = which counter you walk up to.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>12. Databases &amp; SQL</h2>
+  <p>A <strong>database</strong> stores data that must survive after the program stops — accounts,
+    orders, users. A <strong>relational database</strong> (PostgreSQL, MySQL, H2…) stores it in
+    <strong>tables</strong>: rows and named columns, like a spreadsheet with rules.</p>
+  <p><strong>SQL</strong> is the language for talking to it:</p>
+  <pre><code>SELECT balance FROM accounts WHERE account_id = 123;   -- read one value
+INSERT INTO accounts (account_id, balance) VALUES (124, 0);   -- add a row
+UPDATE accounts SET balance = 500 WHERE account_id = 124;     -- change a row</code></pre>
+  <p>Your Java code sends SQL to the database and gets rows back. Units 12–13 show two ways to do that
+    (raw JDBC, and JPA which hides most of the SQL).</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>13. The words this course leans on</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Word</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Container</strong></td><td>The part of the server that creates, manages and destroys your objects, and wraps them with services (security, transactions). You don’t call <code>new</code> — the container does.</td></tr>
+      <tr><td><strong>Bean</strong></td><td>Just “a class the container manages for you.” An <em>enterprise bean</em> is one with EJB annotations like <code>@Stateless</code>.</td></tr>
+      <tr><td><strong>Deploy</strong></td><td>Hand your built <code>.war</code>/<code>.ear</code> to the server so it starts running it.</td></tr>
+      <tr><td><strong>Inject</strong></td><td>“The container fills this field in for me.” You declare <code>@Inject SomeService s;</code> and the container hands you a ready object.</td></tr>
+      <tr><td><strong>Instance</strong></td><td>Same thing as an object — one concrete item made from a class.</td></tr>
+      <tr><td><strong>Transaction</strong></td><td>A group of steps that must <em>all</em> succeed or <em>all</em> be undone. Unit 06.</td></tr>
+      <tr><td><strong>Asynchronous</strong></td><td>“Send it and carry on; the result comes later.” The opposite of waiting (synchronous). Unit 11.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The full A–Z is in the <a href="glossary.html">glossary</a>, linked from every unit.</p>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"You wrote Calculator.java. What turns it into something the JVM can run?","opts":["The java command","The javac compiler, producing a .class file","Maven's pom.xml","The web browser"],"a":1,"why":"javac compiles .java text into .class bytecode; then the java command starts the JVM to run that bytecode."},
+      {"q":"A class vs an object:","opts":["They are the same thing","A class is the blueprint; an object is a real item built from it with new","An object is the blueprint; a class is the copy","Only servers have objects"],"a":1,"why":"One class (blueprint) can produce many objects (instances), each with its own data."},
+      {"q":"What is an interface?","opts":["A screen the user sees","A promise of what methods exist, with no implementation","A type of database","Another word for a JAR file"],"a":1,"why":"An interface is a contract: it lists method signatures. A class implements it and supplies the real code."},
+      {"q":"Which import is valid?","opts":["import jakarta.naming.InitialContext;","import javax.naming.InitialContext;","Both","Neither"],"a":1,"why":"JNDI stayed under javax.naming. There is no jakarta.naming package — a real bug to watch for in Unit 05."},
+      {"q":"An annotation like @Stateless...","opts":["Runs a block of code immediately","Is a label a tool reads later to change how the class is treated","Is a comment the computer ignores","Creates a new database table"],"a":1,"why":"Annotations carry meaning for tools/servers. @Stateless tells the container to manage the class as a stateless bean."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>Program</td><td>Exact instructions, run top to bottom.</td></tr>
+    <tr><td>Java / JVM</td><td>Language; the pretend machine that runs compiled bytecode anywhere.</td></tr>
+    <tr><td>Variable / type</td><td>A named box; the kind of value it may hold.</td></tr>
+    <tr><td>Method</td><td>A named reusable block, often input → result.</td></tr>
+    <tr><td>Class / object</td><td>Blueprint / a real item made from it with <code>new</code>.</td></tr>
+    <tr><td>Interface</td><td>A contract of methods; classes implement it.</td></tr>
+    <tr><td>Package / import</td><td>Folders for classes; permission to use one from elsewhere.</td></tr>
+    <tr><td>Annotation</td><td>A meaningful sticky note (<code>@Stateless</code>) a tool reads.</td></tr>
+    <tr><td>Exception / stack trace</td><td>A runtime error; the call chain that caused it.</td></tr>
+    <tr><td>Library / JAR / API</td><td>Reused code; its zip file; its callable surface.</td></tr>
+    <tr><td>Maven / pom.xml</td><td>Build tool; the file describing the project + its libraries.</td></tr>
+    <tr><td>Server / client / HTTP</td><td>Always-on program; requester; their request/response language.</td></tr>
+    <tr><td>Database / SQL</td><td>Where data survives; the language to read/write it.</td></tr>
+    <tr><td>Container / bean / deploy / inject</td><td>Manager of your objects / a managed class / hand it to the server / let the container fill a field.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
+<script src="assets/js/terminal.js"></script>

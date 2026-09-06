@@ -1,0 +1,106 @@
+<title>Enterprise Java, From Zero</title>
+<meta name="description" content="A beginner-first, interactive Jakarta EE course you run in your browser — offline.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "index";</script>
+
+<main class="page">
+
+  <section class="hero">
+    <span class="tag">Interactive · offline · no experience assumed</span>
+    <h1>Enterprise Java, from absolutely zero</h1>
+    <p>A rebuilt, plain-language course in Jakarta EE (the “big” server-side Java used by
+       banks, airlines and governments). Every idea starts with a real-world story, every
+       code sample has a <strong>Run</strong> button, and you can practise the developer
+       commands in a safe pretend terminal.</p>
+    <span class="cta">
+      <a class="primary" id="resumeBtn" href="00-foundations.html">Start at Unit 00 →</a>
+      <a class="secondary" href="glossary.html">Open the glossary</a>
+    </span>
+  </section>
+
+  <span class="eyebrow">how this works</span>
+  <h2>Read a little, then do a little</h2>
+  <p>Each unit follows the same rhythm so you always know where you are:</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Block</th><th>What it means when you see it</th></tr></thead>
+      <tbody>
+        <tr><td><code>// concept</code></td><td>Plain explanation with a story or analogy first, jargon second.</td></tr>
+        <tr><td><code>// try it</code></td><td>A code panel with a <strong>Run</strong> button. Some are <em>live</em> — change a number, run it again, watch the answer change. Others replay the exact output a real server would print.</td></tr>
+        <tr><td><code>// terminal</code></td><td>A simulated shell. Type real commands like <code>java -version</code> or <code>mvn clean package</code> and see realistic output. It touches nothing on your machine.</td></tr>
+        <tr><td><code>// check yourself</code></td><td>A few multiple-choice questions with instant explanations.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout callout--key">
+    <span class="callout__i">✓</span>
+    <div class="callout__b">
+      <b>Nothing to install to read this</b>
+      Your progress (ticked units, quiz answers, theme) is saved in this browser only.
+      Unit 01 shows you how to install the real tools when you’re ready to build for real.
+    </div>
+  </div>
+
+  <span class="eyebrow">the path</span>
+  <h2>The full syllabus</h2>
+  <p>Seventeen units. Do them in order the first time — each one leans on the one before.</p>
+
+  <h3>Start here</h3>
+  <div class="cardgrid" id="grid-start"></div>
+  <h3>The core idea</h3>
+  <div class="cardgrid" id="grid-core"></div>
+  <h3>Wiring things together</h3>
+  <div class="cardgrid" id="grid-wire"></div>
+  <h3>Building the web tier</h3>
+  <div class="cardgrid" id="grid-web"></div>
+  <h3>Filling the gaps</h3>
+  <div class="cardgrid" id="grid-gaps"></div>
+
+  <hr>
+  <p style="color:var(--ink-faint);font-size:.9rem">
+    This is a beginner-facing companion to the original session notes in this repository.
+    Where the two disagree, the fixes noted in each unit’s “what changed” box are the
+    corrected version.
+  </p>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script>
+document.addEventListener("course:ready", function () {
+  var P = window.Course.PAGES, done = window.Course.done();
+  var groups = {
+    "grid-start": ["00-foundations", "01-setup"],
+    "grid-core":  ["02-what-is-jakarta-ee", "03-session-beans", "04-entity-and-mdb"],
+    "grid-wire":  ["05-jndi-and-resources", "06-transactions", "07-concurrency-security", "08-review-integration"],
+    "grid-web":   ["09-facelets-jsf", "10-local-remote-clients", "11-messaging-jms", "12-connectors-jdbc"],
+    "grid-gaps":  ["13-jpa-persistence", "14-cdi", "15-rest-jaxrs", "16-testing"]
+  };
+  Object.keys(groups).forEach(function (gid) {
+    var host = document.getElementById(gid);
+    groups[gid].forEach(function (slug) {
+      var m = P.find(function (x) { return x.slug === slug; });
+      if (!m) return;
+      var a = document.createElement("a");
+      a.className = "card" + (done[slug] ? " is-done" : "");
+      a.href = m.file;
+      a.setAttribute("data-slug", slug);
+      a.innerHTML = "<span class='k'>" + m.unit + "</span><b>" + m.title + "</b>";
+      host.appendChild(a);
+    });
+  });
+  // resume link -> first not-done content page
+  var order = ["00-foundations","01-setup","02-what-is-jakarta-ee","03-session-beans","04-entity-and-mdb",
+    "05-jndi-and-resources","06-transactions","07-concurrency-security","08-review-integration",
+    "09-facelets-jsf","10-local-remote-clients","11-messaging-jms","12-connectors-jdbc",
+    "13-jpa-persistence","14-cdi","15-rest-jaxrs","16-testing"];
+  var next = order.find(function (s) { return !done[s]; });
+  var btn = document.getElementById("resumeBtn");
+  if (next && next !== "00-foundations") {
+    var m = window.Course.PAGES.find(function (x) { return x.slug === next; });
+    btn.href = m.file;
+    btn.textContent = "Resume: " + m.title + " →";
+  }
+});
+</script>

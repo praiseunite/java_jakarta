@@ -1,0 +1,149 @@
+<title>Messaging with JMS</title>
+<meta name="description" content="Asynchronous messaging: queues vs topics, producers and consumers, the simplified JMSContext API, and request-reply.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "11-messaging-jms";</script>
+
+<main class="page">
+
+  <h1>Unit 11 · Messaging with JMS</h1>
+  <p class="lede">Sometimes you don’t want to wait. <strong>Jakarta Messaging (JMS)</strong> lets one
+    part of a system drop a message and move on; another part picks it up later. The middleman that
+    stores and routes messages is a <strong>message broker</strong>.</p>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Recap</b> An MDB (Unit 04) is a bean that consumes messages. This unit
+      is the messaging system it plugs into — and how to send messages yourself.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Synchronous vs asynchronous</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Synchronous call (RMI / REST)</th><th>Asynchronous message (JMS)</th></tr></thead>
+    <tbody>
+      <tr><td>Caller</td><td>Blocks until the answer comes back</td><td>Sends, continues immediately</td></tr>
+      <tr><td>Both sides online?</td><td>Must be, at the same time</td><td>No — the broker holds the message until the consumer is up</td></tr>
+      <tr><td>Target down</td><td>Immediate error</td><td>Message waits in the broker (guaranteed delivery)</td></tr>
+      <tr><td>Traffic spike</td><td>Overwhelms the target</td><td>Queue absorbs it, drained at a steady rate</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Two delivery styles</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>Point-to-Point — <code>Queue</code></th><th>Publish/Subscribe — <code>Topic</code></th></tr></thead>
+    <tbody>
+      <tr><td>Delivery</td><td>Each message goes to <strong>exactly one</strong> consumer</td><td>Every subscriber gets <strong>its own copy</strong></td></tr>
+      <tr><td>Picture</td><td>A ticket queue at a counter</td><td>A radio broadcast</td></tr>
+      <tr><td>Offline consumer</td><td>Message waits in the queue</td><td>Missed, unless the subscription is <em>durable</em></td></tr>
+      <tr><td>Use for</td><td>Order processing, transactions, batch jobs</td><td>Price updates, notifications, news feeds</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>The pieces</h2>
+  <ul>
+    <li><strong>Broker / provider</strong> — the messaging server (WildFly’s embedded Artemis, Apache
+      ActiveMQ, RabbitMQ…).</li>
+    <li><strong>ConnectionFactory</strong> — an <em>administered object</em> (configured on the server,
+      looked up via JNDI) that knows how to connect to the broker.</li>
+    <li><strong>Destination</strong> — the <code>Queue</code> or <code>Topic</code>, also an
+      administered object.</li>
+    <li><strong>Producer</strong> sends; <strong>Consumer</strong> receives (by polling with
+      <code>receive()</code>, or via a <code>MessageListener</code> callback like an MDB).</li>
+  </ul>
+
+  <span class="eyebrow">concept</span>
+  <h2>Classic API vs simplified API</h2>
+  <div class="code-head">Classic (JMS 1.1) — lots of ceremony</div>
+  <pre><code>Connection connection = factory.createConnection();
+connection.start();
+Session session = connection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+Queue queue = (Queue) ctx.lookup("java:/jms/queue/OrderQueue");
+MessageProducer producer = session.createProducer(queue);
+producer.send(session.createTextMessage("Order #1001"));
+session.close();
+connection.close();</code></pre>
+
+  <div class="code-head">Simplified (JMS 2.0+ / Jakarta Messaging) — one resource</div>
+  <pre><code>try (JMSContext ctx = factory.createContext(JMSContext.AUTO_ACKNOWLEDGE)) {
+    ctx.createProducer().send(queue, "Order #1001");
+}   // JMSContext is AutoCloseable — connection + session managed for you</code></pre>
+  <p><code>JMSContext</code> bundles the old <code>Connection</code> + <code>Session</code> into one
+    auto-closing object. Prefer it.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Note on <code>javax.jms</code> vs <code>jakarta.jms</code></b>
+      The original Session 7 lab uses <code>import javax.jms.*</code> — correct for
+      <strong>ActiveMQ 5.18</strong>, whose client still uses the old package. On a Jakarta EE 10
+      server (WildFly + Artemis) the import is <code>jakarta.jms.*</code>. Match the package to the
+      library you actually put on the classpath.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Message structure &amp; body types</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Section</th><th>Holds</th></tr></thead>
+    <tbody>
+      <tr><td>Header</td><td>System fields: <code>JMSMessageID</code>, <code>JMSDestination</code>, <code>JMSReplyTo</code>, <code>JMSCorrelationID</code>, <code>JMSTimestamp</code></td></tr>
+      <tr><td>Properties</td><td>Your own key/value pairs — used for filtering (“selectors”)</td></tr>
+      <tr><td>Body</td><td><code>TextMessage</code> (String), <code>ObjectMessage</code> (Serializable), <code>BytesMessage</code>, <code>MapMessage</code>, <code>StreamMessage</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Request–reply over one-way queues</h2>
+  <p>Messaging is one-way, so how does a sender match a reply to its request? Two headers:
+    <strong><code>JMSReplyTo</code></strong> (which queue to answer on) and
+    <strong><code>JMSCorrelationID</code></strong> (a unique tag the reply must echo back).</p>
+
+  <div class="bench" data-run="canned">
+    <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">replay — request/reply</span></div>
+    <pre class="bench__code"><code>// client sends 2 requests with reply-to + correlation IDs, then waits for matches
+send("CHECK_BALANCE ACC-9871", replyTo=REPLY_Q, corrId="CORR-1")
+send("RESET_PIN USR-5542",     replyTo=REPLY_Q, corrId="CORR-2")</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run</button>
+      <span class="bench__hint">Replies can arrive in any order; the client matches them by correlation ID.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[client]  -> REQUEST_Q : CHECK_BALANCE ACC-9871   (CORR-1, JMSReplyTo=REPLY_Q)
+[client]  -> REQUEST_Q : RESET_PIN USR-5542       (CORR-2, JMSReplyTo=REPLY_Q)
+[processor] handling CORR-2 ... -> REPLY_Q : "CONFIRMED: pin reset" (CORR-2)
+[processor] handling CORR-1 ... -> REPLY_Q : "CONFIRMED: balance = 4210.55" (CORR-1)
+[client]  matched CORR-1 -> balance = 4210.55
+[client]  matched CORR-2 -> pin reset
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <p>Always give <code>receive()</code> a timeout — <code>consumer.receive(5000)</code> — so a failed
+    processor can’t hang your client forever.</p>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"A message on a Queue is delivered to...","opts":["Every consumer listening","Exactly one consumer","No one until a Topic is created","The database"],"a":1,"why":"Point-to-Point: one message, one consumer. Topics broadcast a copy to every subscriber."},
+      {"q":"Which destination for live stock-price updates to many screens?","opts":["Queue","Topic","Neither — use REST","A DataSource"],"a":1,"why":"Publish/Subscribe: every subscriber gets its own copy of each published message."},
+      {"q":"What does JMSContext replace from the classic API?","opts":["The broker","Connection + Session, in one AutoCloseable object","The Queue","The MessageListener"],"a":1,"why":"The simplified API folds connection and session management into JMSContext."},
+      {"q":"ConnectionFactory and Queue/Topic are 'administered objects', meaning...","opts":["Your code creates them with new at runtime","They're configured on the server by an admin and looked up via JNDI","They only exist in tests","They are database tables"],"a":1,"why":"Administered objects are provisioned server-side; clients obtain them by JNDI lookup."},
+      {"q":"How does a request-reply client match a reply to its original request?","opts":["By message order (FIFO)","By comparing JMSCorrelationID on the reply to the one it set on the request","By the message body text","It can't"],"a":1,"why":"JMSReplyTo says where to answer; JMSCorrelationID ties each reply to its request, even out of order."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>JMS</td><td>Asynchronous messaging via a broker; sender doesn’t wait.</td></tr>
+    <tr><td>Queue</td><td>Point-to-point: one message → one consumer.</td></tr>
+    <tr><td>Topic</td><td>Publish/subscribe: one message → every subscriber gets a copy.</td></tr>
+    <tr><td>JMSContext</td><td>Simplified API; auto-closes connection + session.</td></tr>
+    <tr><td>Request-reply</td><td><code>JMSReplyTo</code> + <code>JMSCorrelationID</code>; always time out <code>receive()</code>.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

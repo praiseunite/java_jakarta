@@ -85,6 +85,14 @@ Create a standard Maven project named `Session_07_JMS_Lab`.
 
 ---
 
+> 📦 **Which package: `javax.jms` or `jakarta.jms`?** This lab uses `import javax.jms.*` on purpose —
+> the **ActiveMQ 5.18** client library still ships the messaging API under the old `javax.jms` name,
+> so that is what compiles here. On a Jakarta EE 10 server (WildFly + Artemis, ActiveMQ 5.19+) the
+> same classes live under `jakarta.jms.*`. **Rule:** match the `import` prefix to the messaging
+> library that is actually on your classpath, not to the "Jakarta" branding.
+
+---
+
 ## 📋 STEP 2 — Create the Embedded Broker Manager
 
 To eliminate the need for running an external binary or bat script during class exercises, we will create an embedded ActiveMQ broker that spins up automatically inside our application on `tcp://localhost:61616`.
