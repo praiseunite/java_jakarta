@@ -66,7 +66,7 @@ Think of it this way:
 
 JNDI has a two-part architecture:
 
-![JNDI Architecture](/Users/mac/.gemini/antigravity/brain/04f4ab8f-3331-438d-995a-883844318d5f/jndi_architecture_1785735733575.png)
+![JNDI Architecture](../assets/images/jndi_architecture_1785735733575.png)
 
 > 📌 **Key Point**: Your application code uses the **JNDI API** layer only. You never call WildFly-specific code. This means if your company switches from WildFly to WebLogic, your JNDI lookup code does NOT change. Only the SPI layer (handled by the server vendor) changes.
 
@@ -259,7 +259,7 @@ Connection conn = ds.getConnection();
 
 **Connection pooling** is the technique of keeping a "pool" of pre-established database connections ready so that application code can grab one when needed and return it when done — without the cost of creating a new physical connection each time.
 
-![Connection Pooling](/Users/mac/.gemini/antigravity/brain/04f4ab8f-3331-438d-995a-883844318d5f/connection_pool_1785735753522.png)
+![Enterprise JNDI and Database Connection Pooling Architecture](../assets/images/jndi_connection_pool.jpg)
 
 ---
 

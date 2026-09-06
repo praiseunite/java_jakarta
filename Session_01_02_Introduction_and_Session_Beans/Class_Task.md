@@ -11,10 +11,10 @@
 ## Objective
 
 By the end of this class task, you will have:
-- Created your **very first EJB project** in Eclipse
+- Created your **very first EJB project** in IntelliJ IDEA (or Eclipse)
 - Written and deployed a **Stateless Session Bean**
-- Written a client that calls the bean remotely
-- Seen the results running on WildFly
+- Written a client that calls the bean
+- Seen the results running live on WildFly
 
 This is your "Hello, World!" of Jakarta Enterprise Beans.
 
@@ -23,9 +23,9 @@ This is your "Hello, World!" of Jakarta Enterprise Beans.
 ## What You Need Before Starting
 
 Make sure all of these are ready:
-- [ ] Eclipse IDE for Enterprise Java is open
-- [ ] WildFly server is installed in Eclipse and can be started
-- [ ] `jakarta.jakartaee-api-9.0.0.jar` is downloaded (we will add it to the build path in Step 4)
+- [ ] IntelliJ IDEA (or Eclipse IDE for Enterprise Java) is open
+- [ ] WildFly server is installed and can be started
+- [ ] Maven or `jakarta.jakartaee-api` dependency configured
 - [ ] You have completed the Environment Setup guide (00a)
 
 ---
@@ -38,8 +38,18 @@ You are a junior developer at **ZenTech Solutions**. Your team leader has asked 
 
 ## Step-by-Step Instructions
 
-### STEP 1 — Create a New EJB Project in Eclipse
+### STEP 1 — Create a New EJB Project
 
+#### Option A: In IntelliJ IDEA (Recommended)
+1. Launch IntelliJ IDEA and click **New Project**.
+2. Select **Jakarta EE** (or Maven archetype).
+3. **Template:** Web application or EJB.
+4. **Application Server:** Select your configured WildFly instance.
+5. In your `pom.xml`, ensure `jakarta.jakartaee-api` is present with `<scope>provided</scope>`.
+
+![IntelliJ IDEA WildFly Configuration](../assets/images/intellij_wildfly_setup.jpg)
+
+#### Option B: In Eclipse IDE
 **1a.** Launch Eclipse. On the top menu bar, click:
 ```
 File → New → Project

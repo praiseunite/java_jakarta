@@ -135,7 +135,7 @@ Once a transaction is committed, the changes are permanently saved. A power fail
 
 ### ACID Summary Table
 
-![ACID Properties](/Users/mac/.gemini/antigravity/brain/04f4ab8f-3331-438d-995a-883844318d5f/acid_properties_1785735764327.png)
+![ACID Properties](../assets/images/acid_properties_1785735764327.png)
 
 ---
 
@@ -147,6 +147,8 @@ In Jakarta EE, transactions are managed by two related technologies:
 |---|---|---|
 | **JTA** | Jakarta Transaction API | The API your application uses to interact with transactions. It is the interface between your code and the transaction manager. |
 | **JTS** | Jakarta Transaction Service | The underlying specification that JTA is built on. Vendors implement JTS on their servers. |
+
+![JTA 2-Phase Commit (2PC) in Jakarta EE](../assets/images/jta_twophase_commit.jpg)
 
 ```
 YOUR EJB CODE
@@ -251,7 +253,7 @@ public void logAuditEvent(String event) {
 
 **Use case**: Audit logging. You always want the audit log to be saved, even if the main business transaction fails. If you used `REQUIRED`, a rollback of the main transaction would also erase the audit log entry — which defeats the purpose of auditing.
 
-![REQUIRES_NEW Timeline](/Users/mac/.gemini/antigravity/brain/04f4ab8f-3331-438d-995a-883844318d5f/transaction_timeline_1785735816484.png)
+![REQUIRES_NEW Timeline](../assets/images/transaction_timeline_1785735816484.png)
 
 ---
 
@@ -844,7 +846,7 @@ Jakarta EE provides a comprehensive, layered security model.
 
 ### Three Layers of Enterprise Application Security
 
-![Jakarta EE Security Layers](/Users/mac/.gemini/antigravity/brain/04f4ab8f-3331-438d-995a-883844318d5f/security_layers_1785735773741.png)
+![Jakarta EE Security Layers](../assets/images/security_layers_1785735773741.png)
 
 ---
 

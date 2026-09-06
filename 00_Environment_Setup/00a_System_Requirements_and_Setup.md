@@ -36,9 +36,10 @@ Here is a complete list of everything you need, in the order you will install it
 | # | Software | Version Required | Purpose | Free? |
 |---|---|---|---|---|
 | 1 | **Java JDK** | JDK 17 LTS or JDK 21 LTS | The core Java runtime to compile and run Java programs | ✅ Yes |
-| 2 | **Eclipse IDE** | 2022-09 (Enterprise Edition) | The code editor (IDE) where you write your programs | ✅ Yes |
+| 2 | **IntelliJ IDEA (Primary)** | Ultimate or Community Edition | The primary modern IDE where you write, test, and run enterprise code | ✅ Yes |
+| 2b | **Eclipse IDE (Alternative)** | 2022-09 (Enterprise Edition) | Alternative IDE supported by classic textbook exercises | ✅ Yes |
 | 3 | **WildFly Server** | WildFly 26.1.2 Final or 30+ | The application server that runs your enterprise beans | ✅ Yes |
-| 4 | **Maven** | 3.9+ | Build tool (comes bundled with Eclipse) | ✅ Yes |
+| 4 | **Maven** | 3.9+ | Build tool (bundled with IntelliJ and Eclipse) | ✅ Yes |
 | 5 | **PostgreSQL** | 16+ | The database for storing application data | ✅ Yes |
 | 6 | **DBeaver** | Latest | Database management GUI tool | ✅ Yes |
 
@@ -152,13 +153,35 @@ We use **Eclipse IDE for Enterprise Java and Web Developers (2022-09)** because 
 
 ---
 
+### STEP 2b — Using IntelliJ IDEA (Recommended for This Course)
+
+#### Why IntelliJ IDEA?
+IntelliJ IDEA is the industry-standard IDE for Java and Jakarta EE development, offering intelligent code completion, integrated Maven/Gradle support, and native WildFly server management.
+
+![IntelliJ IDEA WildFly Configuration](../assets/images/intellij_wildfly_setup.jpg)
+
+#### Configuring WildFly in IntelliJ IDEA:
+1. **Install WildFly:** Download and extract `wildfly-26.1.2.Final.zip` to a stable directory (e.g., `C:\wildfly` or `~/wildfly`).
+2. **Open Run/Debug Configurations:** In the top navigation bar, click the configuration dropdown (next to the green Run icon) and select **Edit Configurations...**
+3. **Add New Server:** Click the `+` icon, scroll to **JBoss / WildFly Server**, and select **Local**.
+4. **Configure Server Home:**
+   * **Name:** `WildFly 26.1.2`
+   * **Application Server:** Click **Configure...** and select your extracted WildFly directory.
+   * **HTTP Port:** Ensure it is set to `8080` (Management Port: `9990`).
+5. **Add Deployment Artifact:**
+   * Navigate to the **Deployment** tab.
+   * Click `+` and choose your project's `war` or `war exploded` artifact.
+6. Click **Apply** and **OK**. You can now start, stop, and debug WildFly directly from IntelliJ!
+
+---
+
 ### STEP 3 — Install WildFly Application Server
 
 #### What is WildFly and Why Do We Need It?
 
 Imagine you have written a recipe (your Java enterprise application). You need a **kitchen** (the application server) to actually cook the food. The application server provides all the services your enterprise beans need — transaction management, security, connection pooling, messaging — things you would otherwise have to write yourself.
 
-**WildFly** (previously called JBoss Application Server) is a free, open-source, Jakarta EE-certified application server. It is one of the most popular choices for enterprise Java development worldwide. We install it directly inside Eclipse so that you can start and stop the server without leaving your IDE.
+**WildFly** (previously called JBoss Application Server) is a free, open-source, Jakarta EE-certified application server. It is one of the most popular choices for enterprise Java development worldwide.
 
 > ⚠️ **Version Requirement**: You must use **WildFly 24 or higher** for Jakarta EE 9 compatibility. We will install **WildFly 26.1.2 Final** as shown in the textbook.
 

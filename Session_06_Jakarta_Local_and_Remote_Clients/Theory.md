@@ -39,6 +39,8 @@ flowchart TB
     end
 ```
 
+![Jakarta EE Local vs Remote Client Architecture](../assets/images/local_remote_clients.jpg)
+
 ### Key Differences at a Glance
 | Feature | Local Client | Remote Client |
 | :--- | :--- | :--- |

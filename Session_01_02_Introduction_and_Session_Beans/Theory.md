@@ -302,6 +302,8 @@ Use enterprise beans when your application needs:
 
 ## Part 2 — Session Beans and Their Types
 
+![Session Bean Lifecycle Architecture](../assets/images/session_bean_lifecycle.jpg)
+
 ### 2.1 What Is a Session Bean?
 
 > **DEFINITION**: A Session Bean is an enterprise bean that contains business logic to be executed on behalf of a client over a network. It can be local (same JVM) or remote (different JVM).

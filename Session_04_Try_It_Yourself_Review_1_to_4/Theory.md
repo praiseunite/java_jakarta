@@ -26,7 +26,7 @@ Over the past four sessions, you have completed several "Try It Yourself" (TIY) 
 
 In the real world, these do not exist in isolation. They form a **layered architecture**.
 
-![Integrated Architecture](/Users/mac/.gemini/antigravity/brain/04f4ab8f-3331-438d-995a-883844318d5f/integrated_architecture_1_to_4_1785735967674.png)
+![Integrated Architecture](../assets/images/integrated_architecture_1_to_4_1785735967674.png)
 
 ### The Integrated Flow
 

@@ -1,8 +1,8 @@
-# Session 6 — Facelets in Jakarta Enterprise Beans
+# Session 5 — Facelets in Jakarta Enterprise Beans
 ## Theory Guide
 
 **Course:** Enterprise Application Development in Jakarta EE
-**TL Session:** TL1 (Session 6)
+**TL Session:** TL1 (Session 5)
 
 ---
 
@@ -17,7 +17,7 @@ By the end of this session, you will be able to:
 
 ---
 
-## 6.1 Introduction to Facelets
+## 5.1 Introduction to Facelets
 
 **JavaServer Faces (JSF)**, known as **Jakarta Server Faces** in the Jakarta EE ecosystem, is a server-side component-centric user interface (UI) framework for web applications. 
 
@@ -51,7 +51,9 @@ One of its significant benefits is that it offers a clear division between behav
 
 ---
 
-## 6.2 Lifecycle of Facelets
+## 5.2 Lifecycle of Facelets
+
+![JSF & Facelets Request Lifecycle in Jakarta EE](../assets/images/jsf_lifecycle_phases.jpg)
 
 A JSF lifecycle starts when a client sends an HTTP request and ends when the server returns an HTML response. The lifecycle is broadly divided into two high-level phases: **Execute** and **Render**.
 
