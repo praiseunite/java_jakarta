@@ -62,9 +62,10 @@ Think of it this way:
 
 ---
 
-### JNDI Architecture — Three Layers
+### JNDI Architecture
 
-JNDI has a two-part architecture:
+Your application sits on top of a **two-part** JNDI architecture — the **API** you call
+(`javax.naming`) and the **SPI** the server vendor implements underneath it:
 
 ![JNDI Architecture](../assets/images/jndi_architecture_1785735733575.png)
 
@@ -587,8 +588,8 @@ package uppercase.jndi;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-import jakarta.naming.InitialContext;
-import jakarta.naming.NamingException;
+import javax.naming.InitialContext;   // NOTE: JNDI stays under javax.naming even in Jakarta EE 9+
+import javax.naming.NamingException;  //       there is NO jakarta.naming package
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
@@ -694,7 +695,7 @@ Answer these questions to test your understanding:
    - Q1: **c** — Naming support
    - Q2: **a** — Close method
    - Q3: **a and b** — JNDIEnvironment and JNDIName
-   - Q4: **a** — `jakarta.naming` package
+   - Q4: **a** — the `javax.naming` package (JNDI was **not** renamed to `jakarta.naming`; that package does not exist)
    - Q5: **d** — To access various directory services using a single interface
 
 ---

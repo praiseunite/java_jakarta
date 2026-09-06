@@ -1,0 +1,138 @@
+<title>Testing & Reading Errors</title>
+<meta name="description" content="Write a JUnit test, understand the test pyramid, and get fluent at reading Java stack traces and WildFly logs.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "16-testing";</script>
+
+<main class="page">
+
+  <h1>Unit 16 · Testing &amp; reading errors</h1>
+  <p class="lede">Two survival skills the original course left out: writing an automated test so you
+    <em>know</em> your logic works, and reading a stack trace so a wall of red text becomes one
+    fixable line.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Why test at all</h2>
+  <p>A test is code that runs your code and checks the result. Once written, it re-checks in seconds,
+    forever. It catches the bug you’d otherwise find in production at 2 a.m.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>A JUnit 5 test</h2>
+  <div class="code-head">CalculatorBeanTest.java</div>
+  <pre><code>import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.*;
+
+class CalculatorBeanTest {
+
+    private final CalculatorBean calc = new CalculatorBean();  // plain unit test: no container
+
+    @Test
+    void adds_two_numbers() {
+        assertEquals(15, calc.add(10, 5));
+    }
+
+    @Test
+    void divide_by_zero_throws() {
+        ArithmeticException ex = assertThrows(
+            ArithmeticException.class, () -> calc.divide(1, 0));
+        assertEquals("Cannot divide by zero!", ex.getMessage());
+    }
+}</code></pre>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Piece</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Test</code></td><td>“Run this method as a test.”</td></tr>
+      <tr><td><code>assertEquals(expected, actual)</code></td><td>Fail the test unless they match.</td></tr>
+      <tr><td><code>assertThrows(Type.class, () -&gt; …)</code></td><td>Fail unless the lambda throws that exception.</td></tr>
+      <tr><td>Arrange → Act → Assert</td><td>The shape of almost every test: set up, do the thing, check.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Run them with <code>mvn test</code> (try it in the terminal on any unit page), or the green ▶ next
+    to a test method in IntelliJ.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>The test pyramid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Level</th><th>Tests</th><th>Speed / count</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Unit</strong></td><td>One class in isolation (like above). Mock its collaborators.</td><td>Milliseconds · many</td></tr>
+      <tr><td><strong>Integration</strong></td><td>Several parts together — a bean + a real database. Tools: <em>Arquillian</em>, Testcontainers.</td><td>Seconds · fewer</td></tr>
+      <tr><td><strong>End-to-end</strong></td><td>The whole app through its HTTP API or UI.</td><td>Slow · fewest</td></tr>
+    </tbody>
+  </table></div>
+  <p>Write mostly unit tests. They’re fast enough to run on every save and pinpoint the break.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Reading a stack trace — the method</h2>
+  <ol>
+    <li>Read the <strong>top line</strong>: the exception type and message (<em>what</em> went wrong).</li>
+    <li>Scan down to the <strong>first frame in your own package</strong> (<code>com.globalbank.…</code>)
+      — that’s <em>where</em> in your code it blew up. Frames above it are library internals.</li>
+    <li>Read every <strong>“Caused by:”</strong> from the bottom up. The <em>deepest</em> one is the
+      root cause; the ones above are wrappers.</li>
+    <li>Open that file at that line number. Fix <em>that</em>.</li>
+  </ol>
+
+  <div class="bench" data-run="canned">
+    <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">replay — decode this trace</span></div>
+    <pre class="bench__code"><code>// Deployment failed. Apply the 4-step method to this log.
+// Q: which file &amp; line do you open first, and what's the root cause?</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run</button>
+      <span class="bench__hint">Answer: AccountService.java:47 — the root cause is a NullPointerException on 'repo'.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+Caused by: jakarta.ejb.EJBException: Invocation failed
+    at org.jboss.as.ejb3.tx.CMTTxInterceptor.invokeInOurTx
+    at com.globalbank.ejb.AccountService.open(AccountService.java:47)   &lt;-- your code
+    at com.globalbank.web.SignupServlet.doPost(SignupServlet.java:22)
+Caused by: java.lang.NullPointerException:
+        Cannot invoke "AccountRepository.save(..)" because "this.repo" is null
+    at com.globalbank.ejb.AccountService.open(AccountService.java:47)   &lt;-- ROOT CAUSE
+--------
+Fix: 'repo' was never injected. Add @Inject to the field (or check the bean is discoverable).
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Reading the WildFly log</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Line you’ll look for</th><th>Means</th></tr></thead>
+    <tbody>
+      <tr><td><code>WFLYSRV0025: WildFly … started in …ms</code></td><td>Server is up.</td></tr>
+      <tr><td><code>WFLYUT0021: Registered web context: '/myapp'</code></td><td>Your web app deployed; base URL is <code>/myapp</code>.</td></tr>
+      <tr><td><code>java:global/myapp/MyBean!…</code></td><td>The JNDI name for a bean — copy it for lookups (Unit 05).</td></tr>
+      <tr><td><code>WFLYCTL0013: Operation ("deploy") failed</code> / a stack trace</td><td>Deployment broke — the cause follows.</td></tr>
+      <tr><td><code>ERROR [org.hibernate…]</code></td><td>A JPA/DB problem — often a bad mapping or missing table.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The full log is <code>standalone/log/server.log</code>, or the IntelliJ <em>Services</em> console.</p>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"assertThrows(ArithmeticException.class, () -> calc.divide(1, 0)) passes when...","opts":["divide returns 0","divide throws an ArithmeticException","divide returns Infinity","the test is skipped"],"a":1,"why":"assertThrows fails unless the lambda throws exactly that exception type."},
+      {"q":"Which level should you have the MOST of?","opts":["End-to-end tests","Integration tests","Unit tests — fast, isolated, pinpoint the break","Manual tests"],"a":2,"why":"The pyramid: many fast unit tests, fewer integration, fewest end-to-end."},
+      {"q":"In a stack trace, the root cause is...","opts":["The very top line","The first line mentioning your package","The deepest 'Caused by:' at the bottom","The last line of the file"],"a":2,"why":"Read 'Caused by:' bottom-up; the deepest is the origin, the ones above wrap it."},
+      {"q":"In the sample trace, what do you fix?","opts":["CMTTxInterceptor","SignupServlet line 22","AccountService line 47 — 'repo' is null, so inject it","Restart WildFly"],"a":2,"why":"The NPE says this.repo is null at AccountService:47 — the dependency was never injected."},
+      {"q":"You need the JNDI name of a deployed bean. Where do you get it?","opts":["Guess from the class name","From the WildFly log line starting java:global/...","From pom.xml","From the browser console"],"a":1,"why":"WildFly prints the exact bound name at deploy time; copy it verbatim (it's case-sensitive)."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>JUnit</td><td><code>@Test</code> + <code>assertEquals</code>/<code>assertThrows</code>; Arrange–Act–Assert; run with <code>mvn test</code>.</td></tr>
+    <tr><td>Pyramid</td><td>Many unit, some integration, few end-to-end.</td></tr>
+    <tr><td>Stack trace</td><td>Type/message → first frame in your package → deepest “Caused by:” → fix that line.</td></tr>
+    <tr><td>WildFly log</td><td>“…started”, “Registered web context”, <code>java:global/…</code>, and any “failed” + trace.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
+<script src="assets/js/terminal.js"></script>

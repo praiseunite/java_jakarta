@@ -1,0 +1,156 @@
+<title>REST APIs with JAX-RS</title>
+<meta name="description" content="The modern way clients talk to a Jakarta EE backend: HTTP endpoints that return JSON, built with JAX-RS annotations.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "15-rest-jaxrs";</script>
+
+<main class="page">
+
+  <h1>Unit 15 · REST APIs with JAX-RS</h1>
+  <p class="lede">The original course never covered this, yet it’s how most Jakarta EE backends talk to
+    the world today. <strong>JAX-RS</strong> (Jakarta RESTful Web Services) turns Java methods into
+    HTTP endpoints that usually speak JSON.</p>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Recap</b> HTTP = request/response; a client sends
+      <code>GET /accounts/123</code>, the server answers with data and a status code (Unit 00). JAX-RS
+      maps those requests to your methods.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>REST in one paragraph</h2>
+  <p>Model your system as <strong>resources</strong> (things: an account, an order) each at a
+    <strong>URL</strong>, and act on them with HTTP <strong>verbs</strong>:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Verb</th><th>Means</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr><td><code>GET</code></td><td>read</td><td><code>GET /accounts/123</code></td></tr>
+      <tr><td><code>POST</code></td><td>create</td><td><code>POST /accounts</code></td></tr>
+      <tr><td><code>PUT</code></td><td>replace/update</td><td><code>PUT /accounts/123</code></td></tr>
+      <tr><td><code>DELETE</code></td><td>remove</td><td><code>DELETE /accounts/123</code></td></tr>
+    </tbody>
+  </table></div>
+  <p>Common status codes: <code>200 OK</code>, <code>201 Created</code>, <code>204 No Content</code>,
+    <code>400 Bad Request</code>, <code>404 Not Found</code>, <code>500 Server Error</code>.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Turn it on</h2>
+  <pre><code>import jakarta.ws.rs.ApplicationPath;
+import jakarta.ws.rs.core.Application;
+
+@ApplicationPath("/api")          // all endpoints live under /api
+public class RestConfig extends Application { }</code></pre>
+
+  <span class="eyebrow">concept</span>
+  <h2>A resource class</h2>
+  <pre><code>import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import jakarta.inject.Inject;
+
+@Path("/accounts")                                   // base path
+@Produces(MediaType.APPLICATION_JSON)                // methods return JSON
+@Consumes(MediaType.APPLICATION_JSON)                // methods accept JSON
+public class AccountResource {
+
+    @Inject AccountService accounts;                 // your EJB / CDI bean (Unit 13/14)
+
+    @GET
+    public List&lt;Account&gt; list() {
+        return accounts.findAll();
+    }
+
+    @GET @Path("/{id}")
+    public Response getOne(@PathParam("id") Long id) {
+        Account a = accounts.get(id);
+        return (a != null)
+            ? Response.ok(a).build()
+            : Response.status(Response.Status.NOT_FOUND).build();
+    }
+
+    @POST
+    public Response create(Account incoming) {       // JSON body -> Account, automatically
+        Account saved = accounts.open(incoming.getHolder());
+        return Response.status(Response.Status.CREATED).entity(saved).build();
+    }
+
+    @DELETE @Path("/{id}")
+    public void delete(@PathParam("id") Long id) {
+        accounts.remove(id);
+    }
+}</code></pre>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Path</code></td><td>URL this class / method answers on</td></tr>
+      <tr><td><code>@GET</code> <code>@POST</code> <code>@PUT</code> <code>@DELETE</code></td><td>Which HTTP verb triggers the method</td></tr>
+      <tr><td><code>@PathParam</code></td><td>Pull a value out of the URL (<code>/{id}</code>)</td></tr>
+      <tr><td><code>@QueryParam</code></td><td>Pull a value from <code>?name=…</code></td></tr>
+      <tr><td><code>@Produces</code> / <code>@Consumes</code></td><td>Response / request body format (usually JSON)</td></tr>
+    </tbody>
+  </table></div>
+  <p>JSON ↔ Java conversion is automatic via <strong>JSON-B</strong> — a public field or getter
+    becomes a JSON property, and an incoming JSON body is bound to your method parameter.</p>
+
+  <div class="bench" data-run="canned">
+    <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">replay — HTTP calls &amp; responses</span></div>
+    <pre class="bench__code"><code>POST /api/accounts     {"holder": "Ada Lovelace"}
+GET  /api/accounts/1
+GET  /api/accounts/999
+DELETE /api/accounts/1</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run</button>
+      <span class="bench__hint">Note the status codes: 201 on create, 200 on found, 404 on missing.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+&gt; POST /api/accounts   body {"holder":"Ada Lovelace"}
+&lt; 201 Created
+&lt; {"id":1,"holder":"Ada Lovelace","balance":0.0}
+
+&gt; GET /api/accounts/1
+&lt; 200 OK
+&lt; {"id":1,"holder":"Ada Lovelace","balance":0.0}
+
+&gt; GET /api/accounts/999
+&lt; 404 Not Found
+
+&gt; DELETE /api/accounts/1
+&lt; 204 No Content
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Where JAX-RS sits</b>
+      A JAX-RS resource is a thin edge. It parses the request, calls your session bean / CDI service
+      for the real work (transactions, security, persistence all still apply there), and shapes the
+      response. Keep business logic out of the resource class.</div>
+  </div>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"Which HTTP verb reads a resource without changing it?","opts":["POST","GET","DELETE","PUT"],"a":1,"why":"GET retrieves. POST creates, PUT replaces, DELETE removes."},
+      {"q":"@Path(\"/{id}\") with @PathParam(\"id\") Long id does what?","opts":["Reads a cookie","Captures the {id} segment of the URL into the method parameter","Sets the response format","Injects a database row"],"a":1,"why":"Path templates capture URL segments; @PathParam binds them to parameters."},
+      {"q":"How does a JSON request body become an Account object?","opts":["You parse the string yourself","Automatically, via JSON-B, into the method parameter","It doesn't — REST is text only","Through JNDI"],"a":1,"why":"With @Consumes(APPLICATION_JSON), JSON-B binds the body to your parameter; @Produces does the reverse."},
+      {"q":"Status code for a successful resource creation?","opts":["200 OK","201 Created","404 Not Found","500 Server Error"],"a":1,"why":"201 Created signals a new resource was made (often with its representation in the body)."},
+      {"q":"Where should the transaction + persistence logic live?","opts":["Inside the JAX-RS resource method","In an injected session bean / CDI service the resource calls","In the browser","In persistence.xml"],"a":1,"why":"The resource is a thin edge; delegate real work to a bean where @TransactionAttribute, security and JPA apply."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>JAX-RS</td><td>Java methods → HTTP/JSON endpoints via annotations.</td></tr>
+    <tr><td>Turn on</td><td><code>@ApplicationPath</code> class extending <code>Application</code>.</td></tr>
+    <tr><td>Map</td><td><code>@Path</code> + <code>@GET/@POST/@PUT/@DELETE</code>; <code>@PathParam</code>/<code>@QueryParam</code> for inputs.</td></tr>
+    <tr><td>JSON</td><td>Automatic both ways via JSON-B with <code>@Produces/@Consumes</code>.</td></tr>
+    <tr><td>Layering</td><td>Resource = thin edge; call a bean for logic, transactions, persistence.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

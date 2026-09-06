@@ -1,0 +1,174 @@
+<title>Entity Beans & Message-Driven Beans</title>
+<meta name="description" content="The other two bean families: persistent data objects (entities/JPA) and background message workers (MDBs).">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "04-entity-and-mdb";</script>
+
+<main class="page">
+
+  <h1>Unit 04 · Entity beans &amp; message-driven beans</h1>
+  <p class="lede">Unit 03 covered the three <em>session</em> beans (your logic). Two more bean families
+    round out the picture: <strong>entity beans</strong> (data that lives in the database) and
+    <strong>message-driven beans</strong> (background workers triggered by messages).</p>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Recap</b> Session beans = business logic. Stateless (pooled, no memory),
+      stateful (one per client, remembers), singleton (one shared, use <code>@Lock</code>).</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · Entity beans = database rows as objects</h2>
+  <p>An <strong>entity bean</strong> represents a <em>persistent</em> business object — one whose data
+    is stored in a database table and survives after the program stops. A session bean forgets; an
+    entity is remembered on disk.</p>
+  <div class="callout callout--analogy"><span class="callout__i">🗂️</span>
+    <div class="callout__b"><b>Analogy</b>
+      A library catalogue card. It has a unique number (the <em>primary key</em>), fields (title,
+      author, year), it stays in the drawer even when nobody’s reading it (<em>persistence</em>), and
+      many people can look up the same card (<em>shared</em>).</div>
+  </div>
+
+  <div class="callout callout--key"><span class="callout__i">📌</span>
+    <div class="callout__b"><b>“Entity bean” today means “JPA entity”</b>
+      The old EJB 2.x “entity bean” was heavy and is gone. Modern Jakarta EE does persistence with
+      <strong>JPA</strong> (Jakarta Persistence). An entity is a plain class with <code>@Entity</code>
+      and an <code>@Id</code>. This unit shows the shape; <a href="13-jpa-persistence.html">Unit 13</a>
+      does it for real (the <code>EntityManager</code>, queries, relationships).</div>
+  </div>
+
+  <div class="code-head">Account.java — an entity</div>
+  <pre><code>import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity                              // "map this class to a database table"
+public class Account {
+
+    @Id                              // this field uniquely identifies each row
+    private Long accountId;
+
+    private String accountHolder;
+    private double balance;
+
+    // getters and setters ...
+}</code></pre>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Java</th><th>Database</th></tr></thead>
+    <tbody>
+      <tr><td><code>class Account</code></td><td>table <code>Account</code></td></tr>
+      <tr><td><code>Long accountId</code> <code>@Id</code></td><td><code>account_id BIGINT PRIMARY KEY</code></td></tr>
+      <tr><td><code>String accountHolder</code></td><td><code>account_holder VARCHAR</code></td></tr>
+      <tr><td><code>double balance</code></td><td><code>balance NUMERIC</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>Session bean vs entity</b>
+      A session bean is <em>anonymous work</em> — you can’t ask for “session bean #5”. An entity has
+      an <em>identity</em> (its primary key) and you look it up by that key. Logic vs data.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · Message-driven beans = background workers</h2>
+  <p>A <strong>message-driven bean (MDB)</strong> sits in the background and <em>listens</em>. When a
+    message lands on a queue, the container wakes the MDB and hands it the message. The sender didn’t
+    wait for it — that’s <strong>asynchronous</strong> processing.</p>
+  <div class="callout callout--analogy"><span class="callout__i">📧</span>
+    <div class="callout__b"><b>Analogy</b>
+      An email inbox with an auto-responder. You send a mail and carry on with your day. Whenever it
+      arrives, the responder processes it — independently, on its own time.</div>
+  </div>
+
+  <h3>Why bother? The fund-transfer example</h3>
+  <p>10,000 people click “Transfer money” at once.</p>
+  <ul>
+    <li><strong>Synchronous:</strong> all 10,000 wait for their transfer to finish before the page
+      responds. The system crawls or falls over.</li>
+    <li><strong>Asynchronous with an MDB:</strong> each request is dropped on a <em>queue</em>. The
+      user instantly sees “Transfer submitted”. MDB instances chew through the queue in the
+      background. The site stays fast.</li>
+  </ul>
+
+  <div class="code-head">FundTransferProcessor.java — an MDB</div>
+  <pre><code>import jakarta.ejb.MessageDriven;
+import jakarta.jms.Message;
+import jakarta.jms.MessageListener;
+import jakarta.jms.TextMessage;
+
+@MessageDriven(mappedName = "jms/FundTransferQueue")   // which queue to watch
+public class FundTransferProcessor implements MessageListener {
+
+    @Override
+    public void onMessage(Message message) {           // container calls this per message
+        try {
+            TextMessage text = (TextMessage) message;
+            String details = text.getText();
+            System.out.println("Processing transfer: " + details);
+            // parse accounts + amount, update the database, send a confirmation email
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}</code></pre>
+
+  <div class="bench" data-run="canned">
+    <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">replay — real server output</span></div>
+    <pre class="bench__code"><code>// web layer drops 3 transfer requests on the queue and returns immediately
+queue.send("TRANSFER ACC-1 -> ACC-2  $150");
+queue.send("TRANSFER ACC-7 -> ACC-3  $40");
+queue.send("TRANSFER ACC-9 -> ACC-1  $999");
+// user already saw "submitted". MDB works in the background:</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run</button>
+      <span class="bench__hint">The sends return instantly; onMessage() fires later, one per message.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[web]  queued: TRANSFER ACC-1 -> ACC-2  $150   (returned to user in 3 ms)
+[web]  queued: TRANSFER ACC-7 -> ACC-3  $40    (returned to user in 2 ms)
+[web]  queued: TRANSFER ACC-9 -> ACC-1  $999   (returned to user in 2 ms)
+[mdb]  onMessage(): Processing transfer: ACC-1 -> ACC-2  $150 ... done, email sent
+[mdb]  onMessage(): Processing transfer: ACC-7 -> ACC-3  $40  ... done, email sent
+[mdb]  onMessage(): Processing transfer: ACC-9 -> ACC-1  $999 ... done, email sent
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <h3>MDB vs stateless session bean</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>MDB</th><th>Stateless session bean</th></tr></thead>
+    <tbody>
+      <tr><td>Keeps state between calls?</td><td>No</td><td>No</td></tr>
+      <tr><td>Pooled, serves many?</td><td>Yes</td><td>Yes</td></tr>
+      <tr><td>Triggered by</td><td>A message arriving on a queue/topic</td><td>A client calling a method</td></tr>
+      <tr><td>Has a client interface?</td><td>No — clients never call it directly</td><td>Yes (<code>@Remote</code> / <code>@Local</code>)</td></tr>
+      <tr><td>Must implement</td><td><code>MessageListener</code> (its <code>onMessage</code>)</td><td>Whatever your interface declares</td></tr>
+    </tbody>
+  </table></div>
+  <p>Full messaging — queues vs topics, connection factories, the JMS API — is <a href="11-messaging-jms.html">Unit 11</a>.</p>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"What makes an entity different from a session bean?","opts":["Entities run faster","An entity's data is stored in a database and has an identity (primary key); a session bean is anonymous logic","Entities can't be annotated","Session beans are stored on disk"],"a":1,"why":"Entity = persistent data with a key you look it up by. Session bean = work with no lasting identity."},
+      {"q":"In modern Jakarta EE, an 'entity bean' is really...","opts":["An EJB 2.x heavyweight object","A JPA entity: a plain class with @Entity and @Id","A stateful session bean","A message-driven bean"],"a":1,"why":"The old entity beans are gone; JPA entities replaced them. Unit 13 covers using them."},
+      {"q":"An MDB's onMessage() method is called by...","opts":["Your client code directly","The container, whenever a message arrives on the destination it listens to","The database","A REST request"],"a":1,"why":"Clients never call an MDB. The container invokes onMessage() per delivered message."},
+      {"q":"Why route fund transfers through an MDB instead of a direct method call?","opts":["MDBs are more secure","The user gets an instant response while the work happens in the background; queues absorb traffic spikes","Direct calls are not allowed in Jakarta EE","MDBs skip the database"],"a":1,"why":"Asynchronous processing keeps the UI responsive and smooths load; the queue buffers the backlog."},
+      {"q":"An MDB must implement which interface?","opts":["Remote","Serializable","MessageListener","EntityManager"],"a":2,"why":"MessageListener declares onMessage(Message) — the method the container calls."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>Entity bean</td><td>A persistent object mapped to a DB table; <code>@Entity</code> + <code>@Id</code>; today = JPA.</td></tr>
+    <tr><td>Identity</td><td>Entities have a primary key; session beans are anonymous.</td></tr>
+    <tr><td>Message-driven bean</td><td>Background worker; <code>@MessageDriven</code>, implements <code>MessageListener</code>, container calls <code>onMessage()</code>.</td></tr>
+    <tr><td>Async win</td><td>Sender doesn’t wait; queue buffers load; MDB pool drains it.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

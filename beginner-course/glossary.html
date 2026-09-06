@@ -1,0 +1,211 @@
+<title>Glossary</title>
+<meta name="description" content="Every term used in this course, defined in plain words.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "glossary";</script>
+<style>
+  .gloss { margin: 1.5rem 0; }
+  .gloss dt { font-weight: 700; margin-top: 1.2rem; scroll-margin-top: 70px; }
+  .gloss dd { margin: .2rem 0 0; color: var(--ink-soft); }
+  .gloss dd code { color: var(--ink); }
+  .alpha { position: sticky; top: var(--topbar-h); background: var(--ground);
+    padding: 8px 0; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--line); z-index: 5; }
+  .alpha a { font-family: var(--font-mono); font-size: 13px; text-decoration: none;
+    padding: 3px 7px; border: 1px solid var(--line-strong); border-radius: 5px; color: var(--ink-soft); }
+  .alpha a:hover { border-color: var(--accent); color: var(--ink); }
+  .gloss h2 { scroll-margin-top: 110px; border-bottom: 0; }
+</style>
+
+<main class="page">
+
+  <h1>Glossary</h1>
+  <p class="lede">Plain-language definitions for every term this course uses. Skim it, or jump to a
+    letter.</p>
+
+  <nav class="alpha" aria-label="Jump to letter">
+    <a href="#A">A</a><a href="#B">B</a><a href="#C">C</a><a href="#D">D</a><a href="#E">E</a>
+    <a href="#F">F</a><a href="#H">H</a><a href="#I">I</a><a href="#J">J</a><a href="#L">L</a>
+    <a href="#M">M</a><a href="#N">N</a><a href="#O">O</a><a href="#P">P</a><a href="#Q">Q</a>
+    <a href="#R">R</a><a href="#S">S</a><a href="#T">T</a><a href="#V">V</a><a href="#W">W</a>
+  </nav>
+
+  <h2 id="A">A</h2>
+  <dl class="gloss">
+    <dt>ACID</dt><dd>The four guarantees of a transaction: <b>A</b>tomicity (all steps or none), <b>C</b>onsistency (no rule broken), <b>I</b>solation (concurrent transactions don’t see each other’s half-done work), <b>D</b>urability (a commit survives crashes). Unit 06.</dd>
+    <dt>Annotation</dt><dd>A label starting with <code>@</code> placed on a class, method or field that a tool or the server reads to change how the code is treated — e.g. <code>@Stateless</code>. Not code that runs.</dd>
+    <dt>API (Application Programming Interface)</dt><dd>The set of classes and methods a library or component offers you to call — its control panel.</dd>
+    <dt>Application server</dt><dd>A large program (here, <b>WildFly</b>) that contains all the Jakarta EE machinery; you deploy your app into it.</dd>
+    <dt>Asynchronous</dt><dd>“Send it and carry on; the result comes later.” Opposite of synchronous (wait for the answer). Units 04, 11.</dd>
+    <dt>Atomicity</dt><dd>See ACID. A transaction runs completely or not at all.</dd>
+  </dl>
+
+  <h2 id="B">B</h2>
+  <dl class="gloss">
+    <dt>Backing bean</dt><dd>A Java object a Jakarta Faces page binds its components to with <code>#{...}</code>. Unit 09.</dd>
+    <dt>Bean</dt><dd>Any class the container manages for you. An <i>enterprise bean</i> carries EJB annotations (<code>@Stateless</code>, <code>@Stateful</code>, <code>@Singleton</code>, <code>@MessageDriven</code>). A <i>CDI bean</i> is any class CDI can inject.</dd>
+    <dt>Bytecode</dt><dd>The compact instruction format in a <code>.class</code> file, produced by <code>javac</code> and run by the JVM.</dd>
+    <dt>Broker (message broker)</dt><dd>The server that stores and routes JMS messages between producers and consumers. Unit 11.</dd>
+  </dl>
+
+  <h2 id="C">C</h2>
+  <dl class="gloss">
+    <dt>CDI (Contexts and Dependency Injection)</dt><dd>The wiring layer that resolves <code>@Inject</code> points and manages how long injected objects live (their scope). Unit 14.</dd>
+    <dt>Class</dt><dd>A blueprint that groups data and methods under one name.</dd>
+    <dt>Client</dt><dd>Whatever calls a bean or sends a request — a browser, an app, another bean. <i>Local</i> client = same JVM; <i>remote</i> client = different JVM/machine. Unit 10.</dd>
+    <dt>Compile</dt><dd>Turn <code>.java</code> source text into <code>.class</code> bytecode, with <code>javac</code>.</dd>
+    <dt>Connection pool</dt><dd>A set of already-open database connections lent out and returned, so code never pays the setup cost. <code>close()</code> returns a connection rather than destroying it. Unit 05.</dd>
+    <dt>Container</dt><dd>The part of the server that creates, pools, injects, wraps (with security/transactions) and destroys your beans. Why you never call <code>new</code> on a bean.</dd>
+    <dt>CMT / BMT</dt><dd>Container-Managed / Bean-Managed Transactions — whether the container or your code marks transaction boundaries. Unit 06.</dd>
+    <dt>Correlation ID</dt><dd><code>JMSCorrelationID</code> — a tag a reply message echoes so the sender can match it to the original request. Unit 11.</dd>
+  </dl>
+
+  <h2 id="D">D</h2>
+  <dl class="gloss">
+    <dt>DAO (Data Access Object)</dt><dd>A class whose job is reading/writing one kind of data — hides the SQL or JPA calls behind plain methods (<code>create</code>, <code>findById</code>…). Unit 12.</dd>
+    <dt>DataSource</dt><dd>The object you ask for a database connection; a connection pool sits behind it. Injected with <code>@Resource(lookup=…)</code>. Unit 05.</dd>
+    <dt>Declarative</dt><dd>Saying <i>what</i> you want with annotations/config and letting the container do it — vs <i>programmatic</i> (writing the steps yourself).</dd>
+    <dt>Deploy</dt><dd>Hand your built <code>.war</code>/<code>.ear</code> to the server so it starts running it.</dd>
+    <dt>Durability</dt><dd>See ACID. Once committed, changes survive any crash.</dd>
+  </dl>
+
+  <h2 id="E">E</h2>
+  <dl class="gloss">
+    <dt>EAR / WAR / JAR</dt><dd>Package formats. JAR = a zip of <code>.class</code> files (a library or EJB module). WAR = a web app. EAR = an enterprise bundle that can contain several WARs/JARs.</dd>
+    <dt>EJB (Jakarta Enterprise Beans)</dt><dd>The Jakarta EE API for business-logic components — session beans and message-driven beans.</dd>
+    <dt>EntityManager</dt><dd>The JPA object you call to persist/find/remove entities and run JPQL queries. Injected with <code>@PersistenceContext</code>. Unit 13.</dd>
+    <dt>Entity (entity bean)</dt><dd>A persistent object mapped to a database table: a class with <code>@Entity</code> and <code>@Id</code>. Has identity (a primary key). Units 04, 13.</dd>
+    <dt>Exception</dt><dd>An error object Java <i>throws</i> to stop the current work and report a problem; caught with <code>try/catch</code>.</dd>
+    <dt>Expression Language (EL)</dt><dd><code>#{...}</code> in a Facelets page — binds a component to a bean field or method. Unit 09.</dd>
+  </dl>
+
+  <h2 id="F">F</h2>
+  <dl class="gloss">
+    <dt>Facelets</dt><dd>The XHTML file format for writing Jakarta Faces pages. Unit 09.</dd>
+  </dl>
+
+  <h2 id="H">H</h2>
+  <dl class="gloss">
+    <dt>HTTP</dt><dd>The request/response language of the web. A client sends a request (<code>GET /path</code>); the server sends a response plus a status code (<code>200</code>, <code>404</code>…).</dd>
+  </dl>
+
+  <h2 id="I">I</h2>
+  <dl class="gloss">
+    <dt>Inject</dt><dd>The container fills a field or parameter with a ready object, so you don’t create it. <code>@Inject</code> (CDI) or <code>@EJB</code>. Unit 14.</dd>
+    <dt>Instance</dt><dd>Same as an object — one concrete item built from a class.</dd>
+    <dt>Interface</dt><dd>A contract listing method signatures with no bodies. A class <code>implements</code> it and supplies the code.</dd>
+    <dt>Isolation</dt><dd>See ACID. Concurrent transactions don’t see each other’s uncommitted work.</dd>
+  </dl>
+
+  <h2 id="J">J</h2>
+  <dl class="gloss">
+    <dt>JAX-RS (Jakarta RESTful Web Services)</dt><dd>Annotations that turn Java methods into HTTP/JSON endpoints (<code>@Path</code>, <code>@GET</code>…). Unit 15.</dd>
+    <dt>JCA (Jakarta Connectors)</dt><dd>The standard socket for plugging any external system (mainframe, ERP…) into an app server via a <i>resource adapter</i> (<code>.rar</code>). Unit 12.</dd>
+    <dt>JDBC</dt><dd>The low-level Java API for talking to relational databases: Connection → Statement → execute → ResultSet → close. Unit 12.</dd>
+    <dt>JMS (Jakarta Messaging)</dt><dd>The API for asynchronous messaging via a broker — queues and topics. Unit 11.</dd>
+    <dt>JNDI (Java Naming and Directory Interface)</dt><dd>A name → object directory on the server. Look up <code>"jdbc/GlobalBankDB"</code> and get a real resource. Package is <code>javax.naming</code> (not <code>jakarta.naming</code>). Unit 05.</dd>
+    <dt>JPA (Jakarta Persistence)</dt><dd>An object-relational mapper: translates between Java objects and database rows so you rarely write SQL. Unit 13.</dd>
+    <dt>JPQL</dt><dd>A query language like SQL but written over entities and their fields, not tables and columns. Unit 13.</dd>
+    <dt>JSF (Jakarta Faces)</dt><dd>A server-side, component-based web UI framework; pages are written in Facelets. Unit 09.</dd>
+    <dt>JTA (Jakarta Transaction API)</dt><dd>The API the server uses to manage transactions, including ones spanning several resources (XA / two-phase commit).</dd>
+    <dt>JVM (Java Virtual Machine)</dt><dd>The “pretend computer”, launched by the <code>java</code> command, that runs bytecode the same way on any operating system.</dd>
+  </dl>
+
+  <h2 id="L">L</h2>
+  <dl class="gloss">
+    <dt>Library</dt><dd>Someone else’s reusable code, shipped as a JAR.</dd>
+    <dt>Lifecycle</dt><dd>The stages a bean passes through — created, ready, (passivated), destroyed — with hooks like <code>@PostConstruct</code>, <code>@PreDestroy</code>.</dd>
+    <dt>Local client</dt><dd>A caller in the same JVM as the bean: pass-by-reference, no network. Uses <code>@Local</code> or no interface. Unit 10.</dd>
+    <dt>Lock (<code>@Lock</code>)</dt><dd>In a singleton, controls concurrency: <code>WRITE</code> = one thread at a time; <code>READ</code> = many at once. Unit 07.</dd>
+    <dt>Lost update</dt><dd>Two writers read the same value and overwrite each other; concurrency control (optimistic/pessimistic) prevents it. Unit 07.</dd>
+  </dl>
+
+  <h2 id="M">M</h2>
+  <dl class="gloss">
+    <dt>Maven</dt><dd>The build tool. <code>pom.xml</code> describes the project and its libraries; <code>mvn clean package</code> builds it.</dd>
+    <dt>MDB (message-driven bean)</dt><dd>A bean the container invokes when a message arrives on a queue/topic. Implements <code>MessageListener</code> (<code>onMessage</code>). Units 04, 11.</dd>
+    <dt>Method</dt><dd>A named, reusable block of steps, often taking input and returning a result.</dd>
+    <dt>Marshalling / serialization</dt><dd>Turning an object into bytes to send over a network (and back). Required for <code>@Remote</code> arguments. Unit 10.</dd>
+  </dl>
+
+  <h2 id="N">N</h2>
+  <dl class="gloss">
+    <dt>Namespace (JNDI)</dt><dd><code>java:global</code> (whole server) ⊃ <code>java:app</code> (one EAR) ⊃ <code>java:module</code> (one JAR/WAR). Unit 05.</dd>
+    <dt><code>new</code></dt><dd>The Java keyword that builds an object from a class. You use it for plain objects, <b>not</b> for beans — the container makes those.</dd>
+  </dl>
+
+  <h2 id="O">O</h2>
+  <dl class="gloss">
+    <dt>Object</dt><dd>A concrete item built from a class blueprint. One class → many objects, each with its own data.</dd>
+    <dt>Optimistic locking</dt><dd>Don’t lock; add a <code>@Version</code> column; fail (and retry) if someone else changed the row since you read it. Unit 07.</dd>
+    <dt>ORM (object-relational mapping)</dt><dd>Mapping objects to database rows — what JPA does.</dd>
+  </dl>
+
+  <h2 id="P">P</h2>
+  <dl class="gloss">
+    <dt>Package</dt><dd>A dotted “folder” for classes, e.g. <code>com.globalbank.accounts</code>. Use one with <code>import</code>.</dd>
+    <dt>Passivation / activation</dt><dd>Parking an idle stateful bean to disk to save memory, then restoring it on the next call. Unit 03.</dd>
+    <dt>Pessimistic locking</dt><dd>Lock the row on read; others wait. For frequent clashes / critical data. Unit 07.</dd>
+    <dt>Pool</dt><dd>A stock of ready instances (stateless beans, DB connections) lent out and reused.</dd>
+    <dt><code>pom.xml</code></dt><dd>Maven’s project file: <code>groupId</code>, <code>artifactId</code>, <code>version</code>, <code>packaging</code>, and <code>dependency</code> entries.</dd>
+    <dt>PreparedStatement</dt><dd>A JDBC statement with <code>?</code> placeholders — safe from SQL injection, precompiled. Always prefer it. Unit 12.</dd>
+    <dt>Primary key</dt><dd>The column/field that uniquely identifies a database row / entity (<code>@Id</code>).</dd>
+    <dt>Producer (CDI <code>@Produces</code>)</dt><dd>A method whose return value becomes injectable — for config values or objects you don’t own. Unit 14.</dd>
+    <dt>Programmatic</dt><dd>Writing the steps in code yourself (vs declarative annotations).</dd>
+    <dt>Proxy</dt><dd>A stand-in object the container gives you instead of the real bean, so it can add security/transactions/remoting around each call.</dd>
+  </dl>
+
+  <h2 id="Q">Q</h2>
+  <dl class="gloss">
+    <dt>Qualifier</dt><dd>A custom annotation that picks between multiple CDI beans of the same type (<code>@Sms</code> vs <code>@Email</code>). Unit 14.</dd>
+    <dt>Queue</dt><dd>A JMS destination where each message goes to exactly one consumer (point-to-point). Unit 11.</dd>
+  </dl>
+
+  <h2 id="R">R</h2>
+  <dl class="gloss">
+    <dt>Remote client</dt><dd>A caller in a different JVM/machine: pass-by-value (serialized), slower, needs a <code>@Remote</code> interface. Unit 10.</dd>
+    <dt>REQUIRED / REQUIRES_NEW</dt><dd>Transaction attributes. <code>REQUIRED</code> (default): join or create a transaction. <code>REQUIRES_NEW</code>: own separate transaction (used for audit logs). Unit 06.</dd>
+    <dt>Resource</dt><dd>An external thing a bean uses — a database, a queue, a mail session — usually reached via JNDI.</dd>
+    <dt>Resource adapter (<code>.rar</code>)</dt><dd>A pluggable JCA driver connecting an app server to one external system. Unit 12.</dd>
+    <dt>REST</dt><dd>Modelling a system as resources at URLs, acted on with HTTP verbs (GET/POST/PUT/DELETE). Unit 15.</dd>
+    <dt>ResultSet</dt><dd>A JDBC cursor over query rows; advance with <code>rs.next()</code>. Unit 12.</dd>
+    <dt>Rollback</dt><dd>Undo every change in a transaction. In CMT, throwing an exception triggers it. Unit 06.</dd>
+  </dl>
+
+  <h2 id="S">S</h2>
+  <dl class="gloss">
+    <dt>Scope (CDI)</dt><dd>How long an injected bean lives: request / session / application / dependent / conversation. Unit 14.</dd>
+    <dt>Serializable</dt><dd>A marker interface meaning “this object can be turned into bytes”. Required for remote arguments and session-scoped beans.</dd>
+    <dt>Server</dt><dd>An always-running program that waits for requests.</dd>
+    <dt>Servlet</dt><dd>A Java class that handles HTTP requests directly (<code>doGet</code>/<code>doPost</code>) — the low-level web component beneath JSF/JAX-RS.</dd>
+    <dt>Session bean</dt><dd>A container-managed class holding business logic. Three kinds: stateless, stateful, singleton. Unit 03.</dd>
+    <dt>Singleton bean</dt><dd>Exactly one instance for the whole app, shared by all clients; guard state with <code>@Lock</code>. Unit 03.</dd>
+    <dt>SQL</dt><dd>The language for reading/writing a relational database (<code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>).</dd>
+    <dt>Stack trace</dt><dd>The chain of method calls printed when an exception is thrown. Read: type/message → first frame in your package → deepest “Caused by:”. Unit 16.</dd>
+    <dt>Stateful bean</dt><dd>One instance per client that remembers its fields across calls for a conversation; ended with <code>@Remove</code>. Unit 03.</dd>
+    <dt>Stateless bean</dt><dd>No memory between calls; served from a pool; the default choice. Unit 03.</dd>
+    <dt>Synchronous</dt><dd>The caller waits for the result before continuing. Opposite of asynchronous.</dd>
+  </dl>
+
+  <h2 id="T">T</h2>
+  <dl class="gloss">
+    <dt>Topic</dt><dd>A JMS destination that broadcasts a copy of each message to every subscriber (publish/subscribe). Unit 11.</dd>
+    <dt>Transaction</dt><dd>A group of steps that commit together or roll back together. Unit 06.</dd>
+    <dt><code>@TransactionAttribute</code></dt><dd>Declares how a method relates to the caller’s transaction: REQUIRED, REQUIRES_NEW, MANDATORY, SUPPORTS, NOT_SUPPORTED, NEVER. Unit 06.</dd>
+    <dt><code>try</code>-with-resources</dt><dd><code>try (Connection c = …) { }</code> — automatically closes the resource (returns a pooled connection) in the right order.</dd>
+    <dt>Type</dt><dd>What kind of value a variable may hold: <code>int</code>, <code>double</code>, <code>boolean</code>, <code>String</code>, a class…</dd>
+  </dl>
+
+  <h2 id="V">V</h2>
+  <dl class="gloss">
+    <dt>Variable</dt><dd>A named box holding one value.</dd>
+    <dt><code>@Version</code></dt><dd>A field JPA uses as an optimistic-lock counter; it bumps on each update and is checked in the <code>WHERE</code> clause. Unit 07.</dd>
+  </dl>
+
+  <h2 id="W">W</h2>
+  <dl class="gloss">
+    <dt>WildFly</dt><dd>The free, open-source Jakarta EE application server used in this course (formerly “JBoss AS”). Runs on ports 8080 (apps) and 9990 (admin).</dd>
+    <dt>Web container</dt><dd>The part of the server that runs servlets and JSF pages and calls your enterprise beans.</dd>
+  </dl>
+
+</main>
+
+<script src="assets/js/course.js"></script>

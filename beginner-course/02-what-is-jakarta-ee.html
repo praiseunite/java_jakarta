@@ -1,0 +1,149 @@
+<title>What Jakarta EE Is</title>
+<meta name="description" content="The big picture: server, container, beans, annotations, and why enterprise Java exists at all.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "02-what-is-jakarta-ee";</script>
+
+<main class="page">
+
+  <h1>Unit 02 · What Jakarta EE actually is</h1>
+  <p class="lede">Jakarta EE is a set of rules and prewritten machinery for building big, shared,
+    long-running server applications in Java — the kind that run banks, airlines and tax offices.
+    Its core deal: <strong>you write the business logic, the server handles the hard infrastructure.</strong></p>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Recap</b> Unit 00: a <em>class</em> is a blueprint, an <em>annotation</em>
+      is a meaningful sticky note, a <em>server</em> is an always-on program, a <em>library</em> is
+      reusable code with an <em>API</em> (its callable surface).</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>The problem it solves</h2>
+  <p>Imagine you run a shop alone: you greet customers, take payments, track stock, do the taxes, lock
+    up at night. Fine for 10 customers a day. At 10,000 a day it collapses — you can’t personally
+    verify every payment or hold 50 conversations at once.</p>
+  <p>A plain Java program hits the same wall. One codebase ends up doing security checks, database
+    transactions, thread-safety, connection management <em>and</em> the actual business rules —
+    tangled together, impossible to maintain.</p>
+  <p><strong>Jakarta EE splits those apart.</strong> You write only the business rules. The
+    application server provides the rest as services you switch on with annotations.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Without vs with — the same method</h2>
+  <p>A bank transfer, done the hard way:</p>
+  <pre><code>public class BankService {
+    public void transferFunds(int from, int to, double amount) {
+        Connection conn = getConnection();
+        conn.setAutoCommit(false);                       // start a transaction by hand
+        if (!currentUser.hasRole("TELLER"))              // check security by hand
+            throw new SecurityException("Access denied");
+        synchronized (this) {                            // manage threads by hand
+            try {
+                debit(from, amount, conn);
+                credit(to, amount, conn);
+                conn.commit();                           // commit by hand
+            } catch (Exception e) {
+                conn.rollback();                         // undo by hand
+            }
+        }
+    }
+}</code></pre>
+  <p>The same method as a Jakarta EE bean:</p>
+  <pre><code>@Stateless
+@RolesAllowed("TELLER")                 // security: the container enforces it
+public class BankService {
+
+    @TransactionAttribute(REQUIRED)     // transaction: the container starts &amp; commits it
+    public void transferFunds(int from, int to, double amount) {
+        debit(from, amount);
+        credit(to, amount);
+        // exception thrown? container rolls back automatically.
+        // concurrency? container handles it.
+    }
+}</code></pre>
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>This is the whole idea</b>
+      Same business logic. All the plumbing became annotations. That trade — write plain code, declare
+      what you need — is Jakarta EE in one sentence.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>The words: server, container, bean</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Term</th><th>Plain meaning</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Application server</strong> (WildFly)</td><td>A large program you run that already contains all the Jakarta EE machinery. You drop your app into it.</td></tr>
+      <tr><td><strong>Container</strong></td><td>The part of the server that <em>manages your objects</em>: it creates them, pools them, injects their dependencies, wraps them with security/transactions, and destroys them. There’s a “web container” for servlets/JSF and an “EJB container” for enterprise beans.</td></tr>
+      <tr><td><strong>Bean</strong></td><td>Any class the container manages for you. An <em>enterprise bean</em> is one carrying EJB annotations (<code>@Stateless</code>, <code>@Stateful</code>, <code>@Singleton</code>, <code>@MessageDriven</code>).</td></tr>
+      <tr><td><strong>Deploy</strong></td><td>Hand your built <code>.war</code>/<code>.ear</code> file to the server so it starts running it.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>The three tiers</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tier</th><th>Runs where</th><th>Contains</th><th>Talks to</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Client tier</strong></td><td>The user’s device</td><td>Web browser, mobile app, desktop app</td><td>Sends HTTP / REST requests to the server</td></tr>
+      <tr><td><strong>Web container</strong></td><td>In the app server</td><td>Servlets, Jakarta Faces (JSF) pages</td><td>Calls enterprise beans</td></tr>
+      <tr><td><strong>EJB container</strong></td><td>In the app server</td><td>Session beans, message-driven beans (your business logic)</td><td>Reads/writes the database via JPA/JDBC</td></tr>
+      <tr><td><strong>Data tier</strong></td><td>A database server</td><td>PostgreSQL, other systems (ERP/CRM)</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p>The container gives beans these for free: <strong>transactions, security, concurrency control,
+    connection pooling, lifecycle management, remote access</strong>. Every one of those is a unit
+    later in this course.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Jakarta EE is a family of APIs</h2>
+  <p>“EJB” (Enterprise Beans) is just one member. Others you’ll meet:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>API</th><th>Does</th><th>This course</th></tr></thead>
+    <tbody>
+      <tr><td>Jakarta Enterprise Beans (EJB)</td><td>Business-logic components</td><td>Units 03–08</td></tr>
+      <tr><td>Jakarta Persistence (JPA)</td><td>Store/load objects in a database</td><td>Unit 13</td></tr>
+      <tr><td>Jakarta Contexts &amp; Dependency Injection (CDI)</td><td>Wiring objects together, scopes</td><td>Unit 14</td></tr>
+      <tr><td>Jakarta Faces (JSF) / Facelets</td><td>Server-rendered web UI</td><td>Unit 09</td></tr>
+      <tr><td>Jakarta Messaging (JMS)</td><td>Asynchronous messages between components</td><td>Unit 11</td></tr>
+      <tr><td>Jakarta RESTful Web Services (JAX-RS)</td><td>Build REST / JSON APIs</td><td>Unit 15</td></tr>
+      <tr><td>Jakarta Security</td><td>Authentication &amp; authorisation</td><td>Unit 07</td></tr>
+    </tbody>
+  </table></div>
+  <p>A server that implements all of these to spec is “Jakarta EE certified”. WildFly is; so are
+    Payara, GlassFish and Open Liberty. Your code moves between them without changes — that’s the
+    point of a standard.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Java EE vs Jakarta EE vs <code>javax</code> vs <code>jakarta</code></b>
+      Same technology, renamed. It was “J2EE”, then “Java EE”, now “Jakarta EE” (since Oracle handed
+      it to the Eclipse Foundation). With that move, most package prefixes changed from
+      <code>javax.*</code> to <code>jakarta.*</code>. A few didn’t (<code>javax.sql</code>,
+      <code>javax.naming</code>) — Unit 05 flags the trap.</div>
+  </div>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"In one line, what is the core deal of Jakarta EE?","opts":["It makes Java run faster","You write business logic; the server provides infrastructure (transactions, security, pooling)","It replaces the database","It is a rival to Java itself"],"a":1,"why":"You declare what you need with annotations; the container supplies the plumbing."},
+      {"q":"What is 'the container'?","opts":["A Docker image","The part of the server that creates, manages, injects and destroys your objects and wraps them with services","A zip file of your code","The database connection"],"a":1,"why":"The container is the runtime manager for your beans. That's why you never call `new` on a bean."},
+      {"q":"'EJB' is...","opts":["The whole of Jakarta EE","One API within Jakarta EE — the one for business-logic components","A database driver","A build tool"],"a":1,"why":"Jakarta EE is a family; EJB (Enterprise Beans) is one member, alongside JPA, CDI, JSF, JMS, JAX-RS, Security."},
+      {"q":"Why can the same app run on WildFly, Payara or GlassFish unchanged?","opts":["They share source code","They all implement the same Jakarta EE specification","Java is interpreted","The app is recompiled each time"],"a":1,"why":"Coding to the standard API means any certified server can run it. Portability is the reason the standard exists."},
+      {"q":"Java EE and Jakarta EE are:","opts":["Completely different platforms","The same platform, renamed after moving to the Eclipse Foundation; most javax.* packages became jakarta.*","Two versions of Java the language","Nothing to do with each other"],"a":1,"why":"Same technology and concepts; the name and most package prefixes changed."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>Jakarta EE</td><td>Standard + machinery for large server apps; you write logic, the server does infrastructure.</td></tr>
+    <tr><td>Application server</td><td>WildFly — contains the machinery; you deploy your app into it.</td></tr>
+    <tr><td>Container</td><td>Manages your beans’ whole life and wraps them with services.</td></tr>
+    <tr><td>Bean</td><td>A container-managed class; enterprise bean = one with EJB annotations.</td></tr>
+    <tr><td>Family</td><td>EJB, JPA, CDI, JSF, JMS, JAX-RS, Security — separate APIs, one platform.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>

@@ -68,7 +68,7 @@ The **Execute** phase has several sub-phases. In total, there are 6 distinct pha
 
 ---
 
-## 6.3 Creating a Simple Facelet Application
+## 5.3 Creating a Simple Facelet Application
 
 To create a Facelets application, you need configuration files, an XHTML page, and a Backing Bean.
 
@@ -126,7 +126,7 @@ The user interface using Facelet tags and Expression Language (`#{...}`).
 
 ---
 
-## 6.4 Composite Components
+## 5.4 Composite Components
 
 Composite components allow developers to create custom UI components using a collection of standard tags. They promote code reuse and uniformity. For example, a custom "Login Box" or "Shipping Address Form" can be written once and reused across many pages.
 
@@ -138,7 +138,7 @@ Composite components allow developers to create custom UI components using a col
 
 ---
 
-## 6.5 Web Resources
+## 5.5 Web Resources
 
 Web resources are static files like CSS, Images, and JavaScript. Jakarta Server Faces has a standardized way of locating and rendering these resources.
 

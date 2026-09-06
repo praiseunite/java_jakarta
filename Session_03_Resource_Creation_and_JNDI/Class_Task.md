@@ -103,8 +103,8 @@ package uppercase.jndi;
 import java.io.IOException;
 import java.io.PrintWriter;
 
-import jakarta.naming.InitialContext;
-import jakarta.naming.NamingException;
+import javax.naming.InitialContext;   // NOTE: JNDI stays under javax.naming, NOT jakarta.naming
+import javax.naming.NamingException;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;
