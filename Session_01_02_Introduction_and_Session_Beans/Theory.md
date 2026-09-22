@@ -450,24 +450,26 @@ public class DemoExampleBean implements DemoExampleBeanRemote {
 
 **Step 3: Create an Application Client (Remote Client)**
 
+> ⚠️ **Important — do NOT create a bean with `new`.** A client never builds an enterprise bean
+> itself; the container does. The correct ways are container injection (`@EJB` / `@Inject`) or a
+> JNDI lookup, both shown properly in **Session 3**. The snippet below is written as **pseudocode**
+> only, to keep the focus on the `add()` call — it will not compile as-is.
+
 ```java
-import org.stateful.co.DemoExampleBean;
 import org.stateful.co.DemoExampleBeanRemote;
+import javax.naming.InitialContext;   // JNDI stays under javax.naming, not jakarta.naming
 
 public class Main {
-    
-    // This variable will hold the reference to our remote bean
-    public static DemoExampleBeanRemote DemoExampleBean;
-    
-    public static void main(String[] args) {
-        
-        // Create an instance of the bean (in a real remote scenario,
-        // this would be done via JNDI lookup - covered in Session 3)
-        DemoExampleBeanRemote DemoExampleBean = new DemoExampleBean();
-        
+
+    public static void main(String[] args) throws Exception {
+
+        // The real way: look the bean up in JNDI (full details in Session 3)
+        InitialContext ctx = new InitialContext();
+        DemoExampleBeanRemote bean = (DemoExampleBeanRemote) ctx.lookup(
+            "java:global/StatefulDemo/StatefulDemoEJB/DemoExampleBean!org.stateful.co.DemoExampleBeanRemote");
+
         // Call the add() method on the bean and print the result
-        // This calls the business logic inside the EJB
-        System.out.println("Result:" + DemoExampleBean.add(4, 2));
+        System.out.println("Result:" + bean.add(4, 2));
         // Expected output: Result:6
     }
 }
@@ -477,10 +479,11 @@ public class Main {
 
 | Line | What It Does |
 |---|---|
-| `public static DemoExampleBeanRemote DemoExampleBean` | Declares a variable of type `DemoExampleBeanRemote` (the remote interface) — we use the interface type, not the concrete class |
-| `new DemoExampleBean()` | Creates an instance of the bean (simplified for now; real clients use JNDI lookup) |
-| `DemoExampleBean.add(4, 2)` | Calls the `add()` method remotely — the client sends `4` and `2` to the server, the bean computes `4+2=6`, and returns `6` |
-| `System.out.println(...)` | Prints the result to the console: `Result:6` |
+| `DemoExampleBeanRemote bean` | A variable of the **remote interface** type — we use the interface, not the concrete class |
+| `new InitialContext()` | Opens a connection to the server's JNDI directory (Session 3) |
+| `ctx.lookup("java:global/...")` | Asks JNDI for the deployed bean by its registered name; the cast turns the returned `Object` into our interface type |
+| `bean.add(4, 2)` | Calls `add()` on the bean — sends `4` and `2`, the bean computes `4+2=6`, returns `6` |
+| `System.out.println(...)` | Prints `Result:6` |
 
 ---
 
@@ -598,27 +601,28 @@ public interface StateLessRemote {
 
 **The Remote Client:**
 
+> ⚠️ **Pseudocode.** Again — never `new` an enterprise bean. The real client obtains the bean by
+> JNDI lookup (or `@EJB` injection), shown properly in Session 3. Shown here only to focus on the
+> method calls.
+
 ```java
-import java.util.ArrayList;
 import java.util.List;
+import javax.naming.InitialContext;
 import org.stateless.ejb.StateLessRemote;
 
 public class Main {
-    
-    public static StateLessRemote StateLess;  // reference to the remote interface
-    
-    public static void main(String[] args) {
-        
-        // Create a bean instance (via JNDI lookup in real scenarios)
-        StateLessRemote StateLess = new org.stateless.ejb.StateLess();
-        
-        List PList = new ArrayList();  // a list to hold our results
-        
-        StateLess.addProduct("MobilePhone");  // call the business method
-        
-        PList = StateLess.getProducts();  // retrieve the products list
-        
-        System.out.println(PList);  // prints: [MobilePhone]
+
+    public static void main(String[] args) throws Exception {
+
+        InitialContext ctx = new InitialContext();
+        StateLessRemote catalog = (StateLessRemote) ctx.lookup(
+            "java:global/StatelessDemo/StatelessDemoEJB/StateLess!org.stateless.ejb.StateLessRemote");
+
+        catalog.addProduct("MobilePhone");            // call the business method
+
+        List products = catalog.getProducts();        // retrieve the products list
+
+        System.out.println(products);                 // prints: [MobilePhone]
     }
 }
 ```

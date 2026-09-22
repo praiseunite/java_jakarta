@@ -113,7 +113,7 @@ package com.globalbank.web;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import jakarta.naming.InitialContext;
+import javax.naming.InitialContext;   // NOTE: JNDI is javax.naming, NOT jakarta.naming
 import jakarta.servlet.ServletException;
 import jakarta.servlet.annotation.WebServlet;
 import jakarta.servlet.http.HttpServlet;

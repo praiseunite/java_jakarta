@@ -45,6 +45,27 @@ Here is a complete list of everything you need, in the order you will install it
 
 ---
 
+## 2b. Which versions this course standardises on (read once)
+
+To stop “version soup”, use exactly these:
+
+| Thing | Use | Notes |
+|---|---|---|
+| **JDK** | Eclipse **Temurin 17 (LTS)** — from [adoptium.net](https://adoptium.net) | The free, no-account OpenJDK build. Prefer it over the Oracle download. |
+| **Jakarta EE** | **10** (`jakarta.jakartaee-api` **10.0.0**, scope `provided`) | Where older notes say 9.0.0 / 9.1.0 / “9 and 10”, use 10.0.0. |
+| **App server** | **WildFly 30+** | Ships Jakarta EE 10. WildFly 26–29 (Jakarta EE 9/10) also work. |
+| **Package prefix** | `jakarta.*` for everything **except** the packages below | The Java EE → Jakarta EE rename moved `javax.*` → `jakarta.*` — but not all of them. |
+
+**These packages keep the old `javax.*` name — this is correct, not a typo:**
+
+| Package | Used for |
+|---|---|
+| `javax.naming.*` | JNDI (`InitialContext`, `NamingException`). **There is no `jakarta.naming`.** |
+| `javax.sql.DataSource` | The JDBC DataSource type. |
+| `javax.jms.*` | Only when your messaging library is ActiveMQ **5.18 or older**. WildFly/Artemis and ActiveMQ 5.19+ use `jakarta.jms.*`. Match the import to the library on your classpath. |
+
+---
+
 ## 3. Step-by-Step Installation
 
 ### STEP 1 — Download and Install Java JDK

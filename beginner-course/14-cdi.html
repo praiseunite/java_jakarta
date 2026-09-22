@@ -1,0 +1,136 @@
+<title>CDI: Injection & Scopes</title>
+<meta name="description" content="The wiring system underneath everything: @Inject, bean scopes, qualifiers, producers, and @Inject vs @EJB.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "14-cdi";</script>
+
+<main class="page">
+
+  <h1>Unit 14 · CDI — injection &amp; scopes</h1>
+  <p class="lede">You’ve used <code>@Inject</code> and <code>@Named</code> in nearly every unit without
+    a proper introduction. <strong>CDI</strong> (Contexts and Dependency Injection) is the wiring layer
+    that decides <em>which object</em> fills an injection point and <em>how long it lives</em>.</p>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Recap</b> “Inject” = the container fills a field with a ready object so
+      you don’t call <code>new</code> (Unit 00). CDI is the machinery that does it.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>The basics</h2>
+  <p>Any suitable class is a “CDI bean”. Ask for one with <code>@Inject</code>; CDI finds a matching
+    type, creates it (respecting its scope), and hands it over.</p>
+  <pre><code>public class GreetingService {
+    public String greet(String name) { return "Hello, " + name; }
+}
+
+@Path("/hello")
+public class HelloResource {
+    @Inject GreetingService greeting;              // CDI supplies it
+
+    @GET public String hi() { return greeting.greet("world"); }
+}</code></pre>
+  <p>A near-empty <code>src/main/webapp/WEB-INF/beans.xml</code> (or
+    <code>META-INF/beans.xml</code>) switches CDI on for the module.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Scopes — how long an injected bean lives</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Scope</th><th>One instance per…</th><th>Use for</th></tr></thead>
+    <tbody>
+      <tr><td><code>@RequestScoped</code></td><td>one HTTP request</td><td>Form-backing beans, per-request state</td></tr>
+      <tr><td><code>@SessionScoped</code></td><td>one browser session (needs <code>Serializable</code>)</td><td>Logged-in user, cart</td></tr>
+      <tr><td><code>@ApplicationScoped</code></td><td>the whole application</td><td>Caches, config, stateless helpers</td></tr>
+      <tr><td><code>@Dependent</code> <em>(default)</em></td><td>its injection point — lives and dies with its owner</td><td>Small helpers with no state of their own</td></tr>
+      <tr><td><code>@ConversationScoped</code></td><td>a developer-controlled multi-page conversation</td><td>Wizards spanning several pages</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>Scope is the whole point</b>
+      Inject a <code>@SessionScoped</code> cart into a <code>@RequestScoped</code> controller and each
+      request automatically gets <em>this user’s</em> cart. CDI routes every injection to the right
+      instance for the current context.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2><code>@Inject</code> vs <code>@EJB</code></h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th><code>@Inject</code> (CDI)</th><th><code>@EJB</code> (EJB)</th></tr></thead>
+    <tbody>
+      <tr><td>Injects</td><td>Any CDI bean, including EJBs</td><td>Only enterprise beans</td></tr>
+      <tr><td>Understands CDI scopes/qualifiers</td><td>Yes</td><td>No</td></tr>
+      <tr><td>Works in plain (non-EJB) classes</td><td>Yes</td><td>Limited</td></tr>
+      <tr><td>Today’s advice</td><td>Prefer it almost everywhere</td><td>Legacy; still fine for remote EJB lookups</td></tr>
+    </tbody>
+  </table></div>
+  <p>Modern style: annotate session beans as usual (<code>@Stateless</code> …) but inject them with
+    <code>@Inject</code>.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Qualifiers — when one type isn’t enough</h2>
+  <p>Two implementations of the same interface? Tell CDI which one with a custom qualifier annotation:</p>
+  <pre><code>@Qualifier @Retention(RUNTIME) @Target({FIELD, PARAMETER, TYPE})
+public @interface Sms {}
+
+public interface Notifier { void send(String to, String msg); }
+
+@Sms   public class SmsNotifier   implements Notifier { ... }
+@Email public class EmailNotifier implements Notifier { ... }
+
+public class AlertService {
+    @Inject @Sms Notifier notifier;         // unambiguous now
+}</code></pre>
+
+  <span class="eyebrow">concept</span>
+  <h2>Producers — inject things you don’t own</h2>
+  <p>Need to inject a value or a third-party object that has no annotations? A
+    <code>@Produces</code> method turns any return value into something injectable:</p>
+  <pre><code>@ApplicationScoped
+public class Config {
+    @Produces @MaxTransfer
+    public double maxTransfer() { return 50_000.0; }
+}
+
+public class TransferBean {
+    @Inject @MaxTransfer double limit;       // gets 50000.0
+}</code></pre>
+
+  <span class="eyebrow">concept</span>
+  <h2>CDI events (decoupled notifications)</h2>
+  <pre><code>// fire
+@Inject Event&lt;AccountFunded&gt; funded;
+funded.fire(new AccountFunded(accountId, amount));
+
+// observe — anywhere, no registration
+public void onFunded(@Observes AccountFunded e) {
+    sms.send(e.customer(), "Your account was credited.");
+}</code></pre>
+  <p>The firer doesn’t know who’s listening. Same Observer pattern the original Session 4 notes used
+    for <code>NotificationBean</code>.</p>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"What does CDI decide at an @Inject point?","opts":["The database schema","Which object of the right type to supply, and how long it lives (its scope)","The HTTP status code","The Maven version"],"a":1,"why":"CDI resolves the type (and qualifiers) and returns the correct instance for the current context/scope."},
+      {"q":"You want one instance per logged-in user. Which scope?","opts":["@RequestScoped","@SessionScoped","@ApplicationScoped","@Dependent"],"a":1,"why":"@SessionScoped gives one instance per browser session (and the bean must be Serializable)."},
+      {"q":"@Inject vs @EJB today:","opts":["@EJB is required for all beans","Prefer @Inject; it handles CDI scopes/qualifiers and works in plain classes too","They are identical","@Inject only works in tests"],"a":1,"why":"@Inject is the general mechanism and understands the full CDI model. @EJB is legacy, still used for remote lookups."},
+      {"q":"Two classes implement Notifier. How does CDI know which to inject?","opts":["It picks at random","You add a custom @Qualifier annotation to the implementation and the injection point","It always throws","You must delete one"],"a":1,"why":"Qualifiers disambiguate multiple beans of the same type, e.g. @Sms vs @Email."},
+      {"q":"A @Produces method is for...","opts":["Producing HTTP responses","Making a value or a class you don't own injectable","Starting the server","Running SQL"],"a":1,"why":"@Produces turns any return value into an injectable bean — useful for config values and third-party objects."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>CDI</td><td>The wiring layer: resolves <code>@Inject</code> points, manages bean lifecycles.</td></tr>
+    <tr><td>Scopes</td><td>request / session / application / dependent / conversation — one instance per that context.</td></tr>
+    <tr><td>@Inject vs @EJB</td><td>Prefer <code>@Inject</code>; it knows scopes and qualifiers and works everywhere.</td></tr>
+    <tr><td>Qualifiers</td><td>Pick between multiple beans of one type.</td></tr>
+    <tr><td>Producers / events</td><td>Inject things you don’t own; fire/observe decoupled notifications.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>

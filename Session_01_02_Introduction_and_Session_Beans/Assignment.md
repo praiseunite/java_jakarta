@@ -140,7 +140,7 @@ Session ended and history cleared.
 
 **Acceptance criteria**:
 - `containsVowels("Jakarta Enterprise Beans")` → `true`
-- `countVowels("Jakarta Enterprise Beans")` → `7` (a, a, a, E, e, i, e, a — count carefully!)
+- `countVowels("Jakarta Enterprise Beans")` → `9`  (Jakarta: a,a,a = 3 · Enterprise: E,e,i,e = 4 · Beans: e,a = 2 → 3+4+2 = 9)
 - `containsVowels("rhythm")` → `false`
 - `countVowels("AEiou")` → `5`
 

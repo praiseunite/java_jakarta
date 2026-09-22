@@ -1,0 +1,170 @@
+<title>JPA: Storing Objects</title>
+<meta name="description" content="The modern way to save and load data in Jakarta EE: entities, the EntityManager, a persistence unit, and JPQL.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "13-jpa-persistence";</script>
+
+<main class="page">
+
+  <h1>Unit 13 · JPA — storing objects properly</h1>
+  <p class="lede">Unit 04 showed the <em>shape</em> of an entity. This is the part the original course
+    barely covered: actually saving, loading and querying entities with the
+    <strong>EntityManager</strong>. JPA lets you work with objects and (mostly) forget the SQL.</p>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Recap</b> An entity is a plain class with <code>@Entity</code> and an
+      <code>@Id</code>, mapped to a database table (Unit 04). JDBC (Unit 12) is the low-level
+      alternative where you write every SQL string yourself.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>What JPA is</h2>
+  <p><strong>JPA</strong> (Jakarta Persistence API) is an <em>object-relational mapper</em>: it
+    translates between Java objects and database rows. You call <code>em.persist(account)</code>;
+    JPA writes the <code>INSERT</code>. You call <code>em.find(Account.class, 42)</code>; JPA runs the
+    <code>SELECT</code> and hands you an <code>Account</code> object. A <strong>provider</strong>
+    (Hibernate, on WildFly) does the actual work.</p>
+
+  <span class="eyebrow">concept</span>
+  <h2>Three things you need</h2>
+  <h3>1 · An entity with real mappings</h3>
+  <pre><code>import jakarta.persistence.*;
+
+@Entity
+@Table(name = "accounts")
+public class Account {
+
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;                       // DB assigns it
+
+    @Column(name = "account_holder", nullable = false)
+    private String holder;
+
+    private double balance;
+
+    @Version                              // optimistic locking (Unit 07)
+    private int version;
+
+    // getters / setters
+}</code></pre>
+
+  <h3>2 · A persistence unit — <code>src/main/resources/META-INF/persistence.xml</code></h3>
+  <pre><code>&lt;persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.0"&gt;
+  &lt;persistence-unit name="globalbankPU" transaction-type="JTA"&gt;
+    &lt;jta-data-source&gt;java:/jdbc/GlobalBankDB&lt;/jta-data-source&gt;
+    &lt;properties&gt;
+      &lt;property name="jakarta.persistence.schema-generation.database.action"
+                value="update"/&gt;      &lt;!-- create/update tables from entities --&gt;
+    &lt;/properties&gt;
+  &lt;/persistence-unit&gt;
+&lt;/persistence&gt;</code></pre>
+  <p>It names the unit, points at the DataSource from Unit 05, and (optionally) lets JPA build the
+    tables from your entities.</p>
+
+  <h3>3 · An <code>EntityManager</code>, injected into a bean</h3>
+  <pre><code>@Stateless
+public class AccountService {
+
+    @PersistenceContext(unitName = "globalbankPU")
+    private EntityManager em;              // container injects &amp; manages it
+
+    public Account open(String holder) {
+        Account a = new Account();
+        a.setHolder(holder);
+        em.persist(a);                     // INSERT (inside the method's transaction)
+        return a;                          // a.getId() is now populated
+    }
+
+    public Account get(Long id) {
+        return em.find(Account.class, id); // SELECT by primary key, or null
+    }
+
+    public void deposit(Long id, double amount) {
+        Account a = em.find(Account.class, id);
+        a.setBalance(a.getBalance() + amount);
+        // no save() call needed: a managed entity is flushed at commit (Unit 06)
+    }
+}</code></pre>
+
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>The “managed entity” trick</b>
+      An entity returned by <code>find()</code> or <code>persist()</code> is <em>managed</em>: JPA
+      watches it. Change a field, and at transaction commit JPA writes the <code>UPDATE</code>
+      automatically. No explicit save.</div>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>The four operations</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Call</th><th>SQL it runs</th></tr></thead>
+    <tbody>
+      <tr><td><code>em.persist(obj)</code></td><td><code>INSERT</code></td></tr>
+      <tr><td><code>em.find(Class, id)</code></td><td><code>SELECT … WHERE id = ?</code></td></tr>
+      <tr><td>mutate a managed entity</td><td><code>UPDATE</code> at commit</td></tr>
+      <tr><td><code>em.remove(obj)</code></td><td><code>DELETE</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>JPQL — querying by object, not table</h2>
+  <p>JPQL looks like SQL but names <em>entities and fields</em>, not tables and columns:</p>
+  <pre><code>List&lt;Account&gt; rich = em.createQuery(
+        "SELECT a FROM Account a WHERE a.balance &gt; :min ORDER BY a.balance DESC",
+        Account.class)
+    .setParameter("min", 10_000.0)
+    .getResultList();</code></pre>
+
+  <span class="eyebrow">concept</span>
+  <h2>Relationships</h2>
+  <pre><code>@Entity
+public class Customer {
+    @Id @GeneratedValue private Long id;
+
+    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+    private List&lt;Account&gt; accounts = new ArrayList&lt;&gt;();
+}
+
+@Entity
+public class Account {
+    @Id @GeneratedValue private Long id;
+
+    @ManyToOne
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+}</code></pre>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>@OneToMany</code> / <code>@ManyToOne</code></td><td>One customer has many accounts; each account has one customer.</td></tr>
+      <tr><td><code>@JoinColumn</code></td><td>The foreign-key column that stores the link.</td></tr>
+      <tr><td><code>cascade = ALL</code></td><td>Persisting/removing the customer cascades to its accounts.</td></tr>
+      <tr><td><code>mappedBy</code></td><td>“The other side owns the foreign key” — avoids a duplicate column.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Check yourself</h3>
+    <script type="application/json">
+    [
+      {"q":"What does JPA do for you?","opts":["Runs the app server","Translates between Java objects and database rows so you rarely write SQL","Replaces WildFly","Encrypts the database"],"a":1,"why":"JPA is an object-relational mapper. em.persist() writes the INSERT; em.find() runs the SELECT."},
+      {"q":"You loaded an Account with em.find(), changed its balance, and did nothing else. At commit...","opts":["Nothing is saved — you forgot em.save()","JPA writes an UPDATE automatically because the entity is 'managed'","It throws an exception","A new row is inserted"],"a":1,"why":"Managed entities are dirty-checked and flushed on commit. There is no save() method."},
+      {"q":"Where is the persistence unit declared?","opts":["pom.xml","META-INF/persistence.xml","web.xml","The entity class"],"a":1,"why":"persistence.xml names the unit, its data source, and provider properties."},
+      {"q":"JPQL 'SELECT a FROM Account a WHERE a.balance > :min' refers to...","opts":["The accounts table and balance column","The Account entity and its balance field","A stored procedure","A JNDI name"],"a":1,"why":"JPQL is expressed in terms of entities and their fields, not tables and columns."},
+      {"q":"An Account has one Customer; a Customer has many Accounts. On Account you put...","opts":["@OneToMany","@ManyToOne with @JoinColumn","@Version","@Entity only"],"a":1,"why":"Many accounts to one customer -> @ManyToOne on the Account side, with the foreign-key @JoinColumn."}
+    ]
+    </script>
+  </section>
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td>JPA</td><td>Object ↔ row mapper; provider is Hibernate on WildFly.</td></tr>
+    <tr><td>Need</td><td>Mapped <code>@Entity</code> + <code>persistence.xml</code> + injected <code>EntityManager</code>.</td></tr>
+    <tr><td>CRUD</td><td><code>persist</code> / <code>find</code> / mutate-then-commit / <code>remove</code>.</td></tr>
+    <tr><td>Managed entity</td><td>Changes flush automatically at commit — no <code>save()</code>.</td></tr>
+    <tr><td>JPQL</td><td>SQL-like, but over entities and fields; <code>@OneToMany</code>/<code>@ManyToOne</code> for links.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
