@@ -1,0 +1,317 @@
+<title>Session 11 — Jakarta CDI (Part I)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 11: Jakarta Contexts and Dependency Injection (CDI) Part I: architecture, beans.xml configuration, core scopes (@RequestScoped, @SessionScoped, @ApplicationScoped, @ConversationScoped), and type-safe @Inject.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s11";</script>
+
+<main class="page">
+
+  <h1>Session 11 · Jakarta CDI (Part I)</h1>
+  <p class="lede">Throughout this course, you have seen annotations like <code>@Inject</code> and <code>@Named</code>.
+    <strong>Jakarta Contexts and Dependency Injection (CDI)</strong> is the foundational wiring backbone of modern Jakarta EE.
+    It manages the creation, lifecycle, and type-safe injection of application components across all tiers.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Define Contexts and Dependency Injection (CDI) and explain its core architecture</li>
+        <li>Configure CDI bean archives using <code>beans.xml</code> and understand discovery modes</li>
+        <li>Master all 5 core CDI scopes: <code>@Dependent</code>, <code>@RequestScoped</code>, <code>@SessionScoped</code>, <code>@ApplicationScoped</code>, and <code>@ConversationScoped</code></li>
+        <li>Apply type-safe dependency injection using <code>@Inject</code> on fields, constructors, and initializer methods</li>
+        <li>Contrast <code>@Inject</code> (CDI) with <code>@EJB</code> and <code>@Resource</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       11.1 What is CDI?
+       ===================================================================== -->
+  <span class="eyebrow">session 11.1</span>
+  <h2>Part 1 · The CDI Architecture: Loose Coupling &amp; Strong Typing</h2>
+
+  <div class="callout callout--analogy"><span class="callout__i">🔌</span>
+    <div class="callout__b"><b>The Power Outlet Analogy</b>
+      In tight coupling, a lamp's cord is hard-soldered into the power generator inside the power station. You cannot move the lamp, replace it, or test it separately.<br>
+      In <strong>CDI</strong>, the wall has a standardized socket (the injection point). Any device with a matching plug (type-safe bean) can be plugged in without rewiring the building. The electrical grid (the CDI container) decides when current flows (lifecycle scopes).
+    </div>
+  </div>
+
+  <p>In traditional Java, creating objects via <code>new ServiceImpl()</code> ties your code to one concrete implementation.
+    With CDI, the container supplies the instance at runtime, managing its exact lifecycle according to its contextual scope.</p>
+
+  <h3>Enabling CDI: The <code>beans.xml</code> Marker File</h3>
+  <p>For a JAR or WAR module to be recognized as a CDI bean archive, it must contain a <code>beans.xml</code> file
+    in <code>META-INF/</code> (for JARs) or <code>WEB-INF/</code> (for WARs):</p>
+
+  <div class="code-head">WEB-INF/beans.xml — CDI Bean Archive Configuration</div>
+  <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="annotated"&gt;
+&lt;/beans&gt;</code></pre>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Bean Discovery Mode</th><th>Which Classes Become CDI Beans?</th></tr></thead>
+    <tbody>
+      <tr><td><code>annotated</code> (Default &amp; Recommended)</td><td>Only classes with an explicit scope annotation (e.g., <code>@RequestScoped</code>, <code>@ApplicationScoped</code>). Keeps startup fast.</td></tr>
+      <tr><td><code>all</code></td><td>Every Java class in the archive is treated as a CDI bean (can slow down deployment).</td></tr>
+      <tr><td><code>none</code></td><td>CDI is completely disabled for this archive.</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       11.2 The Five Core CDI Scopes
+       ===================================================================== -->
+  <span class="eyebrow">session 11.2</span>
+  <h2>Part 2 · The Five Core CDI Scopes</h2>
+
+  <p>A <strong>Scope</strong> defines two things: <em>how many instances exist</em> and <em>how long they live in memory</em>:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Scope Annotation</th><th>Package</th><th>Lifecycle Duration</th><th>Typical Use Case</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>@Dependent</code><br>(Default pseudo-scope)</td>
+        <td><code>jakarta.enterprise.context</code></td>
+        <td>Lives and dies with the bean that injected it. No shared state.</td>
+        <td>Stateless utility helpers, loggers, mathematical converters.</td>
+      </tr>
+      <tr>
+        <td><code>@RequestScoped</code></td>
+        <td><code>jakarta.enterprise.context</code></td>
+        <td>One single HTTP request/response cycle. Destroyed when response returns.</td>
+        <td>JSF form backing beans, REST endpoint controllers.</td>
+      </tr>
+      <tr>
+        <td><code>@SessionScoped</code></td>
+        <td><code>jakarta.enterprise.context</code></td>
+        <td>One browser session (persists across multiple page clicks). <strong>Must implement <code>Serializable</code></strong>.</td>
+        <td>Logged-in user credentials, shopping cart, user theme preferences.</td>
+      </tr>
+      <tr>
+        <td><code>@ApplicationScoped</code></td>
+        <td><code>jakarta.enterprise.context</code></td>
+        <td>Single shared instance for the entire lifetime of the application.</td>
+        <td>Global application configuration, in-memory caches, hit counters.</td>
+      </tr>
+      <tr>
+        <td><code>@ConversationScoped</code></td>
+        <td><code>jakarta.enterprise.context</code></td>
+        <td>Spans multiple requests controlled programmatically via <code>Conversation.begin()</code> and <code>end()</code>.</td>
+        <td>Multi-step wizards (e.g., Book Flight $\to$ Select Seat $\to$ Payment).</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="code-head">Multi-Step Booking Wizard with @ConversationScoped</div>
+  <pre><code>package com.globalbank.web;
+
+import jakarta.enterprise.context.Conversation;
+import jakarta.enterprise.context.ConversationScoped;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import java.io.Serializable;
+
+@Named("loanWizard")
+@ConversationScoped // Survives across multi-page wizard
+public class LoanApplicationWizard implements Serializable {
+
+    @Inject
+    private Conversation conversation;
+
+    private int step = 1;
+    private double requestedAmount;
+
+    public void startApplication() {
+        if (conversation.isTransient()) {
+            conversation.begin(); // Promotes transient conversation to long-running!
+        }
+    }
+
+    public void submitFinal() {
+        // execute loan creation ...
+        if (!conversation.isTransient()) {
+            conversation.end(); // Destroys conversation and frees memory
+        }
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       11.3 Injection Strategies
+       ===================================================================== -->
+  <span class="eyebrow">session 11.3</span>
+  <h2>Part 3 · The Three Ways to Apply <code>@Inject</code></h2>
+
+  <p>CDI supports three injection points. Constructor injection is widely recognized as the most testable:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Injection Pattern</th><th>Code Example</th><th>Architectural Trade-Off</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Field Injection</strong></td>
+        <td><code>@Inject private AccountService service;</code></td>
+        <td>Convenient and short, but cannot make fields <code>final</code>; harder to test with plain JUnit mocks.</td>
+      </tr>
+      <tr>
+        <td><strong>Constructor Injection</strong><br><em>(Best Practice)</em></td>
+        <td><pre style="margin:0"><code>@Inject
+public Controller(AccountService s) {
+    this.service = s;
+}</code></pre></td>
+        <td>Allows <code>final</code> immutable fields; cleanly testable with <code>new Controller(mockService)</code> in unit tests.</td>
+      </tr>
+      <tr>
+        <td><strong>Initializer Method</strong></td>
+        <td><pre style="margin:0"><code>@Inject
+public void init(AccountService s) { ... }</code></pre></td>
+        <td>Invoked by container after constructor; useful for multi-dependency configuration setups.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       11.4 @Inject vs @EJB vs @Resource
+       ===================================================================== -->
+  <span class="eyebrow">session 11.4</span>
+  <h2>Part 4 · Disambiguating <code>@Inject</code> vs. <code>@EJB</code> vs. <code>@Resource</code></h2>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>Specification</th><th>What It Injects</th><th>Understands CDI Scopes?</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong><code>@Inject</code></strong></td>
+        <td>Jakarta CDI</td>
+        <td>Any CDI bean, EJB, or produced object.</td>
+        <td><strong>Yes</strong> (Full scope, qualifier, and decorator awareness)</td>
+      </tr>
+      <tr>
+        <td><strong><code>@EJB</code></strong></td>
+        <td>Jakarta Enterprise Beans</td>
+        <td>Enterprise Beans (Stateless, Stateful, Singleton) only.</td>
+        <td><strong>No</strong> (Legacy EJB container lookup)</td>
+      </tr>
+      <tr>
+        <td><strong><code>@Resource</code></strong></td>
+        <td>Jakarta Common Annotations</td>
+        <td>Server-managed environment resources (DataSources, JMS queues, <code>UserTransaction</code>).</td>
+        <td><strong>No</strong> (Direct JNDI registry injection)</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">CDI Scope Lifecycle Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Client A opens page -> Client B opens page concurrently
+Request 1 (Client A): @RequestScoped bean created -> processes -> destroyed.
+Request 2 (Client A): @SessionScoped Cart retained. Instance ID unchanged.
+Request 3 (Client B): Gets separate @SessionScoped Cart instance.
+Both clients share the exact same @ApplicationScoped GlobalConfig instance.</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Simulate CDI Scopes</button>
+      <span class="bench__hint">Traces contextual instance allocation and destruction across client requests.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[09:05:01,001] [CDI Context] Client A sends GET /cart.xhtml (Session ID: JSESSION_A1)
+[09:05:01,004] [CDI Context] Created @RequestScoped FormController [Instance #101]
+[09:05:01,006] [CDI Context] Created @SessionScoped ShoppingCart [Instance #901] for JSESSION_A1
+[09:05:01,009] [CDI Context] Injected @ApplicationScoped BankConfig [Instance #001] (Single shared instance)
+[09:05:01,012] [CDI Context] Request 1 completed. Destroyed @RequestScoped FormController [Instance #101].
+[09:05:01,014] [CDI Context] Client B sends GET /cart.xhtml (Session ID: JSESSION_B2)
+[09:05:01,017] [CDI Context] Created @SessionScoped ShoppingCart [Instance #902] for JSESSION_B2
+[09:05:01,019] [CDI Context] Injected @ApplicationScoped BankConfig [Instance #001] (Reused existing singleton)
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 11 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the default pseudo-scope of a CDI bean if no scope annotation is specified?",
+        "opts": [
+          "@ApplicationScoped",
+          "@Dependent",
+          "@RequestScoped",
+          "@SessionScoped"
+        ],
+        "a": 1,
+        "why": "@Dependent is the default pseudo-scope: instances live and die with the object into which they are injected."
+      },
+      {
+        "q": "Which CDI scope requires the bean class to implement java.io.Serializable?",
+        "opts": [
+          "@RequestScoped",
+          "@SessionScoped",
+          "@ApplicationScoped",
+          "@Dependent"
+        ],
+        "a": 1,
+        "why": "@SessionScoped beans are bound to HTTP sessions, which application servers can passivate to disk or replicate across clusters."
+      },
+      {
+        "q": "What file must be placed in WEB-INF or META-INF to enable CDI in a deployment archive?",
+        "opts": [
+          "web.xml",
+          "beans.xml",
+          "ejb-jar.xml",
+          "context.xml"
+        ],
+        "a": 1,
+        "why": "beans.xml is the official deployment descriptor that configures CDI bean archives and discovery modes."
+      },
+      {
+        "q": "Which scope allows a developer to programmatically span state across a multi-step user wizard with begin() and end()?",
+        "opts": [
+          "@WizardScoped",
+          "@ConversationScoped",
+          "@StepScoped",
+          "@SessionScoped"
+        ],
+        "a": 1,
+        "why": "@ConversationScoped provides developer-controlled lifecycles via the injected Conversation API."
+      },
+      {
+        "q": "Why is Constructor Injection preferred over Field Injection in modern software design?",
+        "opts": [
+          "It allows fields to be marked final (immutable) and makes unit testing possible without special reflection frameworks",
+          "It requires 50% less RAM",
+          "Field injection is deprecated in Java 17",
+          "Constructor injection bypasses the JVM"
+        ],
+        "a": 0,
+        "why": "Constructor injection supports immutability (final fields) and allows straightforward testing via new Controller(mockService)."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>CDI Core</strong></td><td>Contextual dependency injection managing instance creation, wiring, and lifecycle.</td></tr>
+    <tr><td><strong><code>beans.xml</code></strong></td><td>Required marker file setting <code>bean-discovery-mode="annotated"</code>.</td></tr>
+    <tr><td><strong>Five Scopes</strong></td><td><code>@Dependent</code> (default), <code>@RequestScoped</code>, <code>@SessionScoped</code> (serializable), <code>@ApplicationScoped</code>, <code>@ConversationScoped</code>.</td></tr>
+    <tr><td><strong>Constructor Injection</strong></td><td>Preferred pattern allowing <code>final</code> fields and simple unit testing.</td></tr>
+    <tr><td><strong><code>@Inject</code> vs <code>@EJB</code></strong></td><td><code>@Inject</code> is modern, universal, and scope-aware; <code>@EJB</code> is legacy EJB-only.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

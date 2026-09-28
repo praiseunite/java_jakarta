@@ -1,0 +1,278 @@
+<title>Session 14 — Packaging Jakarta Applications</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 14: Packaging Jakarta Applications: JAR, WAR, RAR, and EAR archives, application.xml, modern Skinny WARs, WildFly deployment markers, and classloading isolation.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s14";</script>
+
+<main class="page">
+
+  <h1>Session 14 · Packaging Jakarta Applications</h1>
+  <p class="lede">Writing code is only the first step. To run in production, enterprise components must be packaged
+    into standardized archives and deployed to an application server like WildFly. Session 14 covers the anatomy of
+    <strong>JAR</strong>, <strong>WAR</strong>, <strong>RAR</strong>, and <strong>EAR</strong> bundles, the modern
+    <strong>Skinny WAR</strong> paradigm, deployment automation, and classloading architecture.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Identify the four standard Jakarta EE packaging archives: <code>.jar</code>, <code>.war</code>, <code>.rar</code>, and <code>.ear</code></li>
+        <li>Deconstruct the internal layout of an Enterprise Archive (<code>.ear</code>) and configure <code>application.xml</code></li>
+        <li>Explain the modern "Skinny WAR" architecture and when to choose a standalone WAR over an EAR</li>
+        <li>Deploy applications to WildFly via CLI, Admin GUI, and file marker automation (<code>.dodeploy</code>)</li>
+        <li>Master classloading isolation, parent-first vs. child-first delegation, and <code>jboss-deployment-structure.xml</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       14.1 The Four Archive Types
+       ===================================================================== -->
+  <span class="eyebrow">session 14.1</span>
+  <h2>Part 1 · The Four Standard Jakarta EE Archive Types</h2>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Archive</th><th>Full Name</th><th>Primary Contents</th><th>Typical Deployment Role</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong><code>.jar</code></strong></td>
+        <td>Java Archive</td>
+        <td>Compiled <code>.class</code> files, EJB session beans, JPA entities, <code>META-INF/beans.xml</code></td>
+        <td>Reusable business logic libraries or standalone EJB modules.</td>
+      </tr>
+      <tr>
+        <td><strong><code>.war</code></strong></td>
+        <td>Web Application Archive</td>
+        <td>Servlets, JSF Facelets (<code>.xhtml</code>), static web assets, <code>WEB-INF/web.xml</code>, <code>WEB-INF/classes/</code></td>
+        <td>Web user interface tier and RESTful API endpoints.</td>
+      </tr>
+      <tr>
+        <td><strong><code>.rar</code></strong></td>
+        <td>Resource Adapter Archive</td>
+        <td>JCA connector classes, native socket libraries, <code>META-INF/ra.xml</code></td>
+        <td>Pluggable enterprise connectors (e.g., SAP, IBM CICS adapters).</td>
+      </tr>
+      <tr>
+        <td><strong><code>.ear</code></strong></td>
+        <td>Enterprise Application Archive</td>
+        <td>Contains multiple WARs, EJB JARs, RARs, shared <code>lib/</code>, and <code>META-INF/application.xml</code></td>
+        <td>Top-level enterprise suite bundling web and business tiers into one unified deployment.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       14.2 The Anatomy of an EAR
+       ===================================================================== -->
+  <span class="eyebrow">session 14.2</span>
+  <h2>Part 2 · The Enterprise Archive (<code>.ear</code>) &amp; <code>application.xml</code></h2>
+
+  <p>An Enterprise Archive brings multiple tiers together under a single coordinated deployment context:</p>
+
+  <div class="code-head">Physical Structure of GlobalBank.ear</div>
+  <pre><code>GlobalBank.ear
+├── META-INF/
+│   ├── application.xml        &lt;!-- Master deployment descriptor --&gt;
+│   └── MANIFEST.MF
+├── lib/                       &lt;!-- Shared third-party libraries (accessible to all modules) --&gt;
+│   ├── commons-lang3.jar
+│   └── postgresql-driver.jar
+├── GlobalBank-EJB.jar         &lt;!-- Business logic tier --&gt;
+│   ├── com/globalbank/ejb/AccountBean.class
+│   └── META-INF/beans.xml
+└── GlobalBank-Web.war         &lt;!-- Presentation tier --&gt;
+    ├── login.xhtml
+    ├── index.xhtml
+    └── WEB-INF/
+        ├── web.xml
+        └── beans.xml</code></pre>
+
+  <div class="code-head">META-INF/application.xml — Master Application Descriptor</div>
+  <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;application xmlns="https://jakarta.ee/xml/ns/jakartaee" version="10"&gt;
+    &lt;application-name&gt;GlobalBankApp&lt;/application-name&gt;
+
+    &lt;!-- 1. Web Module Definition with Context Root --&gt;
+    &lt;module&gt;
+        &lt;web&gt;
+            &lt;web-uri&gt;GlobalBank-Web.war&lt;/web-uri&gt;
+            &lt;context-root&gt;/globalbank&lt;/context-root&gt;
+        &lt;/web&gt;
+    &lt;/module&gt;
+
+    &lt;!-- 2. EJB Business Module --&gt;
+    &lt;module&gt;
+        &lt;ejb&gt;GlobalBank-EJB.jar&lt;/ejb&gt;
+    &lt;/module&gt;
+
+    &lt;!-- 3. Shared Library Directory --&gt;
+    &lt;library-directory&gt;lib&lt;/library-directory&gt;
+&lt;/application&gt;</code></pre>
+
+  <!-- =====================================================================
+       14.3 The Modern "Skinny WAR"
+       ===================================================================== -->
+  <span class="eyebrow">session 14.3</span>
+  <h2>Part 3 · The Modern "Skinny WAR" Paradigm</h2>
+
+  <p>Since the introduction of EJB 3.1 in Java EE 6, <strong>Enterprise Beans (EJBs) can be packaged directly inside a WAR</strong>.
+    You no longer need to build an EAR unless you have complex multi-module requirements:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Architecture Model</th><th>Package Format</th><th>When to Choose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>All-in-One WAR</strong><br><em>(Modern Cloud / Microservices)</em></td>
+        <td>Single <code>.war</code> file containing EJBs, JSF, and REST in <code>WEB-INF/classes</code></td>
+        <td>Ideal for modern cloud deployments, Docker containers, and microservice architectures. Simpler Maven build.</td>
+      </tr>
+      <tr>
+        <td><strong>Multi-Module EAR</strong><br><em>(Traditional Enterprise)</em></td>
+        <td><code>.ear</code> containing separate <code>.war</code> and <code>.jar</code> modules</td>
+        <td>Necessary when multiple separate web frontends (e.g., Customer Portal WAR + Admin Portal WAR) share the exact same EJB business JAR.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       14.4 WildFly Deployment Automation & Markers
+       ===================================================================== -->
+  <span class="eyebrow">session 14.4</span>
+  <h2>Part 4 · WildFly Deployment Mechanisms &amp; Status Markers</h2>
+
+  <p>WildFly supports three standard mechanisms for deploying archives:</p>
+
+  <ol>
+    <li><strong>Management CLI (Production Best Practice):</strong>
+      <pre><code>$WILDFLY_HOME/bin/jboss-cli.sh --connect --command="deploy /build/GlobalBank.ear"</code></pre>
+    </li>
+    <li><strong>Admin Web Console:</strong> Upload the archive via <code>http://localhost:9990/console</code> under <em>Deployments $\to$ Add</em>.</li>
+    <li><strong>File-System Auto-Deployment Scanner:</strong> Copying the archive into <code>$WILDFLY_HOME/standalone/deployments/</code>.</li>
+  </ol>
+
+  <h3>WildFly Deployment Marker Files</h3>
+  <p>When using file-system deployment, WildFly creates empty marker files in the <code>deployments/</code> directory
+    to report deployment status:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Marker File</th><th>Status Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>myapp.ear.dodeploy</code></td><td>User touches/creates this file to trigger WildFly to start deploying <code>myapp.ear</code>.</td></tr>
+      <tr><td><code>myapp.ear.isdeploying</code></td><td>WildFly is currently unpacking and parsing the archive.</td></tr>
+      <tr><td><code>myapp.ear.deployed</code></td><td>Deployment succeeded! Application is active and ready to accept traffic.</td></tr>
+      <tr><td><code>myapp.ear.failed</code></td><td>Deployment failed! Contains the stack trace describing why deployment aborted.</td></tr>
+      <tr><td><code>myapp.ear.undeployed</code></td><td>Application was successfully undeployed and stopped.</td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">WildFly EAR Deployment Lifecycle Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Deploying GlobalBank.ear to WildFly standalone/deployments/
+touch standalone/deployments/GlobalBank.ear.dodeploy
+WildFly DeploymentScanner detects marker -> Unpacks EAR
+Registers /globalbank Web Context -> Binds EJBs in JNDI</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Simulate WildFly Deployment</button>
+      <span class="bench__hint">Traces EAR deployment parsing, module registration, and marker creation.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[09:45:01,001 INFO] [DeploymentScanner] Found 'GlobalBank.ear.dodeploy'. Triggering deployment.
+[09:45:01,004 INFO] [Server] Created 'GlobalBank.ear.isdeploying'.
+[09:45:01,015 INFO] [EE Subsystem] Parsing META-INF/application.xml for 'GlobalBankApp'.
+[09:45:01,022 INFO] [EJB Container] Starting subdeployment 'GlobalBank-EJB.jar'...
+[09:45:01,026 INFO] [JNDI Binding] java:global/GlobalBankApp/GlobalBank-EJB/AccountBean!com.globalbank.AccountRemote
+[09:45:01,034 INFO] [Undertow] Starting web subdeployment 'GlobalBank-Web.war'...
+[09:45:01,040 INFO] [Undertow] Bound web context root: 'http://localhost:8080/globalbank'
+[09:45:01,045 INFO] [Server] Renamed marker to 'GlobalBank.ear.deployed'. Deployment completed in 44ms.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 14 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "Which deployment descriptor serves as the master configuration file for an Enterprise Archive (.ear)?",
+        "opts": [
+          "web.xml",
+          "ejb-jar.xml",
+          "application.xml",
+          "beans.xml"
+        ],
+        "a": 2,
+        "why": "application.xml in META-INF defines the web modules, EJB modules, and shared library paths for an EAR."
+      },
+      {
+        "q": "What is the primary benefit of the modern 'Skinny WAR' approach over traditional EAR files?",
+        "opts": [
+          "WAR files can run without an operating system",
+          "EJBs and web components can be packaged together in a single archive, simplifying build scripts and Docker containerization",
+          "Skinny WARs delete the database",
+          "Skinny WARs do not use Java"
+        ],
+        "a": 1,
+        "why": "Since EJB 3.1, enterprise beans can reside directly inside a WAR, eliminating the complexity of multi-module EARs for single-app services."
+      },
+      {
+        "q": "In WildFly, which marker file indicates that an archive has been successfully deployed and is serving requests?",
+        "opts": [
+          "app.ear.dodeploy",
+          "app.ear.deployed",
+          "app.ear.isdeploying",
+          "app.ear.ok"
+        ],
+        "a": 1,
+        "why": "WildFly replaces the .dodeploy marker with .deployed when the deployment succeeds."
+      },
+      {
+        "q": "Where should shared third-party utility JARs (like Apache Commons) be placed inside an EAR file?",
+        "opts": [
+          "In the root of the EAR",
+          "In the lib/ directory specified by <library-directory> in application.xml",
+          "Inside web.xml",
+          "On the desktop"
+        ],
+        "a": 1,
+        "why": "JARs placed in the EAR's lib/ directory are automatically added to the shared classpath for all sub-modules."
+      },
+      {
+        "q": "Which archive packaging is specifically used to deploy JCA resource adapters for external enterprise backends?",
+        "opts": [
+          ".jar",
+          ".war",
+          ".rar (Resource Adapter Archive)",
+          ".ear"
+        ],
+        "a": 2,
+        "why": ".rar (Resource Adapter Archive) packages JCA connectors, configuration (ra.xml), and native libraries."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>JAR, WAR, RAR</strong></td><td>Module-level archives: JAR for EJBs, WAR for Web UI/REST, RAR for JCA adapters.</td></tr>
+    <tr><td><strong>EAR Archive</strong></td><td>Top-level enterprise bundle containing WARs and JARs coordinated via <code>application.xml</code>.</td></tr>
+    <tr><td><strong>Skinny WAR</strong></td><td>Modern practice packaging EJBs, REST, and JSF into one single deployable WAR.</td></tr>
+    <tr><td><strong>Shared Libraries</strong></td><td>Stored inside the EAR's <code>lib/</code> folder and accessible across all packaged modules.</td></tr>
+    <tr><td><strong>Deployment Markers</strong></td><td>WildFly uses <code>.dodeploy</code>, <code>.isdeploying</code>, <code>.deployed</code>, and <code>.failed</code> status flags.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

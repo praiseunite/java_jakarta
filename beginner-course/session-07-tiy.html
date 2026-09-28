@@ -1,0 +1,274 @@
+<title>Try It Yourself — Review &amp; Consolidation (Sessions 5 &amp; 6)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Try It Yourself Review for Sessions 5 & 6: Integrating Facelets UI with Local and Remote EJB clients, form lifecycle execution, and distributed client communication.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s07t";</script>
+
+<main class="page">
+
+  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 5 &amp; 6)</h1>
+  <p class="lede">In Sessions 5 and 6, you moved from backend business logic into client presentation and distributed communication:
+    building rich user interfaces with <strong>Jakarta Server Faces (Facelets)</strong> and mastering the architectural boundary
+    between <strong>Local Clients</strong> (in-memory) and <strong>Remote Clients</strong> (network-distributed).</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL7)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Integrate a Facelets XHTML front-end directly with a Local EJB service</li>
+        <li>Trace how user inputs flow through JSF's 6-phase lifecycle to invoke an enterprise bean</li>
+        <li>Build and invoke a standalone Java SE remote client connecting over WildFly HTTP-Remoting</li>
+        <li>Identify and resolve common serialization pitfalls (<code>NotSerializableException</code>) and client lookup errors</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       Part 1: The Integrated Presentation & Client Architecture
+       ===================================================================== -->
+  <span class="eyebrow">consolidation</span>
+  <h2>Part 1 · Connecting the Presentation Tier to Enterprise Beans</h2>
+
+  <p>In a standard Jakarta EE architecture, the web tier acts as a <strong>Local Client</strong> to your business beans,
+    while remote administrative tools or external microservices act as <strong>Remote Clients</strong>:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Client Type</th><th>Component</th><th>How It Accesses EJB</th><th>Communication Boundary</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Web Tier (Local)</strong></td>
+        <td>JSF Facelets + CDI Backing Bean</td>
+        <td>Injected via <code>@EJB</code> or <code>@Inject</code> into backing bean</td>
+        <td><strong>Same JVM</strong> (in-memory, nanoseconds, pass-by-reference)</td>
+      </tr>
+      <tr>
+        <td><strong>Distributed (Remote)</strong></td>
+        <td>Standalone Java Desktop / External Server</td>
+        <td>Looked up via <code>InitialContext.lookup("ejb:...")</code></td>
+        <td><strong>Network Boundary</strong> (serialized over HTTP-Remoting / RMI, milliseconds)</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       Part 2: End-to-End Walkthrough
+       ===================================================================== -->
+  <span class="eyebrow">practical walkthrough</span>
+  <h2>Part 2 · The Integrated Currency Converter Lab</h2>
+
+  <p>Let's examine how a Facelet page invokes an enterprise bean that provides both a <code>@Local</code> view
+    for the web interface and a <code>@Remote</code> view for external partner bank integrations.</p>
+
+  <div class="code-head">1. The Dual Business Interfaces</div>
+  <pre><code>// Local view for the JSF Web Tier
+@Local
+public interface CurrencyLocal {
+    double convert(double amount, String from, String to);
+}
+
+// Remote view for Partner Banks & Desktop Terminals
+@Remote
+public interface CurrencyRemote {
+    double convert(double amount, String from, String to);
+}</code></pre>
+
+  <div class="code-head">2. CurrencyConverterBean.java — Stateless Bean implementing both views</div>
+  <pre><code>package com.globalbank.ejb;
+
+import jakarta.ejb.Stateless;
+
+@Stateless
+public class CurrencyConverterBean implements CurrencyLocal, CurrencyRemote {
+
+    @Override
+    public double convert(double amount, String from, String to) {
+        // Simplified exchange rate calculation
+        if ("USD".equalsIgnoreCase(from) && "EUR".equalsIgnoreCase(to)) return amount * 0.92;
+        if ("EUR".equalsIgnoreCase(from) && "USD".equalsIgnoreCase(to)) return amount * 1.09;
+        return amount; // default 1:1
+    }
+}</code></pre>
+
+  <div class="code-head">3. ConverterBackingBean.java — CDI Backing Bean for JSF</div>
+  <pre><code>package com.globalbank.web;
+
+import jakarta.ejb.EJB;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.inject.Named;
+import com.globalbank.ejb.CurrencyLocal;
+
+@Named("currencyBean")
+@RequestScoped
+public class ConverterBackingBean {
+
+    @EJB
+    private CurrencyLocal currencyService; // Injected as a local client
+
+    private double amount = 100.0;
+    private String from = "USD";
+    private String to = "EUR";
+    private double result;
+
+    public void calculate() {
+        this.result = currencyService.convert(amount, from, to);
+    }
+
+    // Getters and setters for amount, from, to, result...
+}</code></pre>
+
+  <div class="code-head">4. converter.xhtml — Facelets Form</div>
+  <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"&gt;
+&lt;h:head&gt;&lt;title&gt;Currency Exchange&lt;/title&gt;&lt;/h:head&gt;
+&lt;h:body&gt;
+    &lt;h:form&gt;
+        &lt;h:outputLabel value="Amount: "/&gt;
+        &lt;h:inputText value="#{currencyBean.amount}"/&gt;
+
+        &lt;h:commandButton value="Convert" action="#{currencyBean.calculate}"/&gt;
+    &lt;/h:form&gt;
+
+    &lt;h:panelGroup rendered="#{currencyBean.result gt 0}"&gt;
+        &lt;p&gt;Converted Value: &lt;strong&gt;#{currencyBean.result}&lt;/strong&gt;&lt;/p&gt;
+    &lt;/h:panelGroup&gt;
+&lt;/h:body&gt;
+&lt;/html&gt;</code></pre>
+
+  <!-- =====================================================================
+       Part 3: Common Pitfalls & Debugging
+       ===================================================================== -->
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · Top 3 Integration Gotchas for Sessions 5 &amp; 6</h2>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Trap 1: <code>java.io.NotSerializableException</code> on Remote Calls</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Remote client call fails with <code>WriteObjectException: NotSerializableException: com.model.Customer</code>.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> When passing custom objects to <code>@Remote</code> methods, <em>every object and every nested member field</em> must implement <code>java.io.Serializable</code>.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Trap 2: Submitting a form without action method firing</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Clicking the submit button reloads the page, but the backing bean action method is never executed.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Check Phase 3 (Process Validation). If an input fails validation or conversion, JSF skips directly to Phase 6. Add an <code>&lt;h:messages /&gt;</code> tag to your view to display the hidden validation error!</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Trap 3: Annotating one interface with both <code>@Local</code> and <code>@Remote</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> WildFly deployment fails with an EJB specification violation exception.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> A single Java interface <em>cannot</em> be both local and remote. Declare two separate interfaces (e.g., <code>OrderServiceLocal</code> and <code>OrderServiceRemote</code>) and let the bean implement both.</p>
+    </div>
+  </div>
+
+  <!-- Interactive Simulator Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Facelet Form Submission to Local EJB Replay</span>
+    </div>
+    <pre class="bench__code"><code>// User submits converter.xhtml with Amount=250.00
+POST /converter.xhtml
+JSF Lifecycle: Restore View -> Apply Values -> Validate -> Update Model
+Invoking Backing Bean calculate() -> delegates to CurrencyLocal EJB in RAM
+Render updated HTML response with converted sum: $230.00 EUR</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Converter Flow</button>
+      <span class="bench__hint">Demonstrates local pass-by-reference invocation between JSF Backing Bean and EJB.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[07:55:04,101] [HTTP POST] /converter.xhtml incoming from browser.
+[07:55:04,103] [JSF Phase 1-4] Restored view tree. Decoded amount=250.00. Validated: OK. Updated ConverterBackingBean.
+[07:55:04,105] [JSF Phase 5] Invoking #{currencyBean.calculate()}...
+[07:55:04,106] [EJB Local Call] CurrencyConverterBean.convert(250.0, "USD", "EUR") invoked via direct memory pointer.
+[07:55:04,107] [EJB Local Call] Execution completed in 0.08ms. Returned: 230.00.
+[07:55:04,110] [JSF Phase 6] Re-rendering view with <p>Converted Value: 230.0</p>. HTTP 200 sent.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Assessment Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 5 &amp; 6)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "Why does a Local Client call to an EJB execute significantly faster than a Remote Client call?",
+        "opts": [
+          "Local calls use pass-by-reference in shared RAM without network or serialization overhead",
+          "Local calls skip Java bytecode verification",
+          "Remote calls use dial-up modems",
+          "Local calls do not use CPU threads"
+        ],
+        "a": 0,
+        "why": "Local clients share the JVM heap with the bean, requiring only direct pointer dereferencing with zero network transport."
+      },
+      {
+        "q": "What happens when a form submission fails a field validation check in JSF Phase 3?",
+        "opts": [
+          "The server throws a 500 error",
+          "The request skips Update Model and Invoke Application, immediately rendering the response with errors",
+          "The database deletes the row",
+          "The form fields are reset to blank"
+        ],
+        "a": 1,
+        "why": "JSF short-circuits to Phase 6 (Render Response) on validation failure so users can correct errors before business logic runs."
+      },
+      {
+        "q": "Can a single Java interface be annotated with both @Local and @Remote?",
+        "opts": [
+          "Yes, it is standard practice",
+          "No, the EJB specification prohibits an interface from declaring both; you must create two separate interfaces",
+          "Only if the bean is Stateful",
+          "Only in Jakarta EE 10"
+        ],
+        "a": 1,
+        "why": "Local and remote interfaces have fundamentally incompatible semantics (reference vs. serialization) and must be declared separately."
+      },
+      {
+        "q": "What tag is used in a composite component to define the attributes that callers can pass in?",
+        "opts": [
+          "<composite:attribute>",
+          "<ui:param>",
+          "<h:attribute>",
+          "<f:param>"
+        ],
+        "a": 0,
+        "why": "<composite:attribute> declares configurable properties on the composite component's interface."
+      },
+      {
+        "q": "Which exception is thrown if a custom argument passed to a @Remote EJB does not implement java.io.Serializable?",
+        "opts": [
+          "java.io.NotSerializableException",
+          "NullPointerException",
+          "ClassCastException",
+          "IllegalArgumentException"
+        ],
+        "a": 0,
+        "why": "Remote method calls marshal parameters into byte streams using Java serialization; non-serializable objects cause NotSerializableException."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>JSF Web Tier</strong></td><td>Uses Facelets XHTML templates and acts as a Local Client to EJB services.</td></tr>
+    <tr><td><strong>Local vs Remote</strong></td><td>Local = in-memory pointer (nanoseconds); Remote = serialized network call (milliseconds).</td></tr>
+    <tr><td><strong>Lifecycle Flow</strong></td><td>Restore → Apply → Validate → Update Model → Invoke App → Render Response.</td></tr>
+    <tr><td><strong>Remote Prerequisite</strong></td><td>All arguments and return values must implement <code>java.io.Serializable</code>.</td></tr>
+    <tr><td><strong>Validation Errors</strong></td><td>Always include <code>&lt;h:messages /&gt;</code> to diagnose silent short-circuits.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

@@ -1,0 +1,330 @@
+<title>Session 12 — Jakarta CDI (Part II)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 12: Advanced Jakarta CDI Part II: Qualifiers (@Qualifier), Producers (@Produces) & Disposers (@Disposes), Interceptors (@InterceptorBinding, @AroundInvoke), Decorators (@Decorator), and CDI Events (@Observes).">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s12";</script>
+
+<main class="page">
+
+  <h1>Session 12 · Jakarta CDI (Part II)</h1>
+  <p class="lede">Session 11 covered foundational dependency injection and scopes. Session 12 unlocks the advanced
+    powers of CDI: disambiguating multiple implementations with <strong>Qualifiers</strong>, manufacturing custom objects
+    with <strong>Producers &amp; Disposers</strong>, applying cross-cutting logic with <strong>Interceptors &amp; Decorators</strong>,
+    and event-driven decoupling with <strong>CDI Events</strong>.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Resolve ambiguous dependencies using custom type-safe <strong>Qualifiers</strong> (<code>@Qualifier</code>)</li>
+        <li>Dynamically instantiate external classes and configurations using <strong>Producers</strong> (<code>@Produces</code>) and <strong>Disposers</strong> (<code>@Disposes</code>)</li>
+        <li>Implement Aspect-Oriented cross-cutting concerns using CDI <strong>Interceptors</strong> (<code>@InterceptorBinding</code>, <code>@AroundInvoke</code>)</li>
+        <li>Enhance and customize business logic transparently with <strong>Decorators</strong> (<code>@Decorator</code>, <code>@Delegate</code>)</li>
+        <li>Implement decoupled event-driven communication using synchronous and asynchronous <strong>CDI Events</strong> (<code>Event&lt;T&gt;</code>, <code>@Observes</code>)</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       12.1 Qualifiers: Type-Safe Disambiguation
+       ===================================================================== -->
+  <span class="eyebrow">session 12.1</span>
+  <h2>Part 1 · Qualifiers: Resolving Ambiguous Dependencies</h2>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏷️</span>
+    <div class="callout__b"><b>The Medical Specialist Analogy</b>
+      If you enter a hospital asking for "a Doctor", the receptionist doesn't know who to call — there is a Surgeon,
+      a Cardiologist, and a Pediatrician. CDI hits the exact same wall if two beans implement <code>PaymentService</code>.<br>
+      Instead of using fragile string names (like <code>@Named("creditCard")</code>), CDI uses **Qualifiers** — custom annotations that provide compiler-checked, type-safe differentiation.
+    </div>
+  </div>
+
+  <h3>Defining and Using a Custom Qualifier</h3>
+
+  <div class="code-head">1. Define the Qualifier Annotations</div>
+  <pre><code>package com.globalbank.qualifiers;
+
+import jakarta.inject.Qualifier;
+import java.lang.annotation.*;
+
+@Qualifier // ① Marks this annotation as a CDI Qualifier
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER})
+public @interface CreditCard {}
+
+@Qualifier
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER})
+public @interface PayPal {}</code></pre>
+
+  <div class="code-head">2. Tag the Concrete Implementations</div>
+  <pre><code>@CreditCard
+public class CreditCardProcessor implements PaymentProcessor {
+    public void pay(double amt) { System.out.println("Paid via Credit Card: $" + amt); }
+}
+
+@PayPal
+public class PayPalProcessor implements PaymentProcessor {
+    public void pay(double amt) { System.out.println("Paid via PayPal: $" + amt); }
+}</code></pre>
+
+  <div class="code-head">3. Inject with Type Safety</div>
+  <pre><code>public class CheckoutService {
+
+    // CDI knows EXACTLY which implementation to supply based on the qualifier tag!
+    @Inject @CreditCard
+    private PaymentProcessor cardService;
+
+    @Inject @PayPal
+    private PaymentProcessor payPalService;
+}</code></pre>
+
+  <!-- =====================================================================
+       12.2 Producers and Disposers
+       ===================================================================== -->
+  <span class="eyebrow">session 12.2</span>
+  <h2>Part 2 · Producers (<code>@Produces</code>) and Disposers (<code>@Disposes</code>)</h2>
+
+  <p>What if you want to inject an object from a third-party library that doesn't have a no-argument constructor,
+    or dynamically configure a connection based on runtime environment variables? You use a <strong>Producer Method</strong>:</p>
+
+  <div class="code-head">ConnectionFactoryProducer.java — Factory &amp; Cleanup Lifecycle</div>
+  <pre><code>package com.globalbank.producers;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.enterprise.inject.Disposes;
+import jakarta.enterprise.inject.Produces;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+
+@ApplicationScoped
+public class DatabaseConnectionProducer {
+
+    // ① @Produces turns this method into a factory for @RequestScoped Connections
+    @Produces
+    @RequestScoped
+    public Connection createConnection() throws SQLException {
+        String url = System.getProperty("db.url", "jdbc:postgresql://localhost:5432/bank");
+        System.out.println("CDI Producer: Opening physical connection for request...");
+        return DriverManager.getConnection(url, "user", "secret");
+    }
+
+    // ② @Disposes automatically executes when the RequestScope ends, closing the connection!
+    public void closeConnection(@Disposes Connection connection) {
+        System.out.println("CDI Disposer: Deterministically closing connection on request exit.");
+        try {
+            if (connection != null && !connection.isClosed()) {
+                connection.close();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       12.3 Interceptors: Aspect-Oriented Programming
+       ===================================================================== -->
+  <span class="eyebrow">session 12.3</span>
+  <h2>Part 3 · Interceptors: Aspect-Oriented Logging &amp; Auditing</h2>
+
+  <p>Don't clutter your business methods with timing code, security checks, and audit logging.
+    <strong>Interceptors</strong> execute transparently around method invocations:</p>
+
+  <div class="code-head">1. The Interceptor Binding Annotation</div>
+  <pre><code>package com.globalbank.interceptors;
+
+import jakarta.interceptor.InterceptorBinding;
+import java.lang.annotation.*;
+
+@InterceptorBinding // Declares an interceptor contract
+@Target({ElementType.TYPE, ElementType.METHOD})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface PerformanceLogged {}</code></pre>
+
+  <div class="code-head">2. The Interceptor Implementation</div>
+  <pre><code>package com.globalbank.interceptors;
+
+import jakarta.annotation.Priority;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptor;
+import jakarta.interceptor.InvocationContext;
+
+@Interceptor
+@PerformanceLogged // Links to binding
+@Priority(Interceptor.Priority.APPLICATION)
+public class PerformanceInterceptor {
+
+    @AroundInvoke
+    public Object profile(InvocationContext context) throws Exception {
+        long start = System.currentTimeMillis();
+        String methodName = context.getMethod().getName();
+
+        try {
+            // Proceed to execute the actual target business method
+            return context.proceed();
+        } finally {
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("[AUDIT PROFILE] Method '" + methodName + "' executed in " + duration + "ms.");
+        }
+    }
+}</code></pre>
+
+  <div class="code-head">3. Applying the Interceptor to any Bean or Method</div>
+  <pre><code>@Stateless
+public class LoanService {
+
+    @PerformanceLogged // Transparently profiled!
+    public void approveLoan(int customerId, double amount) {
+        // Pure business logic — zero logging boilerplate here!
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       12.4 CDI Events & Observers
+       ===================================================================== -->
+  <span class="eyebrow">session 12.4</span>
+  <h2>Part 4 · Decoupled Event Architecture: Synchronous &amp; Asynchronous</h2>
+
+  <p>CDI provides a built-in publish-subscribe notification model that decouples components in-process without requiring
+    heavyweight JMS message brokers:</p>
+
+  <div class="code-head">Firing and Observing Events</div>
+  <pre><code>// 1. Event Payload POJO
+public record CustomerCreatedEvent(int customerId, String email) {}
+
+// 2. Event Producer
+@Stateless
+public class CustomerRegistrationService {
+
+    @Inject
+    private Event&lt;CustomerCreatedEvent&gt; eventPublisher;
+
+    public void register(String email) {
+        int id = generateId();
+        // Fire event synchronously (or fireAsync() for background threads)
+        eventPublisher.fire(new CustomerCreatedEvent(id, email));
+        System.out.println("Registration complete.");
+    }
+}
+
+// 3. Independent Observer
+@ApplicationScoped
+public class WelcomeEmailNotifier {
+
+    // Runs automatically whenever CustomerCreatedEvent is fired!
+    public void onNewCustomer(@Observes CustomerCreatedEvent event) {
+        System.out.println("Sending welcome package email to: " + event.email());
+    }
+}</code></pre>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">CDI Interceptor &amp; Qualifier Pipeline Replay</span>
+    </div>
+    <pre class="bench__code"><code>// CheckoutController invokes @CreditCard PaymentProcessor
+// Target method calculateFee() is annotated with @PerformanceLogged
+// Interceptor captures timing; event triggers Welcome notification</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run CDI Advanced Pipeline</button>
+      <span class="bench__hint">Traces qualifier resolution, interceptor around-invoke wrapper, and observer firing.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[09:12:00,100] [CDI Resolver] Injected bean 'CreditCardProcessor' based on @CreditCard qualifier.
+[09:12:00,102] [Interceptor] PerformanceInterceptor: Intercepted method call calculateFee().
+[09:12:00,104] [Business EJB] CreditCardProcessor: Processed fee of $12.50.
+[09:12:00,106] [Interceptor] PerformanceInterceptor: calculateFee() finished in 4ms. Resuming.
+[09:12:00,108] [CDI Event] Fired PaymentCompletedEvent(amount=12.50).
+[09:12:00,111] [CDI Observer] AuditService.onPayment(@Observes): Written to compliance ledger.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 12 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the primary role of a CDI Qualifier (@Qualifier)?",
+        "opts": [
+          "To format dates into strings",
+          "To provide type-safe disambiguation when multiple beans implement the exact same interface",
+          "To encrypt database passwords",
+          "To disable injection"
+        ],
+        "a": 1,
+        "why": "Qualifiers are user-defined annotations marked with @Qualifier that tell CDI which specific implementation to supply at an injection point."
+      },
+      {
+        "q": "What is the purpose of a @Disposes method in CDI?",
+        "opts": [
+          "To delete the project from the hard drive",
+          "To automatically execute cleanup logic (closing connections, releasing locks) when the produced bean's scope ends",
+          "To throw a NullPointerException",
+          "To log the user out"
+        ],
+        "a": 1,
+        "why": "@Disposes methods are automatically executed by CDI when the contextual lifecycle of a @Produces instance concludes."
+      },
+      {
+        "q": "Which annotation designates the interceptor method that executes around the target business method invocation?",
+        "opts": [
+          "@BeforeInvoke",
+          "@AroundInvoke",
+          "@Intercept",
+          "@WrapMethod"
+        ],
+        "a": 1,
+        "why": "@AroundInvoke marks the method in an @Interceptor class that takes InvocationContext and calls context.proceed()."
+      },
+      {
+        "q": "How does a CDI observer method declare its interest in listening for a specific event?",
+        "opts": [
+          "By implementing the JMS MessageListener interface",
+          "By annotating an event parameter with @Observes",
+          "By registering in web.xml",
+          "By polling the server every 5 seconds"
+        ],
+        "a": 1,
+        "why": "@Observes on a method parameter designates the method as an event observer for that specific payload type."
+      },
+      {
+        "q": "What is the main difference between an Interceptor and a Decorator in CDI?",
+        "opts": [
+          "Interceptors handle cross-cutting technical concerns (logging, timing); Decorators implement the business interface and enhance domain logic directly",
+          "There is no difference",
+          "Decorators only work with HTML",
+          "Interceptors run in the database"
+        ],
+        "a": 0,
+        "why": "Decorators know about and implement the target business interface; Interceptors are generic cross-cutting interceptors unaware of business specifics."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Qualifiers</strong></td><td>Type-safe annotations (<code>@Qualifier</code>) resolving ambiguous bean implementations at compile time.</td></tr>
+    <tr><td><strong>Producers</strong></td><td><code>@Produces</code> factories manufacturing dynamic objects; cleaned up by <code>@Disposes</code>.</td></tr>
+    <tr><td><strong>Interceptors</strong></td><td>AOP cross-cutting wrappers (<code>@InterceptorBinding</code>, <code>@AroundInvoke</code>) for timing, logging, and security.</td></tr>
+    <tr><td><strong>Decorators</strong></td><td>Implements the business interface with <code>@Delegate</code> to augment domain logic.</td></tr>
+    <tr><td><strong>CDI Events</strong></td><td>In-process decoupled messaging via <code>Event&lt;T&gt;.fire()</code> and <code>@Observes</code> methods.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

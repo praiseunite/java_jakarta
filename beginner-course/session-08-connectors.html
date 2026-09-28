@@ -1,0 +1,303 @@
+<title>Session 8 — Understanding Jakarta Connectors Architecture (JCA) &amp; JDBC</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 8: Jakarta Connectors Architecture (JCA), Resource Adapters (.rar), Enterprise Information Systems (EIS), system-level contracts, and the complete JDBC API deep dive.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s08";</script>
+
+<main class="page">
+
+  <h1>Session 8 · Understanding Jakarta Connectors Architecture &amp; JDBC</h1>
+  <p class="lede">Enterprise systems never live in a vacuum. Organizations rely on an assortment of diverse,
+    heterogeneous backends: ERP platforms (SAP), mainframe transaction monitors (IBM CICS), messaging providers,
+    and relational databases. The <strong>Jakarta Connectors Architecture (JCA)</strong> provides the universal standard
+    adapter plug for enterprise integration, while <strong>JDBC</strong> provides standardized SQL database access.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Define the Jakarta Connectors Architecture (JCA) and Enterprise Information Systems (EIS)</li>
+        <li>Explain the $M \times N$ integration dilemma and how pluggable Resource Adapters (<code>.rar</code>) solve it</li>
+        <li>Detail JCA System-Level Contracts (Connection Management, Transaction Inflow, Security, Work Management)</li>
+        <li>Contrast Outbound, Inbound, and Bidirectional EIS communication architectures</li>
+        <li>Differentiate between Common Client Interface (CCI), Service Provider Interface (SPI), and JDBC</li>
+        <li>Master JDBC operations: Drivers, <code>PreparedStatement</code>, <code>CallableStatement</code>, <code>ResultSet</code> navigation, and auto-cleanup</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       8.1 The M x N Integration Dilemma
+       ===================================================================== -->
+  <span class="eyebrow">session 8.1</span>
+  <h2>Part 1 · The $M \times N$ Integration Problem &amp; JCA</h2>
+
+  <p>An <strong>Enterprise Information System (EIS)</strong> is any core corporate data engine: SAP ERP,
+    IBM CICS mainframes, Siebel CRM, or legacy transaction managers. Without a standard, connecting $M$ application
+    servers to $N$ external systems requires $M \times N$ brittle, vendor-locked point-to-point connectors.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Without JCA ($M \times N$ Nightmare)</th><th>With JCA Pluggable Architecture</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Every application server requires custom proprietary drivers to talk to SAP, CICS, or Tuxedo.</td>
+        <td>The EIS vendor creates <strong>one standardized Resource Adapter</strong> (packaged as a <code>.rar</code> file).</td>
+      </tr>
+      <tr>
+        <td>No unified connection pooling; each vendor driver implements custom threading and pooling.</td>
+        <td>The application server container manages connection pooling uniformly across all adapters.</td>
+      </tr>
+      <tr>
+        <td>Distributed transactions across multiple backends are impossible or hand-coded.</td>
+        <td>Standard 2-Phase Commit (XA) coordinates transactions seamlessly across databases and mainframes.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       8.2 System-Level Contracts & Communication Models
+       ===================================================================== -->
+  <span class="eyebrow">session 8.2 &amp; 8.3</span>
+  <h2>Part 2 · JCA System-Level Contracts &amp; Communication Models</h2>
+
+  <p>JCA operates on standard system-level contracts defined between the application server and the resource adapter:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>System Contract</th><th>Responsibility</th><th>Developer Benefit</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Connection Management</strong></td>
+        <td>Enables the container to pool connections to the external EIS.</td>
+        <td>Your beans borrow and return connections with zero manual socket handling.</td>
+      </tr>
+      <tr>
+        <td><strong>Transaction Management</strong></td>
+        <td>Integrates EIS resource managers into container JTA transactions.</td>
+        <td>Supports XA 2-phase commit (e.g., commit PostgreSQL DB and SAP ERP atomically).</td>
+      </tr>
+      <tr>
+        <td><strong>Security Management</strong></td>
+        <td>Propagates caller identity and credentials to the backend EIS.</td>
+        <td>Prevents unauthorized access on mainframe systems.</td>
+      </tr>
+      <tr>
+        <td><strong>Work Management</strong></td>
+        <td>Allows the adapter to execute tasks using server-managed thread pools.</td>
+        <td>Prevents runaway background threads from starving application server CPUs.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <h3>Direction of Communication</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Model</th><th>Data Flow</th><th>Trigger Initiator</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Outbound</strong></td>
+        <td>App Server → Backend EIS</td>
+        <td>Application EJB invokes a method on the Resource Adapter to send data.</td>
+      </tr>
+      <tr>
+        <td><strong>Inbound</strong></td>
+        <td>Backend EIS → App Server</td>
+        <td>An external event in the EIS triggers an MDB or message endpoint in the server.</td>
+      </tr>
+      <tr>
+        <td><strong>Bidirectional</strong></td>
+        <td>Both Directions</td>
+        <td>Supports interactive requests and asynchronous notifications simultaneously.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       8.3 JDBC Deep Dive
+       ===================================================================== -->
+  <span class="eyebrow">session 8.4 &amp; 8.5</span>
+  <h2>Part 3 · Java Database Connectivity (JDBC) Deep Dive</h2>
+
+  <p>While JCA provides universal connectivity to any EIS, <strong>JDBC</strong> is the dedicated Java standard
+    for relational databases (PostgreSQL, Oracle, MySQL, SQL Server). In enterprise systems, JDBC operations follow
+    a strict 6-stage pipeline:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Stage</th><th>JDBC Operation</th><th>Enterprise Implementation Best Practice</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Load Driver</td><td>Automatic in modern JDBC 4.0+ via Java ServiceLoader on classpath.</td></tr>
+      <tr><td>2</td><td>Establish Connection</td><td>Use pooled JNDI <code>DataSource</code>; avoid raw <code>DriverManager</code>.</td></tr>
+      <tr><td>3</td><td>Create Statement</td><td><strong>Always use <code>PreparedStatement</code></strong> to prevent SQL Injection and benefit from pre-compiled execution plans.</td></tr>
+      <tr><td>4</td><td>Execute Query</td><td><code>executeQuery()</code> for SELECT; <code>executeUpdate()</code> for INSERT/UPDATE/DELETE.</td></tr>
+      <tr><td>5</td><td>Process Results</td><td>Navigate the forward-only <code>ResultSet</code> cursor using <code>rs.next()</code>.</td></tr>
+      <tr><td>6</td><td>Resource Cleanup</td><td>Use Java <code>try-with-resources</code> to guarantee deterministic closure of <code>ResultSet</code>, <code>Statement</code>, and <code>Connection</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The Three Statement Types</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Statement Type</th><th>Syntax Example</th><th>When to Use</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>Statement</code></td>
+        <td><code>conn.createStatement()</code></td>
+        <td>Static DDL (e.g., <code>CREATE TABLE</code>). <em>Never use with user-provided parameters!</em></td>
+      </tr>
+      <tr>
+        <td><code>PreparedStatement</code></td>
+        <td><code>conn.prepareStatement("SELECT * FROM acc WHERE id = ?")</code></td>
+        <td><strong>Standard for all parameterized queries.</strong> Pre-compiles SQL and blocks injection attacks.</td>
+      </tr>
+      <tr>
+        <td><code>CallableStatement</code></td>
+        <td><code>conn.prepareCall("{call calculate_interest(?)}")</code></td>
+        <td>Used to execute stored procedures inside the database engine.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="code-head">Robust Enterprise JDBC Operation with Auto-Cleanup</div>
+  <pre><code>package com.globalbank.dao;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+public class AccountDAO {
+
+    private final DataSource dataSource;
+
+    public AccountDAO(DataSource ds) { this.dataSource = ds; }
+
+    public double fetchBalance(int accountId) throws SQLException {
+        String sql = "SELECT balance FROM accounts WHERE account_id = ?";
+
+        // Try-with-resources: automatically closes ResultSet, Statement, and Connection in reverse order!
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, accountId); // Safe parameter binding
+
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getDouble("balance");
+                }
+            }
+        }
+        return 0.0; // Not found
+    }
+}</code></pre>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">JCA Resource Adapter &amp; JDBC XA Coordination</span>
+    </div>
+    <pre class="bench__code"><code>// Distributed Transaction T1: updates PostgreSQL and SAP ERP via JCA
+UserTransaction tx = getUserTransaction();
+tx.begin();
+accountDAO.debit(1001, 5000.00);      // Resource 1: PostgreSQL JDBC DataSource
+sapAdapter.recordLedger("SAP-99", 5000); // Resource 2: JCA Resource Adapter (.rar)
+tx.commit(); // 2-Phase Commit coordinates both resources</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run JCA 2-Phase Commit</button>
+      <span class="bench__hint">Traces two-phase commit across relational DB and SAP mainframe adapter.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:10:01,002] [JTA TransactionManager] Starting XA Global Transaction [TxId: 0x81fa]
+[08:10:01,004] [JCA Inflow] Enlisting Resource: 'PostgreSQL-XA-DataSource' into TxId 0x81fa
+[08:10:01,007] [JCA Inflow] Enlisting Resource: 'SAP-JCA-Adapter-RAR' into TxId 0x81fa
+[08:10:01,012] [Phase 1: Prepare] Querying PostgreSQL -> XA_OK (vote: COMMIT)
+[08:10:01,015] [Phase 1: Prepare] Querying SAP Resource Adapter -> XA_OK (vote: COMMIT)
+[08:10:01,018] [Phase 2: Commit] All resources voted OK. Executing two-phase commit!
+[08:10:01,022] [PostgreSQL] Database ledger permanently updated.
+[08:10:01,026] [SAP Mainframe] SAP general ledger synchronized. Global Tx committed.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 8 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the primary file packaging format for a JCA Resource Adapter?",
+        "opts": [
+          ".jar",
+          ".war",
+          ".rar (Resource Adapter Archive)",
+          ".ear"
+        ],
+        "a": 2,
+        "why": "JCA resource adapters are packaged into .rar (Resource Adapter Archive) files containing Java classes and native libraries."
+      },
+      {
+        "q": "How does JCA solve the M x N integration problem?",
+        "opts": [
+          "By banning mainframes",
+          "By requiring each EIS vendor to build only one standard Resource Adapter that plugs into any certified Jakarta EE application server",
+          "By converting all data into text files",
+          "By forcing all databases to use SQLite"
+        ],
+        "a": 1,
+        "why": "A single standard .rar adapter allows any certified application server to interact with the EIS using standard system contracts."
+      },
+      {
+        "q": "Which JDBC statement type should always be used when executing SQL queries that contain user-provided parameters?",
+        "opts": [
+          "Statement",
+          "PreparedStatement",
+          "StaticStatement",
+          "NativeStatement"
+        ],
+        "a": 1,
+        "why": "PreparedStatement pre-compiles SQL templates and isolates parameter values, completely neutralizing SQL Injection vulnerabilities."
+      },
+      {
+        "q": "Which JCA system contract enables an external ERP system to participate in a distributed two-phase commit transaction?",
+        "opts": [
+          "Transaction Management Contract",
+          "Security Contract",
+          "Work Management Contract",
+          "Lifecycle Contract"
+        ],
+        "a": 0,
+        "why": "The Transaction Management Contract connects the EIS resource manager to the server's JTA transaction manager via XA protocols."
+      },
+      {
+        "q": "Which JDBC statement type is specifically designed to invoke database stored procedures?",
+        "opts": [
+          "CallableStatement",
+          "PreparedStatement",
+          "ProcedureStatement",
+          "BatchStatement"
+        ],
+        "a": 0,
+        "why": "CallableStatement extends PreparedStatement and provides specialized support for SQL stored procedure invocations with IN/OUT parameters."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>JCA</strong></td><td>Standard architecture for plugging enterprise systems (SAP, CICS) into app servers via <code>.rar</code>.</td></tr>
+    <tr><td><strong>System Contracts</strong></td><td>Connection Management (pooling), Transaction (XA 2PC), Security, and Work Management.</td></tr>
+    <tr><td><strong>Communication</strong></td><td>Outbound (App to EIS), Inbound (EIS to App via MDB), Bidirectional (Both).</td></tr>
+    <tr><td><strong><code>PreparedStatement</code></strong></td><td>Mandatory for parameterized SQL; prevents injection and boosts performance.</td></tr>
+    <tr><td><strong>Auto-Cleanup</strong></td><td>Always use Java <code>try-with-resources</code> to guarantee deterministic closure of DB connections.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

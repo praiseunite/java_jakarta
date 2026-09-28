@@ -1,0 +1,236 @@
+<title>Try It Yourself — Review &amp; Consolidation (Sessions 11 &amp; 12)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Try It Yourself Review for Sessions 11 & 12: Contexts and Dependency Injection (CDI) integration, type-safe qualifiers, producer factories, interceptor pipelines, and event decoupling.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s12t";</script>
+
+<main class="page">
+
+  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 11 &amp; 12)</h1>
+  <p class="lede">Sessions 11 and 12 explored the complete architecture of <strong>Contexts and Dependency Injection (CDI)</strong>:
+    from contextual bean scopes and type-safe injection to advanced qualifiers, custom producer factories,
+    aspect-oriented interceptors, and asynchronous event streams. This review synthesizes these patterns into a unified lab.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL15)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Build a pluggable payment routing engine utilizing CDI Qualifiers (<code>@Domestic</code> vs. <code>@International</code>)</li>
+        <li>Implement a custom <code>@Produces</code> factory with deterministic <code>@Disposes</code> lifecycle cleanup</li>
+        <li>Wrap business methods transparently using a custom <code>@Audited</code> Interceptor pipeline</li>
+        <li>Diagnose and fix the top 3 CDI deployment faults (<code>AmbiguousResolutionException</code>, <code>UnsatisfiedResolutionException</code>, and <code>ContextNotActiveException</code>)</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       Part 1: The Integrated Architecture
+       ===================================================================== -->
+  <span class="eyebrow">consolidation</span>
+  <h2>Part 1 · The Integrated CDI Component Pipeline</h2>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>CDI Feature</th><th>Role in Integrated Architecture</th><th>Benefit</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Contextual Scopes</strong></td>
+        <td><code>@RequestScoped</code> for incoming transactions; <code>@ApplicationScoped</code> for rate caches.</td>
+        <td>Automatic instance creation and memory release without manual garbage collection tuning.</td>
+      </tr>
+      <tr>
+        <td><strong>Type-Safe Qualifiers</strong></td>
+        <td><code>@Domestic</code> and <code>@International</code> choose payment routing at compile time.</td>
+        <td>Eliminates fragile string-based lookups and guarantees type-safety.</td>
+      </tr>
+      <tr>
+        <td><strong>Producer &amp; Disposer</strong></td>
+        <td><code>@Produces Connection</code> and <code>@Disposes Connection</code>.</td>
+        <td>Integrates non-CDI third-party resources cleanly into container injection.</td>
+      </tr>
+      <tr>
+        <td><strong>Interceptors</strong></td>
+        <td><code>@Audited</code> around-invoke logging.</td>
+        <td>Applies audit logging and latency timers without altering business code.</td>
+      </tr>
+      <tr>
+        <td><strong>Events &amp; Observers</strong></td>
+        <td><code>event.fire(new PaymentCompletedEvent(...))</code></td>
+        <td>Decouples notification services and receipt printers from the payment core.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       Part 2: Code Walkthrough
+       ===================================================================== -->
+  <span class="eyebrow">code walkthrough</span>
+  <h2>Part 2 · The Integrated Payment Dispatcher Lab</h2>
+
+  <div class="code-head">1. Qualifiers &amp; Dispatcher Service</div>
+  <pre><code>package com.globalbank.payments;
+
+import jakarta.inject.Inject;
+import jakarta.enterprise.context.RequestScoped;
+import com.globalbank.qualifiers.Domestic;
+import com.globalbank.qualifiers.International;
+import com.globalbank.interceptors.Audited;
+
+@RequestScoped
+public class PaymentDispatcher {
+
+    // CDI supplies the exact matching implementation without ambiguity
+    @Inject @Domestic
+    private PaymentGateway domesticGateway;
+
+    @Inject @International
+    private PaymentGateway internationalGateway;
+
+    @Audited // Automatically intercepted for timing and security logging!
+    public void routePayment(double amount, boolean isOverseas) {
+        if (isOverseas) {
+            internationalGateway.process(amount);
+        } else {
+            domesticGateway.process(amount);
+        }
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       Part 3: Top Troubleshooting Gotchas
+       ===================================================================== -->
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · Top 3 CDI Deployment &amp; Runtime Pitfalls</h2>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Fault 1: <code>jakarta.enterprise.inject.AmbiguousResolutionException</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Application fails to deploy: <code>Ambiguous dependencies for type PaymentGateway with qualifiers [@Default]</code>.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> Two or more beans implement <code>PaymentGateway</code>, and neither has a distinguishing <code>@Qualifier</code> annotation.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Create custom qualifier annotations (e.g., <code>@Domestic</code> and <code>@International</code>) and apply them to both the bean classes and the <code>@Inject</code> fields.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Fault 2: <code>jakarta.enterprise.inject.UnsatisfiedResolutionException</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Deployment aborted: <code>Unsatisfied dependencies for type AccountService</code>.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> CDI could not find any bean implementing that interface, or the module is missing <code>beans.xml</code>, or the bean class is missing a scope annotation under <code>bean-discovery-mode="annotated"</code>.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Verify <code>WEB-INF/beans.xml</code> exists and ensure the target bean has a valid CDI scope (e.g., <code>@ApplicationScoped</code>).</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Fault 3: <code>jakarta.enterprise.context.ContextNotActiveException</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Invoking a <code>@RequestScoped</code> bean from a raw background thread (e.g., <code>new Thread(...)</code>) crashes at runtime.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Raw unmanaged Java threads have no active HTTP Request context! Use Jakarta EE Concurrency Managed Executor Service (<code>ManagedExecutorService</code>) or inject <code>@ApplicationScoped</code> singletons for background workers.</p>
+    </div>
+  </div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">CDI Qualifier &amp; Interceptor Execution Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Client submits overseas payment of $4,200.00
+PaymentDispatcher.routePayment(4200.00, isOverseas: true)
+1. @Audited Interceptor captures start timestamp
+2. CDI dispatches to @International PaymentGateway (SWIFT network)
+3. Interceptor records execution time and writes audit log</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run CDI Pipeline</button>
+      <span class="bench__hint">Traces qualifier selection, interceptor execution, and event emission.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[09:20:01,001] [CDI Resolver] Injected InternationalPaymentGateway via @International qualifier.
+[09:20:01,003] [Interceptor] @Audited invoked on routePayment(4200.00, true). Start timestamp: 09:20:01.003
+[09:20:01,006] [Gateway EJB] Processing SWIFT foreign exchange wire transfer: $4,200.00 USD.
+[09:20:01,009] [CDI Event] Emitted ForeignExchangePaymentEvent.
+[09:20:01,011] [CDI Observer] CurrencyComplianceService received event. Verified AML status: CLEAN.
+[09:20:01,013] [Interceptor] @Audited finished. Method completed in 10ms. Audit ledger updated.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Assessment Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 11 &amp; 12)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What exception is thrown at deployment if two distinct classes implement the same interface and no qualifier is provided at the injection point?",
+        "opts": [
+          "NullPointerException",
+          "AmbiguousResolutionException",
+          "ClassNotFoundException",
+          "SQLException"
+        ],
+        "a": 1,
+        "why": "AmbiguousResolutionException occurs when the container finds multiple eligible beans matching an injection point without qualifiers to choose between them."
+      },
+      {
+        "q": "What is the primary role of a @Produces method in CDI?",
+        "opts": [
+          "To compile Java files into .class files",
+          "To act as a factory method that manufactures objects (such as third-party classes or configurations) for injection",
+          "To run database backups",
+          "To delete unused variables"
+        ],
+        "a": 1,
+        "why": "@Produces turns a method or field into a source of injectable instances, especially for classes not originally designed as CDI beans."
+      },
+      {
+        "q": "What happens if a @RequestScoped bean is invoked from an unmanaged, raw Java thread (new Thread().start())?",
+        "opts": [
+          "It executes 10x faster",
+          "It throws ContextNotActiveException because raw threads have no active HTTP Request context",
+          "The server automatically creates an HTTP session",
+          "The bean becomes a Singleton"
+        ],
+        "a": 1,
+        "why": "CDI contexts (like @RequestScoped) only exist within container-managed request threads; raw threads lack this context."
+      },
+      {
+        "q": "Which parameter must be present on an interceptor method annotated with @AroundInvoke?",
+        "opts": [
+          "jakarta.interceptor.InvocationContext",
+          "jakarta.servlet.http.HttpServletRequest",
+          "java.lang.Object",
+          "javax.naming.Context"
+        ],
+        "a": 0,
+        "why": "The @AroundInvoke method must accept an InvocationContext parameter and call context.proceed() to execute the target method."
+      },
+      {
+        "q": "What is the benefit of CDI Events over direct method calls?",
+        "opts": [
+          "Events run faster than method calls",
+          "Events completely decouple the sender from the receiver — the sender does not know who or how many beans are listening",
+          "Events can only send strings",
+          "Events eliminate the need for Java interfaces"
+        ],
+        "a": 1,
+        "why": "CDI Events implement the Observer pattern: producers fire events without having any direct dependency on the observer beans."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Qualifiers</strong></td><td>Custom annotations preventing <code>AmbiguousResolutionException</code> at injection points.</td></tr>
+    <tr><td><strong>Producers/Disposers</strong></td><td>Factory methods (<code>@Produces</code>) paired with cleanup handlers (<code>@Disposes</code>).</td></tr>
+    <tr><td><strong>Interceptors</strong></td><td>Aspect-oriented wrappers (<code>@InterceptorBinding</code>, <code>@AroundInvoke</code>) separating technical logic.</td></tr>
+    <tr><td><strong>In-Memory Events</strong></td><td><code>Event&lt;T&gt;</code> and <code>@Observes</code> deliver loosely coupled publish-subscribe messaging.</td></tr>
+    <tr><td><strong>Troubleshooting</strong></td><td>Check <code>beans.xml</code> for missing beans; ensure thread management matches active scopes.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

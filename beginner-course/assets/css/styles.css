@@ -30,8 +30,8 @@
   --font-mono: "Cascadia Code", "Cascadia Mono", "JetBrains Mono", "SF Mono",
                "Consolas", "Liberation Mono", ui-monospace, monospace;
 
-  --maxprose: 66ch;
-  --sidebar-w: 300px;
+  --maxprose: 100%;
+  --sidebar-w: 290px;
   --topbar-h: 56px;
   --radius: 10px;
   --radius-sm: 6px;
@@ -255,13 +255,21 @@ a:hover { color: var(--accent-ink); }
 .menu-toggle { display: none; }
 
 /* ---- Main column -------------------------------------------------- */
-.main { grid-column: 2; min-width: 0; }
+.main { grid-column: 2; min-width: 0; width: 100%; }
 .page {
-  max-width: 860px;
+  max-width: 1160px;
   margin: 0 auto;
-  padding: 40px clamp(16px, 4vw, 44px) 80px;
+  padding: 40px clamp(20px, 4vw, 56px) 80px;
+  width: 100%;
+  box-sizing: border-box;
 }
-.page > * { max-width: var(--maxprose); }
+.page > * { max-width: 100%; }
+.page > p,
+.page > ul,
+.page > ol {
+  max-width: 85ch;
+}
+.page > .hero,
 .page > .full,
 .page > figure,
 .page > .bench,
@@ -271,7 +279,8 @@ a:hover { color: var(--accent-ink); }
 .page > .callout,
 .page > .cardgrid,
 .page > .summary,
-.page > hr { max-width: 100%; }
+.page > details,
+.page > hr { max-width: 100%; width: 100%; }
 
 /* ---- Prose ------------------------------------------------------- */
 .page h1 {
@@ -743,7 +752,7 @@ pre code { font: inherit; color: inherit; background: none; border: 0; padding: 
   margin: .4rem 0 .6rem;
   text-wrap: balance;
 }
-.hero p { font-size: 1.15rem; color: var(--ink-soft); max-width: 54ch; }
+.hero p { font-size: 1.15rem; color: var(--ink-soft); max-width: 85ch; }
 .hero .cta {
   display: inline-flex;
   gap: 10px;
@@ -758,6 +767,50 @@ pre code { font: inherit; color: inherit; background: none; border: 0; padding: 
 }
 .hero .cta a.primary { background: var(--action); color: #fff; }
 .hero .cta a.secondary { border: 1px solid var(--line-strong); color: var(--ink); }
+
+/* ==========================================================================
+   Collapsible sections (<details>)
+   ========================================================================== */
+details {
+  margin: 1.6rem 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+details[open] { background: var(--surface); }
+details > summary {
+  padding: 14px 18px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--surface-2);
+  border-bottom: 1px solid transparent;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;          /* touch target */
+  user-select: none;
+  transition: background .15s ease;
+}
+details > summary:hover { background: color-mix(in srgb, var(--accent-soft) 60%, var(--surface-2)); }
+details[open] > summary { border-bottom-color: var(--line); }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before {
+  content: "▸";
+  display: inline-block;
+  font-size: 14px;
+  color: var(--accent);
+  transition: transform .2s ease;
+  flex-shrink: 0;
+}
+details[open] > summary::before { transform: rotate(90deg); }
+details > :not(summary) { padding: 0 18px; }
+details > :not(summary):first-of-type { padding-top: 16px; }
+details > :not(summary):last-child { padding-bottom: 16px; }
+details .tablewrap { margin-left: 0; margin-right: 0; }
+details pre { margin-left: 0; margin-right: 0; }
 
 /* ==========================================================================
    Responsive — sidebar becomes a drawer
@@ -785,11 +838,20 @@ pre code { font: inherit; color: inherit; background: none; border: 0; padding: 
   }
   .scrim.show { opacity: 1; pointer-events: auto; }
 }
-@media (max-width: 520px) {
-  body { font-size: 16px; }
-  .pagefoot a.nav { max-width: 100%; }
+@media (max-width: 600px) {
+  body { font-size: 15.5px; }
+  .page { padding: 24px 16px 60px; }
+  .topbar { padding: 0 14px; }
+  .pagefoot { flex-direction: column; gap: 10px; }
+  .pagefoot a.nav { max-width: 100%; width: 100%; }
   .pagefoot a.nav.next { margin-left: 0; }
+  .quiz { padding: 16px 14px 8px; }
+  .quiz__opts button { min-height: 48px; padding: 12px 14px; }
+  .btn-run { min-height: 44px; padding: 10px 18px; width: 100%; justify-content: center; }
+  .bench__controls { flex-direction: column; align-items: stretch; }
+  .tablewrap { margin-left: -16px; margin-right: -16px; border-radius: 0; border-left: 0; border-right: 0; }
 }
+
 
 /* ==========================================================================
    Print

@@ -1,0 +1,339 @@
+<title>Session 9 — Jakarta Bean Validation</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 9: Jakarta Bean Validation, declarative constraints (@NotNull, @Size, @Pattern), custom constraint validators, programmatic Validator API, and automatic multi-tier validation across JSF, EJB, and JPA.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s09";</script>
+
+<main class="page">
+
+  <h1>Session 9 · Jakarta Bean Validation</h1>
+  <p class="lede">In enterprise systems, data validation was historically duplicated across three layers: JavaScript in
+    the browser, check methods in the EJB layer, and table constraints in the database. <strong>Jakarta Bean Validation</strong>
+    solves this redundancy: you declare business constraints <em>once</em> on your domain classes, and the container automatically
+    enforces them across the web tier (JSF), business tier (EJB), and database persistence tier (JPA).</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Define the Jakarta Bean Validation architecture and explain "write once, enforce everywhere"</li>
+        <li>Apply standard built-in constraint annotations (<code>@NotNull</code>, <code>@Size</code>, <code>@Min</code>, <code>@Pattern</code>, <code>@Email</code>)</li>
+        <li>Distinguish between field, property (getter), and class-level constraint placement</li>
+        <li>Construct custom validation annotations and implement <code>ConstraintValidator</code> logic</li>
+        <li>Explain container integration: automatic JSF Phase 3 validation, EJB method validation, and JPA pre-persist hooks</li>
+        <li>Perform programmatic validation using the <code>Validator</code> and <code>ConstraintViolation</code> API</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       9.1 What is Jakarta Bean Validation?
+       ===================================================================== -->
+  <span class="eyebrow">session 9.1</span>
+  <h2>Part 1 · The "Validate Once, Enforce Everywhere" Paradigm</h2>
+
+  <div class="callout callout--analogy"><span class="callout__i">🛂</span>
+    <div class="callout__b"><b>The Airport Security Checkpoint Analogy</b>
+      Without Bean Validation, an airport would force you to unpack your luggage at the front door, unpack it again
+      at the check-in desk, unpack it at the boarding gate, and unpack it on the plane. Each agent writes their own rules.<br>
+      With <strong>Jakarta Bean Validation</strong>, there is one authoritative specification for allowed items. The luggage
+      tag declares the constraints; every checkpoint (web form, business logic, persistence store) applies the exact same rules automatically.
+    </div>
+  </div>
+
+  <p>Jakarta Bean Validation (implemented by reference providers like <strong>Hibernate Validator</strong>) attaches
+    declarative constraint metadata to Java bean fields, getters, or classes:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Application Layer</th><th>How Bean Validation Integrates</th><th>Failure Behavior</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Presentation Tier (JSF Facelets)</strong></td>
+        <td>JSF reads model constraints automatically during <strong>Phase 3 (Process Validation)</strong>.</td>
+        <td>Stops request; displays localized error messages in <code>&lt;h:messages&gt;</code> without hitting EJB.</td>
+      </tr>
+      <tr>
+        <td><strong>Business Tier (EJB / CDI)</strong></td>
+        <td>Container intercepts method calls with <code>@ValidateExecutable</code> and parameter <code>@Valid</code>.</td>
+        <td>Throws <code>ConstraintViolationException</code> before executing method body.</td>
+      </tr>
+      <tr>
+        <td><strong>Persistence Tier (JPA)</strong></td>
+        <td>JPA automatically runs the validator before executing SQL <code>INSERT</code> or <code>UPDATE</code>.</td>
+        <td>Aborts the transaction before sending invalid SQL to the database.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       9.2 Built-in Constraints
+       ===================================================================== -->
+  <span class="eyebrow">session 9.2</span>
+  <h2>Part 2 · Standard Built-in Constraints</h2>
+
+  <p>The <code>jakarta.validation.constraints.*</code> package provides an extensive library of production-ready rules:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>Supported Types</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>@NotNull</code></td><td>Any Object</td><td>Value must not be <code>null</code> (allows empty strings).</td></tr>
+      <tr><td><code>@NotEmpty</code></td><td>String, Collection, Map, Array</td><td>Must not be <code>null</code> and size/length must be $> 0$.</td></tr>
+      <tr><td><code>@NotBlank</code></td><td>String</td><td>Must not be <code>null</code> and must contain at least one non-whitespace character.</td></tr>
+      <tr><td><code>@Size(min=X, max=Y)</code></td><td>String, Collection, Array</td><td>Ensures string length or collection size is within specified bounds.</td></tr>
+      <tr><td><code>@Min(val)</code> / <code>@Max(val)</code></td><td>Numeric types (int, long, BigDecimal)</td><td>Ensures numeric value is $\ge$ min or $\le$ max.</td></tr>
+      <tr><td><code>@Positive</code> / <code>@PositiveOrZero</code></td><td>Numeric types</td><td>Value must be strictly positive ($> 0$) or non-negative ($\ge 0$).</td></tr>
+      <tr><td><code>@Email</code></td><td>String</td><td>Validates RFC-compliant email address structure.</td></tr>
+      <tr><td><code>@Pattern(regexp="...")</code></td><td>String</td><td>Validates string against a standard regular expression.</td></tr>
+      <tr><td><code>@Past</code> / <code>@Future</code></td><td>Date, LocalDate, Instant</td><td>Ensures date is strictly in the past (e.g., date of birth) or future (e.g., card expiry).</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="code-head">CustomerRegistration.java — Model with Declarative Constraints</div>
+  <pre><code>package com.globalbank.model;
+
+import jakarta.validation.constraints.*;
+import java.io.Serializable;
+import java.time.LocalDate;
+
+public class CustomerRegistration implements Serializable {
+
+    @NotBlank(message = "First name is mandatory")
+    @Size(min = 2, max = 50, message = "Name must be between 2 and 50 characters")
+    private String fullName;
+
+    @NotBlank(message = "Email is required")
+    @Email(message = "Invalid email format")
+    private String email;
+
+    @Pattern(regexp = "^\\d{10}$", message = "Account number must be exactly 10 digits")
+    private String accountNumber;
+
+    @NotNull(message = "Date of birth required")
+    @Past(message = "Date of birth must be in the past")
+    private LocalDate dateOfBirth;
+
+    @Positive(message = "Opening deposit must be greater than zero")
+    private double initialDeposit;
+
+    // Getters and setters...
+}</code></pre>
+
+  <!-- =====================================================================
+       9.3 Custom Constraints
+       ===================================================================== -->
+  <span class="eyebrow">session 9.3</span>
+  <h2>Part 3 · Creating Custom Constraints</h2>
+
+  <p>When business requirements exceed standard annotations (such as verifying a bank routing number checksum or
+    enforcing password complexity), you build a <strong>Custom Constraint</strong> in two straightforward steps:</p>
+
+  <h3>Step 1: Define the Custom Annotation</h3>
+  <div class="code-head">ValidAccountNumber.java — Custom Constraint Annotation</div>
+  <pre><code>package com.globalbank.validation;
+
+import jakarta.validation.Constraint;
+import jakarta.validation.Payload;
+import java.lang.annotation.*;
+
+@Documented
+@Constraint(validatedBy = AccountNumberValidator.class) // Links to validator class
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+public @interface ValidAccountNumber {
+
+    // Mandatory standard Bean Validation attributes:
+    String message() default "Invalid bank account number check-digit";
+    Class&lt;?&gt;[] groups() default {};
+    Class&lt;? extends Payload&gt;[] payload() default {};
+}</code></pre>
+
+  <h3>Step 2: Implement the <code>ConstraintValidator</code></h3>
+  <div class="code-head">AccountNumberValidator.java — Validator Logic</div>
+  <pre><code>package com.globalbank.validation;
+
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
+
+public class AccountNumberValidator implements ConstraintValidator&lt;ValidAccountNumber, String&gt; {
+
+    @Override
+    public void initialize(ValidAccountNumber constraintAnnotation) {
+        // Initialization if annotation has configurable attributes
+    }
+
+    @Override
+    public boolean isValid(String value, ConstraintValidatorContext context) {
+        if (value == null || value.length() != 10) {
+            return false; // Null or incorrect length fails
+        }
+
+        // Luhn algorithm or bank check-digit verification:
+        int sum = 0;
+        for (int i = 0; i &lt; value.length(); i++) {
+            char c = value.charAt(i);
+            if (!Character.isDigit(c)) return false;
+            sum += Character.getNumericValue(c);
+        }
+        return (sum % 10 == 0); // Must satisfy check-digit rule
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       9.4 Programmatic Validation API
+       ===================================================================== -->
+  <span class="eyebrow">session 9.4</span>
+  <h2>Part 4 · Programmatic Validation with the <code>Validator</code> API</h2>
+
+  <p>While the container validates web inputs and entities automatically, batch processors or standalone utilities
+    can invoke the validation engine manually:</p>
+
+  <div class="code-head">ProgrammaticValidationDemo.java</div>
+  <pre><code>package com.globalbank.validation;
+
+import com.globalbank.model.CustomerRegistration;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
+import jakarta.validation.ConstraintViolation;
+import java.util.Set;
+
+public class ProgrammaticValidationDemo {
+
+    public static void main(String[] args) {
+        // 1. Build the default ValidatorFactory and retrieve Validator instance
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+
+            // 2. Instantiate bean with deliberate constraint violations
+            CustomerRegistration customer = new CustomerRegistration();
+            customer.setEmail("invalid-email-address"); // Fails @Email
+            customer.setInitialDeposit(-50.0);          // Fails @Positive
+
+            // 3. Validate bean and inspect violation set
+            Set&lt;ConstraintViolation&lt;CustomerRegistration&gt;&gt; violations = validator.validate(customer);
+
+            if (violations.isEmpty()) {
+                System.out.println("Customer data is valid!");
+            } else {
+                System.err.println("Validation failed with " + violations.size() + " error(s):");
+                for (ConstraintViolation&lt;CustomerRegistration&gt; v : violations) {
+                    System.err.println(" • Field '" + v.getPropertyPath() + "': " + v.getMessage());
+                }
+            }
+        }
+    }
+}</code></pre>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Constraint Validation Pipeline Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Client submits Customer form:
+CustomerRegistration c = new CustomerRegistration();
+c.setFullName("J");                      // Fails @Size(min=2)
+c.setEmail("alice@corporate.internal");  // Passes @Email
+c.setAccountNumber("12345");             // Fails @Pattern(10 digits)
+c.setInitialDeposit(-200.00);            // Fails @Positive
+// JSF Phase 3 triggers Bean Validation engine</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Validation Engine</button>
+      <span class="bench__hint">Observe how validation errors halt processing before business methods execute.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:35:10,001 INFO] [BeanValidator] Validating model 'com.globalbank.model.CustomerRegistration'
+[08:35:10,003 WARN] [ConstraintViolation] Property 'fullName': "Name must be between 2 and 50 characters" (Rejected: "J")
+[08:35:10,005 WARN] [ConstraintViolation] Property 'accountNumber': "Account number must be exactly 10 digits" (Rejected: "12345")
+[08:35:10,007 WARN] [ConstraintViolation] Property 'initialDeposit': "Opening deposit must be greater than zero" (Rejected: -200.0)
+[08:35:10,010 INFO] [JSF Phase 3] Validation failed with 3 constraint violation(s).
+[08:35:10,012 INFO] [JSF Lifecycle] Short-circuiting directly to Phase 6 (Render Response).
+[08:35:10,015 INFO] [UI View] Populated <h:messages> with 3 localized error alerts. Database untouched.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 9 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the primary architectural benefit of Jakarta Bean Validation over manual validation methods?",
+        "opts": [
+          "It makes databases run without SQL",
+          "Constraints are defined once on the domain model and enforced uniformly across JSF, EJB, and JPA tiers",
+          "It eliminates the need for Java constructors",
+          "It compresses images automatically"
+        ],
+        "a": 1,
+        "why": "Bean Validation centralizes constraint rules on the domain model, preventing duplicate validation code across presentation, business, and storage tiers."
+      },
+      {
+        "q": "What is the difference between @NotNull, @NotEmpty, and @NotBlank on a String field?",
+        "opts": [
+          "There is no difference; they are aliases",
+          "@NotNull disallows null; @NotEmpty disallows null and \"\"; @NotBlank disallows null, \"\", and whitespace-only strings",
+          "@NotBlank only works on numbers",
+          "@NotEmpty requires at least 100 characters"
+        ],
+        "a": 1,
+        "why": "@NotBlank is the strictest check for text: it requires non-null, non-empty, and at least one non-whitespace character."
+      },
+      {
+        "q": "Which interface must you implement when writing the evaluation logic for a custom constraint?",
+        "opts": [
+          "ConstraintValidator<A, T>",
+          "java.lang.Runnable",
+          "jakarta.ejb.SessionBean",
+          "java.io.Serializable"
+        ],
+        "a": 0,
+        "why": "Custom validators implement ConstraintValidator<AnnotationType, TargetType> and provide the isValid(...) method."
+      },
+      {
+        "q": "When does JPA automatically execute Bean Validation by default?",
+        "opts": [
+          "Only when the database server restarts",
+          "Automatically prior to executing INSERT (pre-persist) and UPDATE (pre-update) statements",
+          "Only on SELECT queries",
+          "Never; JPA ignores Bean Validation"
+        ],
+        "a": 1,
+        "why": "JPA hooks directly into Bean Validation lifecycle events, validating entities before writing to the database."
+      },
+      {
+        "q": "Which method on the Validator interface returns the set of detected errors for a given object?",
+        "opts": [
+          "validator.checkErrors(obj)",
+          "validator.validate(obj)",
+          "validator.verify(obj)",
+          "validator.inspect(obj)"
+        ],
+        "a": 1,
+        "why": "validator.validate(object) returns a Set<ConstraintViolation<T>>, which is empty if all constraints pass."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Bean Validation</strong></td><td>Declarative constraint specification (<code>jakarta.validation.*</code>) enforced across all application tiers.</td></tr>
+    <tr><td><strong>Core Constraints</strong></td><td><code>@NotNull</code>, <code>@NotBlank</code>, <code>@Size</code>, <code>@Min</code>, <code>@Max</code>, <code>@Pattern</code>, <code>@Email</code>.</td></tr>
+    <tr><td><strong>Custom Validator</strong></td><td>Annotated with <code>@Constraint</code> and backed by a <code>ConstraintValidator&lt;A, T&gt;</code> implementation.</td></tr>
+    <tr><td><strong>Container Hooks</strong></td><td>JSF validates in Phase 3; EJB validates parameters; JPA validates on pre-persist/pre-update.</td></tr>
+    <tr><td><strong>Programmatic API</strong></td><td><code>Validation.buildDefaultValidatorFactory().getValidator().validate(bean)</code>.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
