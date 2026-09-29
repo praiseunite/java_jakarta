@@ -1,0 +1,298 @@
+<title>Session 13 — CDI Beans &amp; Jakarta Security</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 13: CDI Beans and Jakarta Security, HttpAuthenticationMechanism, IdentityStore (@DatabaseIdentityStoreDefinition), injectable SecurityContext, and role-based access control.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s13";</script>
+
+<main class="page">
+
+  <h1>Session 13 · CDI Beans &amp; Jakarta Security</h1>
+  <p class="lede">Before Jakarta EE 8, configuring security meant wrestling with proprietary, server-specific XML files
+    and complex JAAS login modules. <strong>Jakarta Security</strong> modernizes this entirely: it provides a portable,
+    CDI-driven, annotation-based security framework with three elegant pillars: <strong>HttpAuthenticationMechanism</strong>,
+    <strong>IdentityStore</strong>, and the injectable <strong>SecurityContext</strong>.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Explain the Jakarta Security specification and its integration with CDI</li>
+        <li>Differentiate between Authentication (identifying who you are) and Authorization (determining what you can do)</li>
+        <li>Configure portable authentication mechanisms using <code>@FormAuthenticationMechanismDefinition</code> and <code>@CustomFormAuthenticationMechanismDefinition</code></li>
+        <li>Connect user repositories declaratively using <code>@DatabaseIdentityStoreDefinition</code> or custom <code>IdentityStore</code> beans</li>
+        <li>Perform programmatic security checks using the CDI-injectable <code>SecurityContext</code></li>
+        <li>Apply role-based access control (<code>@RolesAllowed</code>) on CDI managed beans</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       13.1 The Three Pillars of Jakarta Security
+       ===================================================================== -->
+  <span class="eyebrow">session 13.1</span>
+  <h2>Part 1 · The Three Pillars of Modern Jakarta Security</h2>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏦</span>
+    <div class="callout__b"><b>The Bank Vault &amp; Guard Analogy</b>
+      <ul style="margin:.3rem 0 0;padding-left:1.2rem">
+        <li><strong>HttpAuthenticationMechanism (The Front Gate Guard):</strong> Asks you for your passport or password badge at the door. Decides if you are allowed into the building.</li>
+        <li><strong>IdentityStore (The Central HR Database):</strong> The verified database where passwords, hashes, and employee roles are stored and queried.</li>
+        <li><strong>SecurityContext (The Security Keycard):</strong> Carried by the user at all times. As you walk through the building, electronic locks read your keycard (<code>isCallerInRole("MANAGER")</code>) to decide if you can enter the vault.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Pillar</th><th>Core Interface / Annotation</th><th>Responsibility</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Authentication Mechanism</strong></td>
+        <td><code>HttpAuthenticationMechanism</code><br><code>@FormAuthenticationMechanismDefinition</code></td>
+        <td>Intercepts HTTP requests, handles login credentials, redirects to login pages, and initiates challenge protocols.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Identity Store</strong></td>
+        <td><code>IdentityStore</code><br><code>@DatabaseIdentityStoreDefinition</code></td>
+        <td>Validates username/password credentials against databases or LDAP directories and loads caller group/role memberships.</td>
+      </tr>
+      <tr>
+        <td><strong>3. Security Context</strong></td>
+        <td><code>jakarta.security.enterprise.SecurityContext</code></td>
+        <td>CDI-injectable API used by application beans to inspect caller principal, check role memberships, and invoke programmatic authentication.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       13.2 Declarative Authentication & Identity Stores
+       ===================================================================== -->
+  <span class="eyebrow">session 13.2</span>
+  <h2>Part 2 · Declarative Authentication &amp; Database Identity Stores</h2>
+
+  <p>In modern Jakarta EE, you can wire a complete database-backed authentication system using pure Java annotations —
+    with zero server-specific XML configuration:</p>
+
+  <div class="code-head">ApplicationSecurityConfig.java — Complete Portable Security Setup</div>
+  <pre><code>package com.globalbank.security;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.security.enterprise.authentication.mechanism.http.CustomFormAuthenticationMechanismDefinition;
+import jakarta.security.enterprise.authentication.mechanism.http.LoginToContinue;
+import jakarta.security.enterprise.identitystore.DatabaseIdentityStoreDefinition;
+import jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash;
+
+@ApplicationScoped
+// ① Configure Custom Form Authentication: Login at /login.xhtml, error page at /login-error.xhtml
+@CustomFormAuthenticationMechanismDefinition(
+    loginToContinue = @LoginToContinue(
+        loginPage = "/login.xhtml",
+        errorPage = "/login-error.xhtml"
+    )
+)
+// ② Configure the Database Identity Store pointing directly to PostgreSQL JNDI DataSource!
+@DatabaseIdentityStoreDefinition(
+    dataSourceLookup = "java:/jdbc/GlobalBankDB",
+    callerQuery = "SELECT password_hash FROM bank_users WHERE username = ?",
+    groupsQuery = "SELECT role_name FROM user_roles WHERE username = ?",
+    hashAlgorithm = Pbkdf2PasswordHash.class // Secure salted PBKDF2 hashing
+)
+public class ApplicationSecurityConfig {
+    // Declarative configuration class — no method bodies needed!
+}</code></pre>
+
+  <!-- =====================================================================
+       13.3 Injectable SecurityContext
+       ===================================================================== -->
+  <span class="eyebrow">session 13.3</span>
+  <h2>Part 3 · Inspecting Credentials with <code>SecurityContext</code></h2>
+
+  <p>Any CDI bean, EJB, or JSF Backing Bean can inject <code>SecurityContext</code> to inspect user roles and identities dynamically:</p>
+
+  <div class="code-head">AccountDashboardBean.java — Role-Aware CDI Bean</div>
+  <pre><code>package com.globalbank.web;
+
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.security.enterprise.SecurityContext;
+import java.security.Principal;
+
+@Named("dashboard")
+@RequestScoped
+public class AccountDashboardBean {
+
+    // ① Inject the portable Jakarta SecurityContext
+    @Inject
+    private SecurityContext securityContext;
+
+    public String getCurrentUser() {
+        Principal caller = securityContext.getCallerPrincipal();
+        return (caller != null) ? caller.getName() : "Anonymous Guest";
+    }
+
+    public boolean isManager() {
+        // ② Verify if user possesses high-privilege role
+        return securityContext.isCallerInRole("BANK_MANAGER");
+    }
+
+    public String accessVault() {
+        if (!isManager()) {
+            throw new SecurityException("Unauthorized: Access to cash vault is restricted to Managers!");
+        }
+        return "vault-opened";
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       13.4 Method-Level Authorization on CDI Beans
+       ===================================================================== -->
+  <span class="eyebrow">session 13.4</span>
+  <h2>Part 4 · Declarative Role Enforcement (<code>@RolesAllowed</code>)</h2>
+
+  <p>Jakarta Security extends standard authorization annotations (<code>@RolesAllowed</code>, <code>@PermitAll</code>, <code>@DenyAll</code>)
+    from EJBs to all CDI-managed beans:</p>
+
+  <div class="code-head">WireTransferService.java — Secured CDI Bean</div>
+  <pre><code>package com.globalbank.services;
+
+import jakarta.annotation.security.RolesAllowed;
+import jakarta.annotation.security.PermitAll;
+import jakarta.annotation.security.DenyAll;
+import jakarta.enterprise.context.ApplicationScoped;
+
+@ApplicationScoped
+public class WireTransferService {
+
+    @PermitAll
+    public double getExchangeRate(String currency) {
+        return 1.15; // Public data accessible to all visitors
+    }
+
+    @RolesAllowed({"TELLER", "BANK_MANAGER"})
+    public void executeTransfer(int from, int to, double amount) {
+        // Only authenticated tellers and managers can initiate wire transfers
+    }
+
+    @RolesAllowed("BANK_MANAGER")
+    public void authorizeForeignOverdraft(int accountId, double amount) {
+        // High-level managerial authorization only
+    }
+
+    @DenyAll
+    public void deprecatedLegacySweep() {
+        // Permanently disabled
+    }
+}</code></pre>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Jakarta Security Authentication &amp; RBAC Replay</span>
+    </div>
+    <pre class="bench__code"><code>// User attempts login: username="sarah_c", password="••••••••"
+1. HttpAuthenticationMechanism intercepts credentials
+2. DatabaseIdentityStore verifies PBKDF2 hash against PostgreSQL
+3. SecurityContext populates Principal & Roles: [TELLER]
+4. Sarah invokes WireTransferService.authorizeForeignOverdraft()</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Security Verification</button>
+      <span class="bench__hint">Traces authentication against IdentityStore and subsequent RBAC authorization check.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[09:30:10,011] [HttpAuthMechanism] Captured credentials from /login.xhtml for user 'sarah_c'.
+[09:30:10,014] [IdentityStore] Executing callerQuery on 'java:/jdbc/GlobalBankDB'.
+[09:30:10,018] [IdentityStore] PBKDF2 hash match confirmed! User 'sarah_c' authenticated.
+[09:30:10,021] [IdentityStore] Executing groupsQuery -> Loaded roles: ["TELLER"].
+[09:30:10,023] [SecurityContext] CallerPrincipal set: Principal('sarah_c').
+[09:30:10,026] [RBAC Interceptor] Method authorizeForeignOverdraft() requires role: [BANK_MANAGER].
+[09:30:10,028] [RBAC Interceptor] Caller roles ["TELLER"] lack [BANK_MANAGER]!
+[09:30:10,030] [Security Violation] Access Denied: 403 Forbidden thrown for user 'sarah_c'.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 13 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the primary architectural improvement introduced by the Jakarta Security specification?",
+        "opts": [
+          "It eliminates the need for passwords",
+          "It replaces proprietary, vendor-specific server XML configs with portable, CDI-driven Java annotations",
+          "It moves authentication into client JavaScript",
+          "It restricts applications to single-user mode"
+        ],
+        "a": 1,
+        "why": "Jakarta Security standardizes authentication and authorization using portable CDI annotations like @DatabaseIdentityStoreDefinition."
+      },
+      {
+        "q": "Which of the three security pillars is responsible for authenticating caller credentials against databases or LDAP directories?",
+        "opts": [
+          "HttpAuthenticationMechanism",
+          "IdentityStore",
+          "SecurityContext",
+          "FacesContext"
+        ],
+        "a": 1,
+        "why": "IdentityStore is the database/LDAP repository connector that validates credentials and queries user group memberships."
+      },
+      {
+        "q": "How can a CDI bean or JSF Backing Bean programmatically check if the current user has the 'ADMIN' role?",
+        "opts": [
+          "securityContext.isCallerInRole(\"ADMIN\")",
+          "httpRequest.hasRole(\"ADMIN\")",
+          "System.getProperty(\"role\").equals(\"ADMIN\")",
+          "database.queryAdmin()"
+        ],
+        "a": 0,
+        "why": "The CDI-injectable SecurityContext provides the standard isCallerInRole(String role) method."
+      },
+      {
+        "q": "Which annotation defines an authentication mechanism that redirects unauthenticated users to a customized XHTML login page?",
+        "opts": [
+          "@BasicAuthenticationMechanismDefinition",
+          "@CustomFormAuthenticationMechanismDefinition",
+          "@OAuthMechanism",
+          "@CertificateAuthentication"
+        ],
+        "a": 1,
+        "why": "@CustomFormAuthenticationMechanismDefinition configures form-based login using custom application-provided pages (/login.xhtml)."
+      },
+      {
+        "q": "What happens if a user without the required role attempts to invoke a CDI method annotated with @RolesAllowed(\"DIRECTOR\")?",
+        "opts": [
+          "The method returns null",
+          "The server throws a security exception and returns HTTP 403 Forbidden",
+          "The user is automatically promoted to Director",
+          "The computer reboots"
+        ],
+        "a": 1,
+        "why": "@RolesAllowed enforces role authorization; unauthorized invocations are aborted with a security exception and HTTP 403."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Jakarta Security</strong></td><td>Modern, portable, CDI-driven enterprise security replacing proprietary server XML.</td></tr>
+    <tr><td><strong>Auth Mechanism</strong></td><td><code>HttpAuthenticationMechanism</code> handles incoming HTTP login challenges and redirects.</td></tr>
+    <tr><td><strong><code>IdentityStore</code></strong></td><td>Validates passwords and loads role groups from relational databases or LDAP.</td></tr>
+    <tr><td><strong><code>SecurityContext</code></strong></td><td>CDI-injectable facade providing <code>getCallerPrincipal()</code> and <code>isCallerInRole()</code>.</td></tr>
+    <tr><td><strong>RBAC Annotations</strong></td><td><code>@RolesAllowed</code>, <code>@PermitAll</code>, and <code>@DenyAll</code> enforce method permissions declaratively.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

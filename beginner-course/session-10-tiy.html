@@ -1,0 +1,294 @@
+<title>Try It Yourself — Review &amp; Consolidation (Sessions 9 &amp; 10)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Try It Yourself Review for Sessions 9 & 10: Combining Jakarta Bean Validation with advanced transactional execution, UserTransaction BMT boundaries, and rollback recovery.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s10t";</script>
+
+<main class="page">
+
+  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 9 &amp; 10)</h1>
+  <p class="lede">Sessions 9 and 10 established the dual integrity guardrails of enterprise applications:
+    <strong>Jakarta Bean Validation</strong> guarantees that data is clean, complete, and format-valid before it reaches
+    business logic, while <strong>Advanced EJB Transactions</strong> guarantee that multi-step operations execute with absolute
+    ACID safety or roll back cleanly without data loss.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL12)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Construct an integrated enterprise flow combining Bean Validation constraints with transactional EJB execution</li>
+        <li>Compare how validation failures halt execution before transactions open vs. how business exceptions trigger rollbacks</li>
+        <li>Implement programmatic chunked commits using <code>UserTransaction</code> in Bean-Managed Transactions (BMT)</li>
+        <li>Diagnose and handle <code>ConstraintViolationException</code>, <code>TransactionRolledbackException</code>, and rollback leaks</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       Part 1: The Integrated Flow
+       ===================================================================== -->
+  <span class="eyebrow">consolidation</span>
+  <h2>Part 1 · The Validation &amp; Transaction Guardrail Pipeline</h2>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Stage</th><th>Layer</th><th>Integrity Check</th><th>Failure Consequence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1. View Submission</td>
+        <td>JSF Facelets Form</td>
+        <td>Validates field constraints (<code>@NotBlank</code>, <code>@Positive</code>)</td>
+        <td>Fails in Phase 3; redisplays view with errors; <strong>no EJB or DB call is made</strong>.</td>
+      </tr>
+      <tr>
+        <td>2. Service Entry</td>
+        <td>Stateless EJB Method</td>
+        <td>Method parameter validation (<code>@Valid TransferRequest req</code>)</td>
+        <td>Throws <code>ConstraintViolationException</code>; stops before opening transaction.</td>
+      </tr>
+      <tr>
+        <td>3. Execution</td>
+        <td>Container-Managed Tx</td>
+        <td>ACID Transaction Boundary (<code>REQUIRED</code>)</td>
+        <td>System exception or <code>setRollbackOnly()</code> triggers complete <strong>ROLLBACK</strong>.</td>
+      </tr>
+      <tr>
+        <td>4. Persistence</td>
+        <td>JPA / JDBC Layer</td>
+        <td>Entity-level constraints and DB foreign keys</td>
+        <td>JPA validates prior to SQL flush; aborts on invalid state.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       Part 2: Code Walkthrough
+       ===================================================================== -->
+  <span class="eyebrow">code walkthrough</span>
+  <h2>Part 2 · The Validated Bank Transfer Service</h2>
+
+  <div class="code-head">1. TransferRequest.java — Validated Request DTO</div>
+  <pre><code>package com.globalbank.dto;
+
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
+import java.io.Serializable;
+
+public class TransferRequest implements Serializable {
+
+    @NotNull(message = "Source account required")
+    @Pattern(regexp = "^\\d{10}$", message = "Source account must be 10 digits")
+    private String fromAccount;
+
+    @NotNull(message = "Destination account required")
+    @Pattern(regexp = "^\\d{10}$", message = "Destination account must be 10 digits")
+    private String toAccount;
+
+    @Positive(message = "Transfer amount must be greater than zero")
+    private double amount;
+
+    public TransferRequest(String from, String to, double amount) {
+        this.fromAccount = from;
+        this.toAccount = to;
+        this.amount = amount;
+    }
+
+    // Getters and setters...
+    public String getFromAccount() { return fromAccount; }
+    public String getToAccount() { return toAccount; }
+    public double getAmount() { return amount; }
+}</code></pre>
+
+  <div class="code-head">2. TransferManagerBean.java — Transactional EJB with Method Validation</div>
+  <pre><code>package com.globalbank.ejb;
+
+import com.globalbank.dto.TransferRequest;
+import jakarta.annotation.Resource;
+import jakarta.ejb.SessionContext;
+import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionAttribute;
+import jakarta.ejb.TransactionAttributeType;
+import jakarta.validation.Valid;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+@Stateless
+public class TransferManagerBean {
+
+    @Resource
+    private SessionContext ctx;
+
+    @Resource(lookup = "java:/jdbc/GlobalBankDB")
+    private DataSource dataSource;
+
+    // @Valid triggers automatic Bean Validation on the parameter before method runs!
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public void executeTransfer(@Valid TransferRequest request) {
+
+        try (Connection conn = dataSource.getConnection()) {
+            // 1. Debit from source
+            debit(conn, request.getFromAccount(), request.getAmount());
+
+            // 2. Simulated business check: block suspicious overseas routing
+            if ("0000000000".equals(request.getToAccount())) {
+                // Programmatic rollback in CMT
+                System.err.println("Suspicious target account! Rolling back.");
+                ctx.setRollbackOnly();
+                return;
+            }
+
+            // 3. Credit to destination
+            credit(conn, request.getToAccount(), request.getAmount());
+
+        } catch (SQLException e) {
+            // System exception automatically triggers container rollback
+            throw new RuntimeException("Database error during transfer", e);
+        }
+    }
+
+    private void debit(Connection c, String acc, double amt) throws SQLException { /* SQL UPDATE */ }
+    private void credit(Connection c, String acc, double amt) throws SQLException { /* SQL UPDATE */ }
+}</code></pre>
+
+  <!-- =====================================================================
+       Part 3: Top Troubleshooting Gotchas
+       ===================================================================== -->
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · Top 3 Integration Gotchas for Sessions 9 &amp; 10</h2>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Trap 1: Expecting Checked Exceptions to Roll Back Automatically</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> A custom <code>InsufficientBalanceException extends Exception</code> is thrown, but previous database writes are committed to disk anyway!</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> By default in EJB, checked Application Exceptions <em>commit</em>. You must annotate the exception class with:
+      <code>@ApplicationException(rollback = true)</code> or explicitly call <code>ctx.setRollbackOnly()</code>.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Trap 2: Swallowing Exceptions in BMT without calling <code>utx.rollback()</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> An error occurs inside a BMT bean; the developer catches it, logs it, and returns. The transaction remains open on the thread until timeout!</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> In BMT, <em>you</em> are the transaction manager. If an error occurs between <code>utx.begin()</code> and <code>utx.commit()</code>, you <strong>must</strong> call <code>utx.rollback()</code> inside the catch block.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Trap 3: Forgetting <code>@Valid</code> on Nested Objects or Method Parameters</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Constraints inside a child DTO (e.g., <code>Address.postalCode</code>) are ignored during validation.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Bean Validation does not cascade into nested objects automatically. Place <code>@Valid</code> on the nested field or method parameter to instruct the engine to validate nested constraints recursively.</p>
+    </div>
+  </div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Validated Transaction Execution Pipeline Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Client submits TransferRequest: from: "1002948192", to: "0000000000", amount: 1500.00
+// 1. Parameter @Valid validation runs -> PASSED (valid 10-digit format and positive amount)
+// 2. Container opens TxId 0xdf81
+// 3. Debit account succeeds
+// 4. Compliance rule flags target "0000000000" -> ctx.setRollbackOnly() invoked</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Validated Transaction</button>
+      <span class="bench__hint">Traces Bean Validation parameter inspection followed by programmatic transaction rollback.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:50:01,002] [BeanValidation] Intercepted TransferManagerBean.executeTransfer(@Valid request).
+[08:50:01,005] [BeanValidation] Checking constraints on TransferRequest -> 0 violations. VALID.
+[08:50:01,008] [CMT Interceptor] Initiating Transaction [TxId: 0xdf81] [REQUIRED].
+[08:50:01,012] [JDBC] Debited $1,500.00 from Account 1002948192.
+[08:50:01,015] [Compliance Check] Destination account '0000000000' is blacklisted!
+[08:50:01,017] [EJB Context] Programmatic rollback flagged: ctx.setRollbackOnly() called.
+[08:50:01,020] [CMT Interceptor] Method exited. Status: MarkedForRollback. Executing JTA ROLLBACK.
+[08:50:01,023] [JDBC] Debit on Account 1002948192 reversed. Account balance restored.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Assessment Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 9 &amp; 10)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "Why is placing Bean Validation on method parameters with @Valid superior to writing if-checks inside the method body?",
+        "opts": [
+          "It compiles faster",
+          "Invalid requests are rejected before transactions open, preventing wasted database connections and locks",
+          "It encrypts the parameters",
+          "It converts strings into integers automatically"
+        ],
+        "a": 1,
+        "why": "Validating parameters at the container interceptor boundary halts processing before resources (transactions, connections) are acquired."
+      },
+      {
+        "q": "By default, what is the rollback behavior for a checked Application Exception in EJB CMT?",
+        "opts": [
+          "It always rolls back",
+          "It COMMITS by default, unless annotated with @ApplicationException(rollback = true) or ctx.setRollbackOnly() is called",
+          "The server shuts down",
+          "It retries 3 times"
+        ],
+        "a": 1,
+        "why": "Application exceptions are considered standard business outcomes and do not trigger a rollback unless explicitly configured."
+      },
+      {
+        "q": "What happens if a developer starts a transaction with utx.begin() in BMT, catches an exception, but fails to call utx.rollback()?",
+        "opts": [
+          "The transaction commits anyway",
+          "The transaction remains open and orphan on the thread until it reaches its transaction timeout, holding locks",
+          "The database deletes the application",
+          "WildFly reboots the machine"
+        ],
+        "a": 1,
+        "why": "In BMT, the developer must explicitly call commit() or rollback(); neglecting rollback causes connection starvation and timeout aborts."
+      },
+      {
+        "q": "Which annotation tells the Bean Validation engine to validate constraints on a nested child object?",
+        "opts": [
+          "@Valid",
+          "@Cascade",
+          "@Inspect",
+          "@NotNull"
+        ],
+        "a": 0,
+        "why": "@Valid instructs the validator to recursively inspect constraints declared on nested member properties."
+      },
+      {
+        "q": "Which method on EJBContext is used to inspect whether the current transaction has been marked for rollback?",
+        "opts": [
+          "ctx.isRollback()",
+          "ctx.getRollbackOnly()",
+          "ctx.checkStatus()",
+          "ctx.isAborted()"
+        ],
+        "a": 1,
+        "why": "getRollbackOnly() returns true if any participating component or interceptor has marked the transaction for rollback."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Bean Validation</strong></td><td>Declarative constraints (<code>@NotNull</code>, <code>@Size</code>, <code>@Positive</code>) validated before opening transactions.</td></tr>
+    <tr><td><strong>BMT Demarcation</strong></td><td>Programmatic control via <code>UserTransaction</code>; always call <code>rollback()</code> on errors.</td></tr>
+    <tr><td><strong>Rollback Rules</strong></td><td>System exceptions rollback automatically; Application exceptions commit unless flagged with <code>rollback=true</code>.</td></tr>
+    <tr><td><strong><code>setRollbackOnly()</code></strong></td><td>Programmatic signal to container that current CMT transaction must be rolled back.</td></tr>
+    <tr><td><strong>Recursive Validation</strong></td><td>Use <code>@Valid</code> on parameters and nested objects to cascade constraint verification.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

@@ -1,0 +1,323 @@
+<title>Session 10 — Execution of Enterprise Beans Using Transactions</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 10: Execution of Enterprise Beans Using Transactions, programmatic Bean-Managed Transactions (BMT) with UserTransaction, transaction propagation, rollback semantics, SessionSynchronization lifecycle, and distributed 2PC.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s10";</script>
+
+<main class="page">
+
+  <h1>Session 10 · Execution of Enterprise Beans Using Transactions</h1>
+  <p class="lede">Session 4 introduced basic transaction attributes. Session 10 dives into the engine room of
+    <strong>advanced transaction execution</strong>: how transactions propagate across distributed EJB boundaries,
+    how to take manual programmatic control with <strong>Bean-Managed Transactions (BMT)</strong> using <code>UserTransaction</code>,
+    how to control rollbacks, and how stateful beans synchronize cache with <code>SessionSynchronization</code>.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Trace transaction propagation across nested and distributed enterprise bean calls</li>
+        <li>Implement programmatic Bean-Managed Transactions (BMT) using the <code>UserTransaction</code> API</li>
+        <li>Differentiate rollback semantics between Application Exceptions and System (Runtime) Exceptions</li>
+        <li>Apply programmatic rollback control via <code>EJBContext.setRollbackOnly()</code></li>
+        <li>Implement the <code>SessionSynchronization</code> interface to manage stateful bean caching across transaction commits</li>
+        <li>Explain the mechanics of distributed Two-Phase Commit (2PC / XA) managed by the server transaction coordinator</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       10.1 Transaction Propagation
+       ===================================================================== -->
+  <span class="eyebrow">session 10.1</span>
+  <h2>Part 1 · Transaction Propagation Across EJB Boundaries</h2>
+
+  <p>In enterprise systems, business workflows rarely fit in a single method. A checkout service invokes
+    an inventory service, which calls a billing service, which updates an audit log. <strong>Transaction Propagation</strong>
+    governs how the active transaction context travels across these method calls:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Caller (Bean A)</th><th>Callee Attribute (Bean B)</th><th>Resulting Transaction Behavior</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>In Transaction $T_1$</td>
+        <td><code>REQUIRED</code></td>
+        <td>Bean B executes inside the <strong>same transaction ($T_1$)</strong>. If B fails, A rolls back too.</td>
+      </tr>
+      <tr>
+        <td>In Transaction $T_1$</td>
+        <td><code>REQUIRES_NEW</code></td>
+        <td>$T_1$ is <strong>suspended</strong>. Container starts a fresh transaction $T_2$ for Bean B. When B finishes, $T_2$ commits and $T_1$ resumes.</td>
+      </tr>
+      <tr>
+        <td>In Transaction $T_1$</td>
+        <td><code>MANDATORY</code></td>
+        <td>Bean B joins $T_1$. (If Caller had no transaction, B would throw <code>TransactionRequiredException</code>).</td>
+      </tr>
+      <tr>
+        <td>In Transaction $T_1$</td>
+        <td><code>NOT_SUPPORTED</code></td>
+        <td>$T_1$ is suspended. Bean B runs without any transaction context until B returns.</td>
+      </tr>
+      <tr>
+        <td>In Transaction $T_1$</td>
+        <td><code>NEVER</code></td>
+        <td>🚨 Container throws <code>EJBException</code> immediately because a transaction is active.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       10.2 Bean-Managed Transactions (BMT)
+       ===================================================================== -->
+  <span class="eyebrow">session 10.2</span>
+  <h2>Part 2 · Programmatic Demarcation with <code>UserTransaction</code> (BMT)</h2>
+
+  <p>While Container-Managed Transactions (CMT) cover 95% of use cases, certain batch workflows (e.g., importing 100,000
+    rows where committing every 500 rows is required) mandate manual programmatic control using <strong>Bean-Managed Transactions (BMT)</strong>:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method on <code>UserTransaction</code></th><th>Function</th><th>Throws</th></tr></thead>
+    <tbody>
+      <tr><td><code>utx.begin()</code></td><td>Starts a new transaction on the current thread</td><td><code>NotSupportedException</code> (if already in tx)</td></tr>
+      <tr><td><code>utx.commit()</code></td><td>Commits all changes made within the transaction</td><td><code>RollbackException</code>, <code>HeuristicMixedException</code></td></tr>
+      <tr><td><code>utx.rollback()</code></td><td>Aborts and reverses all modifications</td><td><code>IllegalStateException</code>, <code>SecurityException</code></td></tr>
+      <tr><td><code>utx.setTransactionTimeout(sec)</code></td><td>Sets maximum seconds before auto-abort</td><td><code>SystemException</code></td></tr>
+      <tr><td><code>utx.getStatus()</code></td><td>Returns current status (e.g., <code>STATUS_ACTIVE</code>)</td><td><code>SystemException</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="code-head">BatchImportService.java — Bean-Managed Transaction Example</div>
+  <pre><code>package com.globalbank.batch;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionManagement;
+import jakarta.ejb.TransactionManagementType;
+import jakarta.transaction.UserTransaction;
+import java.util.List;
+
+@Stateless
+@TransactionManagement(TransactionManagementType.BEAN) // ① Declare BMT
+public class BatchImportService {
+
+    // ② Inject the JTA UserTransaction coordinator (or lookup via java:comp/UserTransaction)
+    @Resource
+    private UserTransaction utx;
+
+    public void processBatchRecords(List&lt;String&gt; records) {
+        int batchSize = 500;
+
+        for (int i = 0; i &lt; records.size(); i += batchSize) {
+            try {
+                // ③ Explicitly open transaction boundary
+                utx.begin();
+                utx.setTransactionTimeout(60); // 60 seconds limit
+
+                List&lt;String&gt; sublist = records.subList(i, Math.min(i + batchSize, records.size()));
+                for (String record : sublist) {
+                    insertRecord(record);
+                }
+
+                // ④ Commit this chunk of 500 rows
+                utx.commit();
+                System.out.println("Committed batch: " + i + " to " + (i + sublist.size()));
+
+            } catch (Exception e) {
+                try {
+                    // ⑤ Abort only this failed chunk; earlier committed chunks remain safe!
+                    utx.rollback();
+                    System.err.println("Batch starting at " + i + " failed and rolled back.");
+                } catch (Exception rollbackEx) {
+                    rollbackEx.printStackTrace();
+                }
+            }
+        }
+    }
+
+    private void insertRecord(String rec) { /* JDBC persistence logic */ }
+}</code></pre>
+
+  <!-- =====================================================================
+       10.3 Rollback Semantics: Application vs System Exceptions
+       ===================================================================== -->
+  <span class="eyebrow">session 10.3</span>
+  <h2>Part 3 · Exception Classification &amp; Rollback Rules</h2>
+
+  <p>In Container-Managed Transactions (CMT), how does the container decide whether to commit or rollback when an exception occurs?</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Exception Type</th><th>Examples</th><th>Container Reaction</th><th>Bean Instance Lifecycle</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>System Exception</strong><br>(Unchecked)</td>
+        <td><code>RuntimeException</code>, <code>NullPointerException</code>, <code>EJBException</code></td>
+        <td><strong>Automatic Rollback</strong></td>
+        <td>Container discards/destroys the bean instance from the pool because its internal state may be corrupted.</td>
+      </tr>
+      <tr>
+        <td><strong>Application Exception</strong><br>(Checked by default)</td>
+        <td><code>InsufficientFundsException</code>, <code>AccountFrozenException</code></td>
+        <td><strong>COMMITS by default!</strong> (Assumed to be normal business flow)</td>
+        <td>Bean instance is retained safely in the pool.</td>
+      </tr>
+      <tr>
+        <td><strong>Application Exception with Rollback</strong></td>
+        <td><code>@ApplicationException(rollback = true)<br>public class FraudException ...</code></td>
+        <td><strong>ROLLBACK forced</strong></td>
+        <td>Bean instance retained in pool, but transaction is rolled back.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Programmatic Rollback in CMT: <code>setRollbackOnly()</code></b>
+      If you catch an exception inside a CMT bean but still want the container to abort the transaction, call:
+      <pre style="margin:.4rem 0"><code>ejbContext.setRollbackOnly();</code></pre>
+      This marks the transaction so that no matter what else happens, the container will execute a <strong>ROLLBACK</strong> upon method exit.
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       10.4 SessionSynchronization Interface
+       ===================================================================== -->
+  <span class="eyebrow">session 10.4</span>
+  <h2>Part 4 · Stateful Bean Caching: <code>SessionSynchronization</code></h2>
+
+  <p>When a <code>@Stateful</code> session bean manages cached data across a transaction, it can implement the
+    <code>SessionSynchronization</code> interface to receive container notifications at critical transaction checkpoints:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Callback Method</th><th>When Container Invokes It</th><th>Typical Use Case</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>afterBegin()</code></td>
+        <td>Immediately after the transaction is started.</td>
+        <td>Pre-load or lock cached data from the database into bean memory.</td>
+      </tr>
+      <tr>
+        <td><code>beforeCompletion()</code></td>
+        <td>Right before the transaction manager issues the <code>COMMIT</code> command.</td>
+        <td>Flush dirty cached changes from bean fields down to the database.</td>
+      </tr>
+      <tr>
+        <td><code>afterCompletion(boolean committed)</code></td>
+        <td>Immediately after the transaction commits (<code>true</code>) or rolls back (<code>false</code>).</td>
+        <td>If <code>committed == true</code>, update UI state. If <code>false</code>, discard modified cache and reload from DB.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">BMT Chunked Transaction Execution Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Client executes BatchImportService.processBatchRecords(1,500 records)
+// BMT loops through chunks of 500:
+Chunk 1 (1–500): utx.begin() -> 500 rows inserted -> utx.commit() -> OK
+Chunk 2 (501–1000): utx.begin() -> syntax error at row 722 -> utx.rollback()
+Chunk 3 (1001–1500): utx.begin() -> 500 rows inserted -> utx.commit() -> OK</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run BMT Batch Processor</button>
+      <span class="bench__hint">Demonstrates independent chunk commits and isolated chunk rollback.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:42:01,001 INFO] [BMT Coordinator] Chunk 1: utx.begin() initiated.
+[08:42:01,014 INFO] [JDBC Batch] 500 records inserted into database.
+[08:42:01,018 INFO] [BMT Coordinator] Chunk 1: utx.commit() SUCCESS. (500 rows permanent).
+[08:42:01,022 INFO] [BMT Coordinator] Chunk 2: utx.begin() initiated.
+[08:42:01,030 ERROR] [SQLException] Foreign key constraint violated at row 722!
+[08:42:01,032 WARN] [BMT Coordinator] Chunk 2: Exception caught -> executing utx.rollback().
+[08:42:01,035 INFO] [BMT Coordinator] Chunk 2: Rollback complete. Rows 501–1000 undone. Chunk 1 remains committed!
+[08:42:01,038 INFO] [BMT Coordinator] Chunk 3: utx.begin() initiated.
+[08:42:01,050 INFO] [BMT Coordinator] Chunk 3: utx.commit() SUCCESS. (Total 1,000 rows committed, 500 skipped).
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 10 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What interface is used to demarcate transaction boundaries programmatically in Bean-Managed Transactions (BMT)?",
+        "opts": [
+          "jakarta.transaction.UserTransaction",
+          "jakarta.persistence.EntityManager",
+          "javax.sql.DataSource",
+          "jakarta.ejb.SessionContext"
+        ],
+        "a": 0,
+        "why": "UserTransaction provides the begin(), commit(), and rollback() methods for programmatic transaction demarcation."
+      },
+      {
+        "q": "What happens when an EJB method marked with @TransactionAttribute(REQUIRES_NEW) is invoked by a caller that already has an active transaction T1?",
+        "opts": [
+          "The container throws an exception",
+          "T1 is suspended; a new transaction T2 is created and completes; then T1 resumes",
+          "T1 is permanently aborted",
+          "Both transactions run in parallel on the same thread"
+        ],
+        "a": 1,
+        "why": "REQUIRES_NEW suspends the caller's active transaction context and executes in an independent newly created transaction."
+      },
+      {
+        "q": "By default in CMT, what happens when an unchecked RuntimeException is thrown out of an EJB method?",
+        "opts": [
+          "The container commits the transaction",
+          "The container automatically executes a ROLLBACK and discards the bean instance",
+          "The container re-prompts the caller",
+          "The container pauses the server"
+        ],
+        "a": 1,
+        "why": "System exceptions (subclasses of RuntimeException) indicate unhandled application failures and automatically trigger a transaction rollback."
+      },
+      {
+        "q": "How can an EJB method using CMT force a transaction rollback without throwing an exception?",
+        "opts": [
+          "By returning -1",
+          "By calling ejbContext.setRollbackOnly()",
+          "By calling System.exit(0)",
+          "By setting a null balance"
+        ],
+        "a": 1,
+        "why": "setRollbackOnly() marks the current container-managed transaction so that it is guaranteed to roll back upon completion."
+      },
+      {
+        "q": "Which callback of the SessionSynchronization interface is executed immediately before a stateful bean's transaction commits?",
+        "opts": [
+          "afterBegin()",
+          "beforeCompletion()",
+          "afterCompletion()",
+          "postConstruct()"
+        ],
+        "a": 1,
+        "why": "beforeCompletion() is called right before the transaction manager commits, allowing the bean to flush any cached updates to the database."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>BMT</strong></td><td>Programmatic transactions via <code>@TransactionManagement(BEAN)</code> and <code>UserTransaction</code>.</td></tr>
+    <tr><td><strong>Propagation</strong></td><td>Governs how transaction contexts carry over across nested bean method invocations.</td></tr>
+    <tr><td><strong>System Exceptions</strong></td><td>Trigger automatic rollback and bean destruction by container.</td></tr>
+    <tr><td><strong>Application Exceptions</strong></td><td>Commit by default; use <code>@ApplicationException(rollback=true)</code> or <code>setRollbackOnly()</code> to abort.</td></tr>
+    <tr><td><strong><code>SessionSynchronization</code></strong></td><td><code>afterBegin()</code>, <code>beforeCompletion()</code>, and <code>afterCompletion()</code> hooks for stateful cache coherence.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

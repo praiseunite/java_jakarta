@@ -1,0 +1,300 @@
+<title>Session 7 — Jakarta Messaging Services (JMS)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Session 7: Jakarta Messaging (JMS), Point-to-Point queues vs. Publish/Subscribe topics, ConnectionFactory, JMSContext simplified API, and Request-Reply messaging.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s07";</script>
+
+<main class="page">
+
+  <h1>Session 7 · Jakarta Messaging Services (JMS)</h1>
+  <p class="lede">When a customer places an order or triggers a bank transfer, they should never be forced to wait
+    synchronously while invoices generate, inventory locks, and email confirmations send. <strong>Jakarta Messaging (JMS)</strong>
+    enables asynchronous, reliable, decoupled communication where components drop messages into queues and move on immediately.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Define Jakarta Messaging and Message-Oriented Middleware (MOM)</li>
+        <li>Compare synchronous calls (RMI / RPC) with asynchronous messaging</li>
+        <li>Contrast the two primary messaging domains: <strong>Point-to-Point (Queue)</strong> and <strong>Publish/Subscribe (Topic)</strong></li>
+        <li>Explain Administered Objects, Connection Factories, and Destinations</li>
+        <li>Differentiate between the Classic API (JMS 1.1) and Simplified API (JMS 2.0 / Jakarta Messaging) (<code>JMSContext</code>)</li>
+        <li>Structure JMS Messages (Headers, Properties, Body) and apply acknowledgement modes</li>
+        <li>Implement the Request-Reply pattern using <code>JMSReplyTo</code> and <code>JMSCorrelationID</code></li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       7.1 Introduction to MOM & Jakarta Messaging
+       ===================================================================== -->
+  <span class="eyebrow">session 7.1</span>
+  <h2>Part 1 · Message-Oriented Middleware (MOM)</h2>
+
+  <p><strong>Message-Oriented Middleware (MOM)</strong> is software infrastructure that acts as a reliable intermediary
+    between distributed systems. In Jakarta EE, the application server embeds a message broker (such as <strong>Apache Artemis</strong>
+    in WildFly) to store, route, and deliver messages asynchronously.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Criteria</th><th>Synchronous Calls (RMI / REST / RPC)</th><th>Asynchronous Messaging (MOM / JMS)</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Thread Blocking</strong></td>
+        <td><strong>Blocking:</strong> Caller thread hangs until the receiver responds</td>
+        <td><strong>Non-blocking:</strong> Producer drops message and returns immediately</td>
+      </tr>
+      <tr>
+        <td><strong>Coupling</strong></td>
+        <td><strong>Tight:</strong> Caller must know exact host, port, and endpoint URL</td>
+        <td><strong>Loose:</strong> Producers and Consumers only know the destination channel name</td>
+      </tr>
+      <tr>
+        <td><strong>Temporal Coupling</strong></td>
+        <td>Both client and server must be online at the exact same millisecond</td>
+        <td><strong>Time-independent:</strong> Consumer can be offline; broker buffers messages safely</td>
+      </tr>
+      <tr>
+        <td><strong>Traffic Spikes</strong></td>
+        <td>Sudden spikes overwhelm the receiving server and cause HTTP 503 errors</td>
+        <td>Queues absorb spikes seamlessly; consumers drain backlog at a steady rate</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       7.2 The Two Messaging Domains
+       ===================================================================== -->
+  <span class="eyebrow">session 7.2</span>
+  <h2>Part 2 · Point-to-Point (Queue) vs. Publish/Subscribe (Topic)</h2>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Feature</th><th>Point-to-Point — <code>Queue</code></th><th>Publish/Subscribe — <code>Topic</code></th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Delivery Model</strong></td>
+        <td><strong>One-to-One:</strong> Each message is received and processed by <strong>exactly one</strong> consumer</td>
+        <td><strong>One-to-Many:</strong> Every active subscriber gets its <strong>own independent copy</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Real-World Analogy</strong></td>
+        <td>A physical ticket queue at a bank counter (one customer per teller)</td>
+        <td>A radio broadcast (every receiver tuned in hears the song)</td>
+      </tr>
+      <tr>
+        <td><strong>Offline Consumer</strong></td>
+        <td>Message waits safely inside the queue until a consumer boots up</td>
+        <td>Messages are missed by default, unless the consumer uses a <strong>Durable Subscription</strong></td>
+      </tr>
+      <tr>
+        <td><strong>Typical Use Case</strong></td>
+        <td>Order processing, financial fund transfers, background invoice printing</td>
+        <td>Live stock ticker feeds, breaking news broadcasts, system alert notifications</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       7.3 Administered Objects & The Simplified API
+       ===================================================================== -->
+  <span class="eyebrow">session 7.3 &amp; 7.4</span>
+  <h2>Part 3 · Administered Objects &amp; the Modern Simplified API</h2>
+
+  <p>To connect to the broker, your application relies on two server-managed <strong>Administered Objects</strong>:</p>
+  <ul>
+    <li><strong><code>ConnectionFactory</code>:</strong> Encapsulates connection parameters to the message broker (typically registered in JNDI at <code>java:/ConnectionFactory</code>).</li>
+    <li><strong><code>Destination</code>:</strong> The physical <code>Queue</code> or <code>Topic</code> target.</li>
+  </ul>
+
+  <h3>Classic API (JMS 1.1) vs. Modern Simplified API (JMS 2.0+)</h3>
+  <p>In older JMS 1.1 code, developers had to manually create Connections, Sessions, MessageProducers, and handle endless try/catch blocks. Modern Jakarta Messaging simplifies this into a single, auto-closable <strong><code>JMSContext</code></strong>:</p>
+
+  <div class="code-head">OrderProducer.java — Modern Simplified Producer using JMSContext</div>
+  <pre><code>package com.globalbank.messaging;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.Stateless;
+import jakarta.inject.Inject;
+import jakarta.jms.JMSConnectionFactory;
+import jakarta.jms.JMSContext;
+import jakarta.jms.Queue;
+
+@Stateless
+public class OrderProducer {
+
+    // ① The container injects a managed JMSContext automatically
+    @Inject
+    @JMSConnectionFactory("java:/ConnectionFactory")
+    private JMSContext jmsContext;
+
+    // ② Inject the pre-configured JNDI Queue administered object
+    @Resource(lookup = "java:/jms/queue/OrderQueue")
+    private Queue orderQueue;
+
+    public void submitOrder(String orderXml) {
+        // ③ Send in one fluent, clean line!
+        jmsContext.createProducer()
+                  .setProperty("priorityLevel", "HIGH")
+                  .send(orderQueue, orderXml);
+
+        System.out.println("Order submitted asynchronously. Producer thread freed immediately.");
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       7.4 Message Anatomy & Acknowledgement Modes
+       ===================================================================== -->
+  <span class="eyebrow">session 7.5 &amp; 7.6</span>
+  <h2>Part 4 · Message Anatomy &amp; Request-Reply Pattern</h2>
+
+  <p>Every JMS Message consists of three distinct parts:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Section</th><th>Contents</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Headers</strong></td>
+        <td><code>JMSMessageID</code>, <code>JMSDeliveryMode</code>, <code>JMSTimestamp</code>, <code>JMSReplyTo</code>, <code>JMSCorrelationID</code></td>
+        <td>Standard routing metadata used by the broker.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Properties</strong></td>
+        <td>Custom key-value pairs (e.g., <code>region="EMEA"</code>, <code>amount=450.00</code>)</td>
+        <td>Enables consumers to filter messages without deserializing the body using <strong>Message Selectors</strong> (SQL-92 syntax).</td>
+      </tr>
+      <tr>
+        <td><strong>3. Body (Payload)</strong></td>
+        <td><code>TextMessage</code>, <code>MapMessage</code>, <code>ObjectMessage</code>, <code>BytesMessage</code>, <code>StreamMessage</code></td>
+        <td>The actual data payload transported across systems.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <h3>Request-Reply Communication Pattern</h3>
+  <p>Although messaging is asynchronous, systems often need a response back. JMS implements this without blocking using a <strong>Temporary Queue</strong> and <strong>Correlation IDs</strong>:</p>
+
+  <div class="code-head">Implementing Request-Reply with JMSReplyTo &amp; JMSCorrelationID</div>
+  <pre><code>// SENDER (Client):
+TemporaryQueue replyQueue = jmsContext.createTemporaryQueue();
+JMSProducer producer = jmsContext.createProducer();
+
+TextMessage requestMsg = jmsContext.createTextMessage("GET_ACCOUNT_SUMMARY: 1001");
+requestMsg.setJMSReplyTo(replyQueue); // Tell receiver where to answer
+
+producer.send(orderQueue, requestMsg);
+String correlationId = requestMsg.getJMSMessageID(); // Unique request token
+
+// Wait on the private temporary reply queue for the specific response
+JMSConsumer replyConsumer = jmsContext.createConsumer(replyQueue,
+    "JMSCorrelationID = '" + correlationId + "'");
+String response = replyConsumer.receiveBody(String.class, 5000); // 5s timeout</code></pre>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">JMS Asynchronous Queue Pipeline Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Web checkout triggers async billing and inventory messages
+jmsContext.createProducer().send(billingQueue, "CHARGE $450 TO ACC-8812");
+jmsContext.createProducer().send(inventoryQueue, "DECREMENT SKU-3901 QUANTITY 1");
+// Producer returns to user in 3 milliseconds</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Messaging Flow</button>
+      <span class="bench__hint">Observe instant return to the web layer while background MDBs process the queue.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:02:10,011] [Web Client] Sent Billing payload to 'java:/jms/queue/BillingQueue' (took 2ms).
+[08:02:10,013] [Web Client] Sent Inventory payload to 'java:/jms/queue/InventoryQueue' (took 1ms).
+[08:02:10,015] [Web Response] HTTP 200 OK: "Order #9021 Submitted successfully" returned to browser.
+[08:02:10,032] [Broker ActiveMQ] Delivered message #0xaa1 to BillingProcessorMDB [Instance 2].
+[08:02:10,045] [BillingProcessorMDB] Successfully charged $450.00 to account 8812.
+[08:02:10,051] [Broker ActiveMQ] Delivered message #0xaa2 to InventoryWorkerMDB [Instance 1].
+[08:02:10,060] [InventoryWorkerMDB] Reserved SKU-3901 in warehouse stock. Acknowledgement sent.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Knowledge Check Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Session 7 · Knowledge Check</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the primary difference between a Queue and a Topic in Jakarta Messaging?",
+        "opts": [
+          "Queues are for text; Topics are for numbers",
+          "A Queue delivers each message to exactly one consumer; a Topic broadcasts to all subscribers",
+          "Topics run in RAM; Queues run on disk",
+          "Queues require passwords; Topics do not"
+        ],
+        "a": 1,
+        "why": "Point-to-Point (Queue) guarantees single-consumer delivery; Publish/Subscribe (Topic) broadcasts to all active subscribers."
+      },
+      {
+        "q": "Which modern class in JMS 2.0+ combines Connection and Session into a single auto-closable interface?",
+        "opts": [
+          "JMSManager",
+          "JMSContext",
+          "MessageDispatcher",
+          "ActiveMQClient"
+        ],
+        "a": 1,
+        "why": "JMSContext simplifies JMS 1.1 code by consolidating Connection and Session creation into one managed object."
+      },
+      {
+        "q": "In the Request-Reply pattern, how does the sender correlate an asynchronous reply with the original request?",
+        "opts": [
+          "By matching the JMSCorrelationID in the reply to the original JMSMessageID",
+          "By opening a direct TCP socket",
+          "By searching the database log",
+          "By restarting the server"
+        ],
+        "a": 0,
+        "why": "The responder copies the request's JMSMessageID into the reply's JMSCorrelationID so the requester can identify the specific answer."
+      },
+      {
+        "q": "What happens if a message consumer is temporarily offline in a Point-to-Point (Queue) domain?",
+        "opts": [
+          "The message is permanently deleted",
+          "The broker holds the message in persistent storage until the consumer comes back online",
+          "The sender's computer crashes",
+          "The message is forwarded to an email address"
+        ],
+        "a": 1,
+        "why": "Queues provide time-independence; the broker retains unconsumed messages until a worker arrives to process them."
+      },
+      {
+        "q": "Which section of a JMS message allows consumers to filter messages using SQL-92 selectors without parsing the payload?",
+        "opts": [
+          "Message Body",
+          "Message Properties",
+          "TCP Header",
+          "JNDI Context"
+        ],
+        "a": 1,
+        "why": "Message Properties store user-defined header attributes that brokers inspect directly for message selector filtering."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>MOM</strong></td><td>Message-Oriented Middleware decouples systems asynchronously via a central broker.</td></tr>
+    <tr><td><strong>Queue vs Topic</strong></td><td>Queue = 1:1 worker consumption; Topic = 1:N broadcast to all subscribers.</td></tr>
+    <tr><td><strong>Administered Objects</strong></td><td><code>ConnectionFactory</code> and <code>Destination</code> configured in WildFly JNDI.</td></tr>
+    <tr><td><strong><code>JMSContext</code></strong></td><td>Modern simplified API reducing connection/session boilerplate to fluent one-liners.</td></tr>
+    <tr><td><strong>Request-Reply</strong></td><td>Uses <code>JMSReplyTo</code> temporary queue + <code>JMSCorrelationID</code> matching.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

@@ -1,34 +1,37 @@
-<title>Enterprise Java, From Zero</title>
-<meta name="description" content="A beginner-first, interactive Jakarta EE course you run in your browser — offline.">
+<title>Enterprise Application Development in Jakarta EE</title>
+<meta name="description" content="An interactive, offline course aligned with the official Enterprise Application Development in Jakarta EE curriculum.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "index";</script>
 
 <main class="page">
 
   <section class="hero">
-    <span class="tag">Interactive · offline · no experience assumed</span>
-    <h1>Enterprise Java, from absolutely zero</h1>
-    <p>A rebuilt, plain-language course in Jakarta EE (the “big” server-side Java used by
-       banks, airlines and governments). Every idea starts with a real-world story, every
-       code sample has a <strong>Run</strong> button, and you can practise the developer
-       commands in a safe pretend terminal.</p>
+    <span class="tag">Syllabus Aligned · Interactive · Offline · Full Jakarta EE Stack</span>
+    <h1>Enterprise Application Development in Jakarta EE</h1>
+    <p>A comprehensive, interactive course directly aligned with the official curriculum.
+       Master enterprise architecture, Jakarta Enterprise Beans (EJB), Facelets, Jakarta Messaging (JMS),
+       Connectors (JCA), Bean Validation, EJB Transactions, CDI scopes and interceptors,
+       Jakarta Security, and enterprise packaging (JAR/WAR/EAR). Every concept starts with real-world analogies,
+       interactive code demonstrations, and hands-on laboratory reviews.</p>
     <span class="cta">
-      <a class="primary" id="resumeBtn" href="00-foundations.html">Start at Unit 00 →</a>
-      <a class="secondary" href="glossary.html">Open the glossary</a>
+      <a class="primary" id="resumeBtn" href="00-foundations.html">Start at Foundations →</a>
+      <a class="secondary" href="session-01-02-intro-and-beans.html">Jump to Session 1–2 →</a>
     </span>
   </section>
 
   <span class="eyebrow">how this works</span>
   <h2>Read a little, then do a little</h2>
-  <p>Each unit follows the same rhythm so you always know where you are:</p>
+  <p>Each session follows an interactive rhythm to help you build enterprise intuition:</p>
   <div class="tablewrap">
     <table>
       <thead><tr><th>Block</th><th>What it means when you see it</th></tr></thead>
       <tbody>
-        <tr><td><code>// concept</code></td><td>Plain explanation with a story or analogy first, jargon second.</td></tr>
-        <tr><td><code>// try it</code></td><td>A code panel with a <strong>Run</strong> button. Some are <em>live</em> — change a number, run it again, watch the answer change. Others replay the exact output a real server would print.</td></tr>
-        <tr><td><code>// terminal</code></td><td>A simulated shell. Type real commands like <code>java -version</code> or <code>mvn clean package</code> and see realistic output. It touches nothing on your machine.</td></tr>
-        <tr><td><code>// check yourself</code></td><td>A few multiple-choice questions with instant explanations.</td></tr>
+        <tr><td><code>// concept</code></td><td>Plain-language explanation with real-world analogies, architecture diagrams, and syntax breakdowns.</td></tr>
+        <tr><td><code>// try it</code></td><td>An interactive code simulation with a <strong>Run</strong> button to test inputs and see container responses live.</td></tr>
+        <tr><td><code>// terminal</code></td><td>A simulated administrative shell. Execute commands like <code>jboss-cli.bat</code>, <code>mvn clean package</code>, or <code>asadmin</code> in a safe environment.</td></tr>
+        <tr><td><code>// check yourself</code></td><td>Targeted multiple-choice assessment questions with immediate feedback and detailed explanations.</td></tr>
+        <tr><td><code>// try it yourself (review)</code></td><td>Consolidation labs every 2–4 sessions focusing on debugging, anti-patterns, and end-to-end integration.</td></tr>
       </tbody>
     </table>
   </div>
@@ -36,32 +39,39 @@
   <div class="callout callout--key">
     <span class="callout__i">✓</span>
     <div class="callout__b">
-      <b>Nothing to install to read this</b>
-      Your progress (ticked units, quiz answers, theme) is saved in this browser only.
-      Unit 01 shows you how to install the real tools when you’re ready to build for real.
+      <b>Fully Offline &amp; Mobile-Responsive</b>
+      No server installation or internet connection required to study. Your progress (completed sessions, quiz scores, light/dark theme) is saved automatically in your browser's local storage.
     </div>
   </div>
 
   <span class="eyebrow">the path</span>
-  <h2>The full syllabus</h2>
-  <p>Seventeen units. Do them in order the first time — each one leans on the one before.</p>
+  <h2>Course Schedule &amp; Syllabus</h2>
+  <p>Structured into 5 weeks covering all 14 official sessions, 6 hands-on review labs, and prerequisite and bonus modules.</p>
 
-  <h3>Start here</h3>
+  <h3>Prerequisites &amp; Setup</h3>
   <div class="cardgrid" id="grid-start"></div>
-  <h3>The core idea</h3>
-  <div class="cardgrid" id="grid-core"></div>
-  <h3>Wiring things together</h3>
-  <div class="cardgrid" id="grid-wire"></div>
-  <h3>Building the web tier</h3>
-  <div class="cardgrid" id="grid-web"></div>
-  <h3>Filling the gaps</h3>
-  <div class="cardgrid" id="grid-gaps"></div>
+
+  <h3>Week 1 — Core EJB Architecture</h3>
+  <div class="cardgrid" id="grid-w1"></div>
+
+  <h3>Week 2 — Web Tier &amp; Messaging</h3>
+  <div class="cardgrid" id="grid-w2"></div>
+
+  <h3>Week 3 — Validation &amp; Advanced Transactions</h3>
+  <div class="cardgrid" id="grid-w3"></div>
+
+  <h3>Week 4 — Jakarta CDI Framework</h3>
+  <div class="cardgrid" id="grid-w4"></div>
+
+  <h3>Week 5 — Security &amp; Packaging</h3>
+  <div class="cardgrid" id="grid-w5"></div>
+
+  <h3>Bonus Modules &amp; Reference</h3>
+  <div class="cardgrid" id="grid-bonus"></div>
 
   <hr>
   <p style="color:var(--ink-faint);font-size:.9rem">
-    This is a beginner-facing companion to the original session notes in this repository.
-    Where the two disagree, the fixes noted in each unit’s “what changed” box are the
-    corrected version.
+    Enterprise Application Development in Jakarta EE · Aligned with August 2024 Course Guide · Supports Jakarta EE 9 &amp; 10 Specifications.
   </p>
 
 </main>
@@ -72,13 +82,16 @@ document.addEventListener("course:ready", function () {
   var P = window.Course.PAGES, done = window.Course.done();
   var groups = {
     "grid-start": ["00-foundations", "01-setup"],
-    "grid-core":  ["02-what-is-jakarta-ee", "03-session-beans", "04-entity-and-mdb"],
-    "grid-wire":  ["05-jndi-and-resources", "06-transactions", "07-concurrency-security", "08-review-integration"],
-    "grid-web":   ["09-facelets-jsf", "10-local-remote-clients", "11-messaging-jms", "12-connectors-jdbc"],
-    "grid-gaps":  ["13-jpa-persistence", "14-cdi", "15-rest-jaxrs", "16-testing"]
+    "grid-w1":    ["s01-02", "s03", "s04", "s04t"],
+    "grid-w2":    ["s05", "s06", "s07t", "s07", "s08", "s08t"],
+    "grid-w3":    ["s09", "s10", "s10t"],
+    "grid-w4":    ["s11", "s12", "s12t"],
+    "grid-w5":    ["s13", "s14", "s14t"],
+    "grid-bonus": ["13-jpa-persistence", "15-rest-jaxrs", "16-testing", "glossary"]
   };
   Object.keys(groups).forEach(function (gid) {
     var host = document.getElementById(gid);
+    if (!host) return;
     groups[gid].forEach(function (slug) {
       var m = P.find(function (x) { return x.slug === slug; });
       if (!m) return;
@@ -91,16 +104,23 @@ document.addEventListener("course:ready", function () {
     });
   });
   // resume link -> first not-done content page
-  var order = ["00-foundations","01-setup","02-what-is-jakarta-ee","03-session-beans","04-entity-and-mdb",
-    "05-jndi-and-resources","06-transactions","07-concurrency-security","08-review-integration",
-    "09-facelets-jsf","10-local-remote-clients","11-messaging-jms","12-connectors-jdbc",
-    "13-jpa-persistence","14-cdi","15-rest-jaxrs","16-testing"];
+  var order = [
+    "00-foundations", "01-setup",
+    "s01-02", "s03", "s04", "s04t",
+    "s05", "s06", "s07t", "s07", "s08", "s08t",
+    "s09", "s10", "s10t",
+    "s11", "s12", "s12t",
+    "s13", "s14", "s14t",
+    "13-jpa-persistence", "15-rest-jaxrs", "16-testing"
+  ];
   var next = order.find(function (s) { return !done[s]; });
   var btn = document.getElementById("resumeBtn");
-  if (next && next !== "00-foundations") {
+  if (btn && next && next !== "00-foundations") {
     var m = window.Course.PAGES.find(function (x) { return x.slug === next; });
-    btn.href = m.file;
-    btn.textContent = "Resume: " + m.title + " →";
+    if (m) {
+      btn.href = m.file;
+      btn.textContent = "Resume: " + m.title + " →";
+    }
   }
 });
 </script>

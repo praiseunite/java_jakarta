@@ -1,0 +1,263 @@
+<title>Try It Yourself — Review &amp; Consolidation (Sessions 7 &amp; 8)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Try It Yourself Review for Sessions 7 & 8: Asynchronous messaging pipelines, Message-Driven Beans, JCA Resource Adapters, and robust JDBC transactions.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s08t";</script>
+
+<main class="page">
+
+  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 7 &amp; 8)</h1>
+  <p class="lede">Sessions 7 and 8 tackled the enterprise integration backplane: decoupling high-load workflows with
+    <strong>Jakarta Messaging (JMS)</strong> and connecting to enterprise backends and relational databases using
+    <strong>Jakarta Connectors Architecture (JCA)</strong> and <strong>JDBC</strong>. This review synthesizes both into an integrated asynchronous data pipeline.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL10)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Trace an asynchronous processing pipeline: Web Producer → JMS Queue → MDB Consumer → JDBC Database Update</li>
+        <li>Contrast Point-to-Point queuing with Publish/Subscribe event broadcasting under production loads</li>
+        <li>Implement bulletproof JDBC resource management inside an asynchronous transaction</li>
+        <li>Diagnose and prevent message loops, Dead Letter Queue (DLQ) escalations, and database connection pool leaks</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       Part 1: The Integrated Asynchronous Architecture
+       ===================================================================== -->
+  <span class="eyebrow">consolidation</span>
+  <h2>Part 1 · The Asynchronous Processing Pipeline</h2>
+
+  <p>In high-throughput enterprise systems, user-facing web tiers do not execute expensive database writes directly.
+    Instead, the web tier acts as a <strong>JMS Producer</strong>, and a pooled <strong>Message-Driven Bean (MDB)</strong>
+    acts as the consumer, performing the database write via a pooled JDBC connection:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Stage</th><th>Component</th><th>Technology Used</th><th>Operational Latency</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1. Submit</td>
+        <td>Web Checkout Controller</td>
+        <td><code>JMSContext.send(orderQueue, orderData)</code></td>
+        <td><strong>1–3 ms</strong> (Returns immediately to browser)</td>
+      </tr>
+      <tr>
+        <td>2. Buffer</td>
+        <td>Artemis Message Broker</td>
+        <td>Point-to-Point Persistent FIFO Queue</td>
+        <td>Buffers traffic spikes safely on disk</td>
+      </tr>
+      <tr>
+        <td>3. Consume</td>
+        <td>OrderProcessingMDB</td>
+        <td><code>@MessageDriven</code> implements <code>MessageListener</code></td>
+        <td>Pulls message from queue in separate worker thread</td>
+      </tr>
+      <tr>
+        <td>4. Persist</td>
+        <td>OrderDAO</td>
+        <td><code>PreparedStatement</code> via pooled JNDI <code>DataSource</code></td>
+        <td>Executes SQL inside an isolated transaction</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       Part 2: Code Walkthrough
+       ===================================================================== -->
+  <span class="eyebrow">code walkthrough</span>
+  <h2>Part 2 · Assembling the End-to-End Pipeline</h2>
+
+  <div class="code-head">1. The Asynchronous MDB Consumer with JDBC Persistence</div>
+  <pre><code>package com.globalbank.messaging;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.ActivationConfigProperty;
+import jakarta.ejb.MessageDriven;
+import jakarta.jms.JMSException;
+import jakarta.jms.Message;
+import jakarta.jms.MessageListener;
+import jakarta.jms.TextMessage;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+@MessageDriven(activationConfig = {
+    @ActivationConfigProperty(propertyName = "destinationLookup",
+                              propertyValue = "java:/jms/queue/OrderQueue"),
+    @ActivationConfigProperty(propertyName = "destinationType",
+                              propertyValue = "jakarta.jms.Queue")
+})
+public class OrderProcessingMDB implements MessageListener {
+
+    @Resource(lookup = "java:/jdbc/GlobalBankDB")
+    private DataSource dataSource;
+
+    @Override
+    public void onMessage(Message message) {
+        try {
+            if (message instanceof TextMessage textMsg) {
+                String payload = textMsg.getText();
+                System.out.println("MDB received background order: " + payload);
+
+                // Persist order details using parameterized JDBC
+                saveOrderRecord(payload);
+            }
+        } catch (JMSException | SQLException e) {
+            System.err.println("Failed to process message: " + e.getMessage());
+            // Throwing RuntimeException causes container to retry or move to DLQ
+            throw new RuntimeException("Rollback message receipt", e);
+        }
+    }
+
+    private void saveOrderRecord(String payload) throws SQLException {
+        String sql = "INSERT INTO processed_orders (order_payload, processed_at) VALUES (?, NOW())";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, payload);
+            ps.executeUpdate();
+        }
+    }
+}</code></pre>
+
+  <!-- =====================================================================
+       Part 3: Top Troubleshooting Gotchas
+       ===================================================================== -->
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · Top 3 Integration Gotchas for Sessions 7 &amp; 8</h2>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Trap 1: The "Poison Message" Infinite Loop &amp; DLQ</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> An MDB repeatedly throws an exception on a malformed message, consuming 100% server CPU as the broker endlessly retries delivery.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Configure maximum redelivery attempts (e.g., 3 retries) in WildFly's Artemis subsystem. Once exceeded, the broker automatically diverts the failed message to a <strong>Dead Letter Queue (DLQ)</strong> for administrative inspection.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Trap 2: Database Connection Leaks under High Asynchronous Load</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> After processing a burst of 5,000 messages, the application server hangs with <code>IJ000453: Unable to get a connection from pool</code>.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> A connection was not deterministically returned to the pool because code used manual <code>conn.close()</code> inside an imperfect try/catch. <em>Always use Java try-with-resources!</em></p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Trap 3: SQL Injection via <code>Statement</code> String Concatenation</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> An attacker injects quotes into message payload strings, tampering with backend tables.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Never use <code>Statement.executeUpdate("... " + val)</code>. Always use <code>PreparedStatement</code> with question mark placeholders (<code>?</code>) and typed setters.</p>
+    </div>
+  </div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Full Async JMS + JDBC Pipeline Execution</span>
+    </div>
+    <pre class="bench__code"><code>// High-volume batch: 3 orders sent to JMS Queue
+producer.send(orderQueue, "ORDER #881: 2x SSD Laptop");
+producer.send(orderQueue, "ORDER #882: 1x Monitor");
+producer.send(orderQueue, "ORDER #883: 4x USB Hub");
+// MDB worker pool drains queue and executes parameterized JDBC INSERTs</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Async Pipeline</button>
+      <span class="bench__hint">Traces asynchronous broker message delivery and pooled JDBC transaction commits.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:18:22,001] [Web Producer] Dispatched 3 messages to 'java:/jms/queue/OrderQueue' (took 4ms total).
+[08:18:22,012] [MDB Pool #1] OrderProcessingMDB received MessageID: ID:001 -> "ORDER #881"
+[08:18:22,015] [MDB Pool #1] Leased connection from PostgreSQL pool. Executing PreparedStatement.executeUpdate().
+[08:18:22,018] [MDB Pool #1] Insert committed. Connection returned to pool. Message #001 acknowledged.
+[08:18:22,021] [MDB Pool #2] OrderProcessingMDB received MessageID: ID:002 -> "ORDER #882"
+[08:18:22,024] [MDB Pool #2] Insert committed. Connection returned to pool. Message #002 acknowledged.
+[08:18:22,028] [MDB Pool #1] OrderProcessingMDB received MessageID: ID:003 -> "ORDER #883"
+[08:18:22,031] [MDB Pool #1] Insert committed. All 3 asynchronous orders successfully persisted.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Assessment Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 7 &amp; 8)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "Why is an MDB particularly well-suited for processing JMS Queue messages?",
+        "opts": [
+          "MDBs run in the web browser",
+          "MDBs are pooled by the container, operate asynchronously, and have no client-interface blocking constraints",
+          "MDBs can only store images",
+          "MDBs replace relational databases"
+        ],
+        "a": 1,
+        "why": "MDBs are server-side background workers invoked by the container whenever a message arrives on their subscribed destination."
+      },
+      {
+        "q": "What happens to a message when an unrecoverable exception occurs repeatedly during MDB processing?",
+        "opts": [
+          "The server hard drive is wiped",
+          "After exceeding max delivery retries, the broker diverts it to a Dead Letter Queue (DLQ)",
+          "The message is forwarded to the client's WhatsApp",
+          "The broker reboots"
+        ],
+        "a": 1,
+        "why": "A Dead Letter Queue (DLQ) safely quarantines repeatedly failing poison messages so they do not jam the production queue."
+      },
+      {
+        "q": "What is the primary advantage of PreparedStatement over Statement in JDBC?",
+        "opts": [
+          "It completely neutralizes SQL injection vulnerabilities and reuses pre-compiled query plans",
+          "It uses half the memory of a normal string",
+          "It converts Java to JavaScript",
+          "It requires no database connection"
+        ],
+        "a": 0,
+        "why": "PreparedStatement compiles query templates and binds parameters safely, preventing SQL injection while boosting performance."
+      },
+      {
+        "q": "What JCA file archive wraps an enterprise resource adapter for deployment into WildFly?",
+        "opts": [
+          ".jar",
+          ".rar (Resource Adapter Archive)",
+          ".zip",
+          ".tar.gz"
+        ],
+        "a": 1,
+        "why": "JCA adapters are packaged into .rar (Resource Adapter Archive) bundles containing deployment descriptors and code."
+      },
+      {
+        "q": "Why must JDBC database connections always be closed within try-with-resources blocks?",
+        "opts": [
+          "To terminate the database server",
+          "To guarantee that borrowed connections are returned to the application server's connection pool, preventing connection starvation",
+          "To log the database administrator out",
+          "To clear browser cookies"
+        ],
+        "a": 1,
+        "why": "Failing to return connections to the pool causes pool exhaustion, crashing the application under load."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Asynchronous Flow</strong></td><td>Web producer submits message instantly; MDB worker executes DB persistence in background.</td></tr>
+    <tr><td><strong>JMS Broker</strong></td><td>Buffers spikes on disk; queues ensure 1:1 delivery, topics broadcast 1:N.</td></tr>
+    <tr><td><strong>JCA Connectors</strong></td><td>Standard <code>.rar</code> adapters plug external EIS systems into app servers via system contracts.</td></tr>
+    <tr><td><strong>Parameterized SQL</strong></td><td>Always use <code>PreparedStatement</code> to prevent SQL injection and reuse compiled plans.</td></tr>
+    <tr><td><strong>Safe Pooling</strong></td><td>Always rely on try-with-resources to prevent catastrophic connection pool exhaustion.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

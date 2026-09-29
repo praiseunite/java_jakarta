@@ -8,36 +8,47 @@
 
   /* ---- Course manifest (order = learning path) ------------------------- */
   var MANIFEST = [
-    { group: "Start here" },
+    { group: "Prerequisites" },
     { slug: "index",                 file: "index.html",                 unit: "Home",    title: "Overview & how to use this" },
-    { slug: "00-foundations",        file: "00-foundations.html",        unit: "Unit 00", title: "Programming from absolute zero" },
-    { slug: "01-setup",              file: "01-setup.html",              unit: "Unit 01", title: "Set up your workshop" },
+    { slug: "00-foundations",        file: "00-foundations.html",        unit: "Prep",    title: "Programming from absolute zero" },
+    { slug: "01-setup",              file: "01-setup.html",              unit: "Prep",    title: "Set up your environment" },
 
-    { group: "The core idea" },
-    { slug: "02-what-is-jakarta-ee", file: "02-what-is-jakarta-ee.html", unit: "Unit 02", title: "What Jakarta EE actually is" },
-    { slug: "03-session-beans",      file: "03-session-beans.html",      unit: "Unit 03", title: "Session beans: stateless, stateful, singleton" },
-    { slug: "04-entity-and-mdb",     file: "04-entity-and-mdb.html",     unit: "Unit 04", title: "Entity beans & message-driven beans" },
+    { group: "Week 1 — Core EJB Architecture" },
+    { slug: "s01-02",  file: "session-01-02-intro-and-beans.html",  unit: "Session 1–2", title: "Introduction & Session Bean Types" },
+    { slug: "s03",     file: "session-03-resource-creation.html",   unit: "Session 3",   title: "Resource Creation in Jakarta EJB" },
+    { slug: "s04",     file: "session-04-working-with-ejb.html",    unit: "Session 4",   title: "Working with Jakarta Enterprise Beans" },
+    { slug: "s04t",    file: "session-04-tiy.html",                 unit: "Review",      title: "Try It Yourself: Sessions 1–4" },
 
-    { group: "Wiring things together" },
-    { slug: "05-jndi-and-resources", file: "05-jndi-and-resources.html", unit: "Unit 05", title: "JNDI, DataSources & connection pools" },
-    { slug: "06-transactions",       file: "06-transactions.html",       unit: "Unit 06", title: "Transactions & the ACID rules" },
-    { slug: "07-concurrency-security",file:"07-concurrency-security.html",unit: "Unit 07", title: "Concurrency, locking & security" },
-    { slug: "08-review-integration", file: "08-review-integration.html", unit: "Unit 08", title: "Putting it together + debugging" },
+    { group: "Week 2 — Web Tier & Messaging" },
+    { slug: "s05",     file: "session-05-facelets.html",            unit: "Session 5",   title: "Facelets in Jakarta EE" },
+    { slug: "s06",     file: "session-06-local-remote.html",        unit: "Session 6",   title: "Local & Remote Clients" },
+    { slug: "s07t",    file: "session-07-tiy.html",                 unit: "Review",      title: "Try It Yourself: Sessions 5–6" },
+    { slug: "s07",     file: "session-07-messaging.html",           unit: "Session 7",   title: "Jakarta Messaging (JMS)" },
+    { slug: "s08",     file: "session-08-connectors.html",          unit: "Session 8",   title: "Jakarta Connectors Architecture" },
+    { slug: "s08t",    file: "session-08-tiy.html",                 unit: "Review",      title: "Try It Yourself: Sessions 7–8" },
 
-    { group: "Building the web tier" },
-    { slug: "09-facelets-jsf",       file: "09-facelets-jsf.html",       unit: "Unit 09", title: "Facelets & Jakarta Faces (JSF)" },
-    { slug: "10-local-remote-clients",file:"10-local-remote-clients.html",unit: "Unit 10", title: "Local vs remote clients" },
-    { slug: "11-messaging-jms",      file: "11-messaging-jms.html",      unit: "Unit 11", title: "Messaging with JMS" },
-    { slug: "12-connectors-jdbc",    file: "12-connectors-jdbc.html",    unit: "Unit 12", title: "Connectors (JCA) & JDBC" },
+    { group: "Week 3 — Validation & Advanced Transactions" },
+    { slug: "s09",     file: "session-09-bean-validation.html",     unit: "Session 9",   title: "Bean Validation" },
+    { slug: "s10",     file: "session-10-ejb-transactions.html",    unit: "Session 10",  title: "EJB Transaction Execution & JNDI" },
+    { slug: "s10t",    file: "session-10-tiy.html",                 unit: "Review",      title: "Try It Yourself: Sessions 9–10" },
 
-    { group: "Filling the gaps" },
-    { slug: "13-jpa-persistence",    file: "13-jpa-persistence.html",    unit: "Unit 13", title: "JPA: storing objects properly" },
-    { slug: "14-cdi",               file: "14-cdi.html",                unit: "Unit 14", title: "CDI: injection & scopes" },
-    { slug: "15-rest-jaxrs",        file: "15-rest-jaxrs.html",         unit: "Unit 15", title: "REST APIs with JAX-RS" },
-    { slug: "16-testing",           file: "16-testing.html",            unit: "Unit 16", title: "Testing & reading errors" },
+    { group: "Week 4 — Jakarta CDI Framework" },
+    { slug: "s11",     file: "session-11-cdi-part1.html",           unit: "Session 11",  title: "Jakarta CDI – Part I" },
+    { slug: "s12",     file: "session-12-cdi-part2.html",           unit: "Session 12",  title: "Jakarta CDI – Part II" },
+    { slug: "s12t",    file: "session-12-tiy.html",                 unit: "Review",      title: "Try It Yourself: Sessions 11–12" },
+
+    { group: "Week 5 — Security & Packaging" },
+    { slug: "s13",     file: "session-13-cdi-beans-security.html",  unit: "Session 13",  title: "CDI Beans & Security" },
+    { slug: "s14",     file: "session-14-packaging.html",           unit: "Session 14",  title: "Packaging Jakarta Applications" },
+    { slug: "s14t",    file: "session-14-tiy.html",                 unit: "Review",      title: "Try It Yourself: Sessions 13–14" },
+
+    { group: "Bonus Material" },
+    { slug: "13-jpa-persistence", file: "13-jpa-persistence.html",   unit: "Bonus",       title: "JPA: Storing Objects Properly" },
+    { slug: "15-rest-jaxrs",      file: "15-rest-jaxrs.html",        unit: "Bonus",       title: "REST APIs with JAX-RS" },
+    { slug: "16-testing",         file: "16-testing.html",           unit: "Bonus",       title: "Testing & Reading Errors" },
 
     { group: "Reference" },
-    { slug: "glossary",            file: "glossary.html",              unit: "Ref",     title: "Glossary — every term, plain words" }
+    { slug: "glossary",           file: "glossary.html",             unit: "Ref",         title: "Glossary — every term, plain words" }
   ];
 
   var PAGES = MANIFEST.filter(function (m) { return m.slug; });

@@ -1,0 +1,222 @@
+<title>Try It Yourself — Review &amp; Consolidation (Sessions 13 &amp; 14)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Try It Yourself Review for Sessions 13 & 14: Complete enterprise security and packaging consolidation, Skinny WAR vs EAR assembly, WildFly CLI deployment, and security verification.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "s14t";</script>
+
+<main class="page">
+
+  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 13 &amp; 14)</h1>
+  <p class="lede">In the final two sessions of the curriculum, you mastered enterprise security and production deployment:
+    securing CDI components with <strong>Jakarta Security</strong> (IdentityStores and SecurityContext) and assembling
+    modular <strong>JAR</strong>, <strong>WAR</strong>, and <strong>EAR</strong> packages for deployment onto WildFly.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL20)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Assemble a secured multi-tier enterprise banking application into a production-ready EAR archive</li>
+        <li>Configure portable database-backed authentication and role enforcement on CDI business beans</li>
+        <li>Deploy and manage application lifecycle using the WildFly Management CLI</li>
+        <li>Diagnose and troubleshoot classloading conflicts, security domain failures, and deployment marker errors</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- =====================================================================
+       Part 1: The Secured Enterprise Packaging Pipeline
+       ===================================================================== -->
+  <span class="eyebrow">consolidation</span>
+  <h2>Part 1 · The Production Assembly Pipeline</h2>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Stage</th><th>Action</th><th>Artifact Generated</th><th>Verification Step</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1. Business Build</td>
+        <td>Compile EJB and CDI service components with <code>beans.xml</code></td>
+        <td><code>GlobalBank-EJB.jar</code></td>
+        <td>Inspect classes for <code>@RolesAllowed</code> and <code>@Stateless</code>.</td>
+      </tr>
+      <tr>
+        <td>2. Web Build</td>
+        <td>Compile JSF Facelets XHTML, controllers, and security definitions</td>
+        <td><code>GlobalBank-Web.war</code></td>
+        <td>Verify <code>web.xml</code> and <code>login.xhtml</code> exist in package.</td>
+      </tr>
+      <tr>
+        <td>3. Enterprise Packaging</td>
+        <td>Assemble WAR + JAR + shared DB drivers in <code>lib/</code></td>
+        <td><code>GlobalBank.ear</code></td>
+        <td>Verify <code>META-INF/application.xml</code> declares both modules.</td>
+      </tr>
+      <tr>
+        <td>4. Production Deployment</td>
+        <td>Deploy to WildFly via CLI or <code>.dodeploy</code> scanner</td>
+        <td>Server Runtime</td>
+        <td>Check for <code>.deployed</code> marker and verify web context root.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       Part 2: Step-by-Step Production Deployment
+       ===================================================================== -->
+  <span class="eyebrow">practical guide</span>
+  <h2>Part 2 · Deploying via the WildFly Management CLI</h2>
+
+  <div class="code-head">Terminal Commands — Production CLI Deployment</div>
+  <pre><code># 1. Start WildFly Application Server in standalone mode
+$WILDFLY_HOME/bin/standalone.sh
+
+# 2. Launch the JBoss Management CLI
+$WILDFLY_HOME/bin/jboss-cli.sh --connect
+
+# 3. Deploy the enterprise application archive
+deploy target/GlobalBank.ear
+
+# 4. Verify deployment status
+deployment-info --name=GlobalBank.ear
+
+# Output should show:
+# NAME              RUNTIME-NAME      PERSISTENT RUNTIME-STATUS
+# GlobalBank.ear    GlobalBank.ear    true       OK</code></pre>
+
+  <!-- =====================================================================
+       Part 3: Top Troubleshooting Gotchas
+       ===================================================================== -->
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · Top 3 Deployment &amp; Security Pitfalls</h2>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Fault 1: <code>ClassNotFoundException</code> on Shared Libraries in EAR</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> An EJB or Web module crashes at startup unable to find a utility class located in the EAR.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> In an EAR, shared libraries must reside inside the directory specified by <code>&lt;library-directory&gt;lib&lt;/library-directory&gt;</code> in <code>application.xml</code>. Placing JARs directly in the root of the EAR will not add them to sub-module classpaths.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Fault 2: WildFly reports <code>.failed</code> with <code>DuplicateResourceException</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Deployment scanner generates <code>GlobalBank.ear.failed</code> stating context root <code>/globalbank</code> is already registered.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> An older version of the WAR or an undeployed test archive is still holding the URL context path. Execute <code>undeploy GlobalBank.ear</code> in the CLI or remove old archives from <code>standalone/deployments/</code>.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Fault 3: HTTP 403 Forbidden on Valid Logged-In User</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> User logs in successfully, but clicking a protected button yields HTTP 403 Access Denied.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Check the role names returned by <code>groupsQuery</code> in <code>@DatabaseIdentityStoreDefinition</code>. Role names are <strong>case-sensitive</strong>: if your DB returns <code>"teller"</code> and your annotation expects <code>@RolesAllowed("TELLER")</code>, the container will deny access.</p>
+    </div>
+  </div>
+
+  <!-- Interactive Simulation Bench -->
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Full Production Deployment &amp; Security Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Packaging GlobalBank.ear (EJB + WAR + Database Driver)
+deploy target/GlobalBank.ear
+WildFly deploys Enterprise Archive -> Starts Security Context
+Client navigates to /globalbank/admin.xhtml -> Enforces RBAC</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Execute Production Verification</button>
+      <span class="bench__hint">Simulates complete EAR deployment followed by role-based security validation.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[09:55:01,002 INFO] [jboss-cli] Executing command: deploy GlobalBank.ear
+[09:55:01,015 INFO] [WildFly] Parsing GlobalBank.ear/META-INF/application.xml.
+[09:55:01,022 INFO] [WildFly] Starting EJB module: GlobalBank-EJB.jar -> 4 session beans registered.
+[09:55:01,030 INFO] [WildFly] Starting Web module: GlobalBank-Web.war -> Mounted at http://localhost:8080/globalbank
+[09:55:01,035 INFO] [WildFly] Deployment status: GlobalBank.ear.deployed created.
+[09:55:01,040 INFO] [Security] User 'alex_m' authenticated against DatabaseIdentityStore. Roles: [ADMIN].
+[09:55:01,044 INFO] [SecurityContext] Access to /globalbank/admin.xhtml (@RolesAllowed("ADMIN")) -> GRANTED.
+[09:55:01,048 INFO] [HTTP 200 OK] Production verification completed successfully.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <!-- =====================================================================
+       Assessment Quiz
+       ===================================================================== -->
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 13 &amp; 14)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "What is the recommended practice for shared third-party JARs in a multi-module EAR application?",
+        "opts": [
+          "Paste copies of the JAR into every single sub-module",
+          "Place them inside the EAR's lib/ directory and declare <library-directory>lib</library-directory> in application.xml",
+          "Store them in the user's home directory",
+          "Hardcode the bytecode in Java source files"
+        ],
+        "a": 1,
+        "why": "Using the EAR's lib/ directory makes libraries available to all sub-modules without duplicate copies."
+      },
+      {
+        "q": "Which deployment marker indicates that WildFly encountered an error and could not complete deployment?",
+        "opts": [
+          "myapp.ear.isdeploying",
+          "myapp.ear.dodeploy",
+          "myapp.ear.failed",
+          "myapp.ear.stop"
+        ],
+        "a": 2,
+        "why": "WildFly creates a .failed marker file containing the failure stack trace whenever deployment cannot complete."
+      },
+      {
+        "q": "Why is @DatabaseIdentityStoreDefinition considered superior to server-specific security realms?",
+        "opts": [
+          "It is completely portable across all Jakarta EE application servers and requires zero server XML edits",
+          "It disables SQL injection protection",
+          "It runs without a database",
+          "It forces all passwords to be 123456"
+        ],
+        "a": 0,
+        "why": "Jakarta Security annotations are part of the standard specification, allowing applications to move between servers without altering security configurations."
+      },
+      {
+        "q": "When should an enterprise choose an EAR over a single Skinny WAR file?",
+        "opts": [
+          "Never; EAR files are forbidden in modern Java",
+          "When multiple distinct web applications (e.g., customer portal and internal backoffice) share the exact same EJB business components",
+          "Only when using MySQL",
+          "Only when running on Windows"
+        ],
+        "a": 1,
+        "why": "EAR archives are designed for complex suites where several WAR frontends share common EJB and connector modules."
+      },
+      {
+        "q": "Are role names in @RolesAllowed case-sensitive in Jakarta EE?",
+        "opts": [
+          "No, case is always ignored",
+          "Yes, role strings must match the exact case returned by the IdentityStore",
+          "Only uppercase letters are allowed",
+          "Only lowercase letters are allowed"
+        ],
+        "a": 1,
+        "why": "Role evaluation is strictly case-sensitive; mismatches between identity store role strings and @RolesAllowed values will cause HTTP 403 access rejections."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       Summary
+       ===================================================================== -->
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Packaging Model</strong></td><td>Choose single Skinny WAR for microservices; multi-module EAR for complex shared enterprise suites.</td></tr>
+    <tr><td><strong>Shared Libraries</strong></td><td>Placed in EAR <code>lib/</code> folder and configured via <code>&lt;library-directory&gt;</code> in <code>application.xml</code>.</td></tr>
+    <tr><td><strong>Deployment Markers</strong></td><td>WildFly transitions from <code>.dodeploy</code> to <code>.isdeploying</code> to <code>.deployed</code> (or <code>.failed</code>).</td></tr>
+    <tr><td><strong>Portable Security</strong></td><td><code>@DatabaseIdentityStoreDefinition</code> eliminates vendor-specific security configurations.</td></tr>
+    <tr><td><strong>Role Enforcement</strong></td><td><code>@RolesAllowed</code> checks are strictly case-sensitive against the IdentityStore group strings.</td></tr>
+  </tbody></table></div>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
