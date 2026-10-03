@@ -33,7 +33,7 @@ The curriculum spans **5 weeks**, **20 direct instruction sessions (TL1–TL20)*
 | | **TL08** | Session 7 | Jakarta Messaging Services (JMS): Point-to-Point (Queues), Publish/Subscribe (Topics), Message-Driven Beans (`@MessageDriven`) | [`TL08_Jakarta_Messaging_Services/`](TL08_Jakarta_Messaging_Services/) | `s07` |
 | **Week 3** | **TL09** | Session 8 | Understanding Jakarta Connectors Architecture (JCA): Resource Adapters, System Contracts (Connection, Transaction, Work Management), EIS Integration | [`TL09_Jakarta_Connectors_Architecture/`](TL09_Jakarta_Connectors_Architecture/) | `s08` |
 | | **TL10** | Review (S7–S8) | **Try It Yourself:** Messaging and Connectors Lab combining JMS Producer/Consumer flows with JCA JDBC DataSources | [`TL10_TIY_Sessions_7_and_8/`](TL10_TIY_Sessions_7_and_8/) | `s08t` |
-| | **S1–S4** | Self-Study (S1–S8) | **Self-Study Block 1:** OnlineVarsity Work Assignments and Lab Exercises for Book Sessions 1 through 8 | [`Self_Study_S1_S4_Assignments_Sessions_1_to_8/`](Self_Study_S1_S4_Assignments_Sessions_1_to_8/) | — |
+| | **S1–S4** | Self-Study (S1–S8) | **Self-Study Block 1 (Revision & Practical Labs):** Revision Guide, 3 Practical Projects (Banking Core, Facelets Portal, JMS/JCA Audit), OnlineVarsity Assignments | [`Self_Study_S1_S4_Assignments_Sessions_1_to_8/`](Self_Study_S1_S4_Assignments_Sessions_1_to_8/) | — |
 | | **TL11 (Part 1)** | Session 9 | Jakarta Bean Validation: Built-in Constraints (`@NotNull`, `@Size`, `@Pattern`), Custom Constraint Validators, Class-level validation | [`TL11_Part1_Bean_Validation/`](TL11_Part1_Bean_Validation/) | `s09` |
 | | **TL11 (Part 2)** | Session 10 | Enterprise Beans Transactions & JNDI: Bean-Managed Transactions (BMT), `UserTransaction` demarcation, 2-Phase Commit | [`TL11_Part2_EJB_Transactions_and_JNDI/`](TL11_Part2_EJB_Transactions_and_JNDI/) | `s10` |
 | | **TL12** | Review (S9–S10) | **Try It Yourself:** Validation & Transaction Integration Lab with rollback enforcement | [`TL12_TIY_Sessions_9_and_10/`](TL12_TIY_Sessions_9_and_10/) | `s10t` |
@@ -45,7 +45,7 @@ The curriculum spans **5 weeks**, **20 direct instruction sessions (TL1–TL20)*
 | | **TL18** | Session 14 (Part 1) | Packaging Enterprise Beans and Entities: Multi-module Maven architectures, EJB JARs, JPA Persistence Archives (`persistence.xml`), EAR assembly (`application.xml`) | [`TL18_Packaging_Enterprise_Beans_and_Entities/`](TL18_Packaging_Enterprise_Beans_and_Entities/) | `s14` |
 | | **TL19** | Session 14 (Part 2) | Packaging Web Archives: Skinny WAR architectures, `beans.xml` discovery, Web Context Root customization, and Deployment Descriptors | [`TL19_Packaging_Web_Archives/`](TL19_Packaging_Web_Archives/) | `s14` |
 | | **TL20** | Review (S13–S14) | **Try It Yourself:** Capstone Enterprise Integration Lab combining CDI, Security, and multi-tier Packaging | [`TL20_TIY_Sessions_13_and_14/`](TL20_TIY_Sessions_13_and_14/) | `s14t` |
-| | **S5–S8** | Self-Study (S9–S14) | **Self-Study Block 2:** OnlineVarsity Work Assignments and Lab Exercises for Book Sessions 9 through 14 | [`Self_Study_S5_S8_Assignments_Sessions_9_to_14/`](Self_Study_S5_S8_Assignments_Sessions_9_to_14/) | — |
+| | **S5–S8** | Self-Study (S9–S14) | **Self-Study Block 2 (Revision & Practical Labs):** Revision Guide, 3 Practical Projects (Hospital Triage, Pluggable Payments, Secured Skinny WAR), OnlineVarsity Assignments | [`Self_Study_S5_S8_Assignments_Sessions_9_to_14/`](Self_Study_S5_S8_Assignments_Sessions_9_to_14/) | — |
 
 ---
 
@@ -59,7 +59,13 @@ TLxx_Session_Name/
 └── Assignment.md    # Graded take-home practical problem with business context and evaluation criteria
 ```
 
-Self-Study folders (`Self_Study_S1_S4...` and `Self_Study_S5_S8...`) contain exhaustive checklists for all OnlineVarsity work assignments with acceptance rubrics.
+Self-Study folders (`Self_Study_S1_S4...` and `Self_Study_S5_S8...`) are fully articulated revision packages:
+```
+Self_Study_Sx_Sx.../
+├── Revision_Guide.md         # Architecture comparison matrices, lifecycle cheat-sheets, exam/interview Q&As
+├── Practical_Lab_Projects.md # 3 hands-on practical end-to-end projects with full implementation code & logs
+└── Assignments.md            # OnlineVarsity work assignments checklist with grading rubrics
+```
 
 ---
 
