@@ -1,6 +1,6 @@
 <title>Transactions & ACID</title>
 <meta name="description" content="All-or-nothing operations: the ACID rules and the six container transaction attributes, in plain words.">
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="../assets/css/styles.css">
 <script>window.PAGE = "06-transactions";</script>
 
 <main class="page">
@@ -39,7 +39,7 @@
     </tbody>
   </table></div>
   <figure>
-    <img src="assets/images/acid_properties_1785735764327.png"
+    <img src="../assets/images/acid_properties_1785735764327.png"
          alt="A summary panel of the four ACID properties — Atomicity, Consistency, Isolation, Durability — each with a one-line definition and a banking example.">
     <figcaption><b>Takeaway:</b> ACID is the contract. The container + database enforce it; you just
       mark where a transaction begins and ends.</figcaption>
@@ -105,7 +105,7 @@ jakarta.ejb.EJBException: java.lang.RuntimeException: CRITICAL ERROR: connection
   </div>
 
   <figure>
-    <img src="assets/images/transaction_timeline_1785735816484.png"
+    <img src="../assets/images/transaction_timeline_1785735816484.png"
          alt="A timeline: the caller's transaction T1 is suspended while a REQUIRES_NEW method runs and commits its own transaction T2; then T1 resumes and later rolls back, leaving T2's changes intact.">
     <figcaption><b>Takeaway:</b> <code>REQUIRES_NEW</code> suspends the caller’s transaction, does its
       work in a separate one that commits on its own, then hands control back.</figcaption>
@@ -144,5 +144,5 @@ jakarta.ejb.EJBException: java.lang.RuntimeException: CRITICAL ERROR: connection
 
 </main>
 
-<script src="assets/js/course.js"></script>
-<script src="assets/js/runner.js"></script>
+<script src="../assets/js/course.js"></script>
+<script src="../assets/js/runner.js"></script>

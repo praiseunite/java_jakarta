@@ -1,6 +1,6 @@
 <title>Local vs Remote Clients</title>
 <meta name="description" content="Calling a bean from the same JVM vs across the network: @Local, @Remote, pass-by-reference vs pass-by-value.">
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="../assets/css/styles.css">
 <script>window.PAGE = "10-local-remote-clients";</script>
 
 <main class="page">
@@ -19,7 +19,7 @@
   <span class="eyebrow">concept</span>
   <h2>The two models side by side</h2>
   <figure>
-    <img src="assets/images/local_remote_clients.jpg"
+    <img src="../assets/images/local_remote_clients.jpg"
          alt="Left: a web tier and a local session bean inside one JVM, connected by a direct method call (pass-by-reference, zero network). Right: a standalone app and a remote session bean separated by a network boundary, connected by an RMI/HTTP call with serialization and JNDI (pass-by-value).">
     <figcaption><b>Takeaway:</b> local calls are ordinary method calls in RAM. Remote calls copy every
       argument across a network — orders of magnitude slower.</figcaption>
@@ -148,5 +148,5 @@ System.out.println(svc.reverseString("Jakarta Enterprise Beans"));</code></pre>
 
 </main>
 
-<script src="assets/js/course.js"></script>
-<script src="assets/js/runner.js"></script>
+<script src="../assets/js/course.js"></script>
+<script src="../assets/js/runner.js"></script>

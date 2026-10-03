@@ -1,6 +1,6 @@
 <title>JNDI, DataSources & Pools</title>
 <meta name="description" content="How code finds shared resources by name, and how database connection pooling keeps apps fast.">
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="../assets/css/styles.css">
 <script>window.PAGE = "05-jndi-and-resources";</script>
 
 <main class="page">
@@ -38,7 +38,7 @@
   </table></div>
 
   <figure>
-    <img src="assets/images/jndi_architecture_1785735733575.png"
+    <img src="../assets/images/jndi_architecture_1785735733575.png"
          alt="Three stacked layers: your Java application on top; the JNDI API (javax.naming) in the middle; the JNDI SPI at the bottom, which plugs into the WildFly naming service or an LDAP directory.">
     <figcaption><b>Takeaway:</b> your code only ever touches the middle layer, the JNDI API. Swapping
       WildFly for another server changes the bottom layer (the vendor’s job), not your lookup code.</figcaption>
@@ -92,7 +92,7 @@ double balance = account.getBalance(12345);</code></pre>
     connection; behind it sits the pool, configured by an administrator.</p>
 
   <figure>
-    <img src="assets/images/jndi_connection_pool.jpg"
+    <img src="../assets/images/jndi_connection_pool.jpg"
          alt="A bean asks a DataSource (registered in JNDI) for a connection; the DataSource hands back one of several pre-opened connections from a pool; when the bean is done the connection returns to the pool rather than closing.">
     <figcaption><b>Takeaway:</b> <code>conn.close()</code> on a pooled connection doesn’t close it —
       it <em>returns</em> it to the pool for the next caller.</figcaption>
@@ -179,5 +179,5 @@ private Double maxTransferLimit;   // container fills it from the descriptor</co
 
 </main>
 
-<script src="assets/js/course.js"></script>
-<script src="assets/js/runner.js"></script>
+<script src="../assets/js/course.js"></script>
+<script src="../assets/js/runner.js"></script>

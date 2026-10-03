@@ -1,6 +1,6 @@
 <title>Session Beans Explained</title>
 <meta name="description" content="Stateless, stateful and singleton session beans — with real analogies and runnable examples.">
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="../assets/css/styles.css">
 <script>window.PAGE = "03-session-beans";</script>
 
 <main class="page">
@@ -31,7 +31,7 @@
   </table></div>
 
   <figure>
-    <img src="assets/images/session_bean_lifecycle.jpg"
+    <img src="../assets/images/session_bean_lifecycle.jpg"
          alt="Two lifecycles side by side. Stateless: the container pre-builds a pool of identical instances that each serve any request then return to the pool. Stateful: one instance per client; if idle it is passivated (saved to disk) and later activated back, and it is destroyed on @Remove or timeout.">
     <figcaption><b>Takeaway:</b> stateless beans live in a <em>shared pool</em> and are handed out per
       call. A stateful bean is <em>yours</em> for the whole conversation and can be parked on disk
@@ -287,6 +287,6 @@ total() -> 3             (READ lock: userA, userB, userC could all read together
 
 </main>
 
-<script src="assets/js/course.js"></script>
-<script src="assets/js/runner.js"></script>
-<script src="assets/js/terminal.js"></script>
+<script src="../assets/js/course.js"></script>
+<script src="../assets/js/runner.js"></script>
+<script src="../assets/js/terminal.js"></script>

@@ -1,6 +1,6 @@
 <title>Concurrency & Security</title>
 <meta name="description" content="Two users at once (optimistic vs pessimistic locking, @Lock) and who is allowed to do what (@RolesAllowed, the three security layers).">
-<link rel="stylesheet" href="assets/css/styles.css">
+<link rel="stylesheet" href="../assets/css/styles.css">
 <script>window.PAGE = "07-concurrency-security";</script>
 
 <main class="page">
@@ -91,7 +91,7 @@ t5 get()  [READ lock]  -&gt; "B"   /
   <span class="eyebrow">concept</span>
   <h2>Security — the three layers</h2>
   <figure>
-    <img src="assets/images/security_layers_1785735773741.png"
+    <img src="../assets/images/security_layers_1785735773741.png"
          alt="Three stacked security layers: application layer (roles and permissions enforced by the container), transport layer (HTTPS/TLS encrypting the network hop), and message layer (encryption embedded inside the message itself, end to end).">
     <figcaption><b>Takeaway:</b> transport security protects the <em>wire</em>; application security
       controls <em>who may call a method</em>; message security protects the <em>payload</em> across
@@ -164,5 +164,5 @@ public class AccountBean implements AccountRemote {
 
 </main>
 
-<script src="assets/js/course.js"></script>
-<script src="assets/js/runner.js"></script>
+<script src="../assets/js/course.js"></script>
+<script src="../assets/js/runner.js"></script>
