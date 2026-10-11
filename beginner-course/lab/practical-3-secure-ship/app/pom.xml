@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     globalbank-web — Practical 3.
+
+     Practicals 1 and 2 built the bank: entities, service beans, a web page, a
+     queue, a remote interface. This project keeps every one of those files —
+     literally, they are the same files — and adds the two things that turn a
+     working application into one you could put in front of a customer:
+
+       * CDI, used properly  -> a @Produces config value, @Email/@Sms qualifiers
+                                on two Notifier beans, an @Logged interceptor,
+                                and an event that fires after a transfer commits
+       * Security            -> form login against a database of users,
+                                @RolesAllowed on the beans, and a page that
+                                shows different things to different roles
+       * Packaging           -> the same war, plus a multi-module EAR next door
+                                in ../ear/
+
+     ===========================================================================
+     THE NAME IS DELIBERATELY UNCHANGED.
+
+     This builds target/globalbank-web.war — the same artefact name as
+     Practical 2, and it deploys to the same URL:
+
+         http://localhost:8080/globalbank-web/
+
+     That is on purpose. Deploying this war REPLACES the Practical 2 deployment;
+     it does not sit beside it. Two wars with the same name in the same server
+     is a conflict, and a renamed war would silently break every URL in
+     Practical 2's notes — including the JNDI name the standalone client uses.
+     Same name, same place, more capability: exactly how you would upgrade a real
+     application.
+     ===========================================================================
+
+     To build:   mvn clean package
+     Result:     target/globalbank-web.war
+     ========================================================================== -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- ===== Who made it and what it is called ============================== -->
+  <groupId>com.globalbank</groupId>
+  <artifactId>globalbank-web</artifactId>
+  <version>1.0.0</version>
+
+  <!-- Still a war. ../ear/ is where this becomes one module of three. -->
+  <packaging>war</packaging>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- Still exactly one dependency, and still `provided`.
+
+         `provided` is what keeps this war small: it says "I need these classes
+         to compile, but do not put them in the war — the server has them".
+         WildFly 30 implements the whole of Jakarta EE 10, so the war that gets
+         built here is a few tens of kilobytes of your code, not tens of
+         megabytes of framework.
+
+         The catch, and it is the one everybody hits once: a `provided`
+         dependency is NOT on the classpath of a program you run outside the
+         server. That is why the standalone client in ../ear/ — and the one in
+         Practical 2 — needs jboss-client.jar on its classpath by hand. -->
+    <dependency>
+      <groupId>jakarta.platform</groupId>
+      <artifactId>jakarta.jakartaee-api</artifactId>
+      <version>10.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- The output name, and therefore the URL folder and the JNDI module name:
+         http://localhost:8080/globalbank-web/... -->
+    <finalName>globalbank-web</finalName>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.4.0</version>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

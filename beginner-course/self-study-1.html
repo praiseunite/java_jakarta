@@ -1,0 +1,1401 @@
+<meta charset="utf-8">
+<title>Self-Study Block 1 — Sessions 1 to 8 (Revision, Assignments &amp; Labs)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Self-Study Block 1 for Sessions 1 to 8: a plain-English revision guide, the full assignment checklist, and three end-to-end practical lab projects with real code, exact commands and the output to expect from WildFly.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "ss1";</script>
+
+<main class="page">
+
+  <h1>Self-Study Block 1 · Sessions 1 to 8 — Revision, Assignments &amp; Labs</h1>
+  <p class="lede">Sessions 1 to 8 are the backbone of the whole course. They give you the four things an
+    enterprise application is made of: <strong>beans</strong> that hold the business logic,
+    <strong>resources</strong> the container hands you, <strong>transactions</strong> that make changes
+    all-or-nothing, and <strong>connections</strong> to the outside world through messaging and
+    connectors. This page is your solo revision block. It has three parts: first a guided revision of
+    the ideas, then the assignments you must submit, then three practical projects you build, deploy and
+    watch run on WildFly. No teacher is needed — every command, every error and every expected line of
+    output is written out for you.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Every heavy word — <em>pooling, passivation,
+          propagation, marshalling, JCA</em> — gets a plain-English explanation the moment it appears.</li>
+        <li><strong>Every command is executable.</strong> Each lab step gives you the exact file or the
+          exact line to type. Nothing is left as “and then do the usual thing”.</li>
+        <li><strong>Every step is checkable.</strong> After each step you are told what you should see in
+          the server log or the browser, so you always know whether it worked.</li>
+        <li><strong>You will submit real work.</strong> By the end you have the assignment checklist
+          ticked off and three working, deployable projects.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a list copied from a manual — these are the things this block makes you able to do:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is practised</th></tr></thead>
+    <tbody>
+      <tr><td>Say what each bean type is for, and when to reach for it instead of the others</td><td>Part 1, section 1.1</td></tr>
+      <tr><td>Read a portable JNDI name and know how far its reach extends</td><td>Part 1, section 1.2</td></tr>
+      <tr><td>Choose the right <code>@TransactionAttribute</code> for a method and predict its rollback behaviour</td><td>Part 1, section 1.3</td></tr>
+      <tr><td>Trace a JSF form through the six request-processing phases</td><td>Part 1, section 1.4</td></tr>
+      <tr><td>Explain why a <code>@Local</code> call is fast and a <code>@Remote</code> call needs serialization</td><td>Part 1, section 1.5</td></tr>
+      <tr><td>Tell a Queue apart from a Topic, and say what the three JCA system contracts do</td><td>Part 1, section 1.6</td></tr>
+      <tr><td>Complete and submit all eight sessions of assignment work</td><td>Part 2</td></tr>
+      <tr><td>Build, deploy and verify the three end-to-end practical projects</td><td>Part 3</td></tr>
+      <tr><td>Answer the exam-style questions on Sessions 1 to 8</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small label on the left of each block tells you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// assignment</code> — a piece of work to do and submit.</li>
+        <li><code>// practical lab</code> — numbered steps to build something real, with the exact commands.</li>
+        <li><code>// checkpoint</code> — a self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read Part 1 first, even if you think you remember it — the labs in Part 3 lean on it. Then work
+      Part 2 and Part 3 with WildFly open in a second window. Every part ends with a checkpoint.
+    </div>
+  </div>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What this block covers (Presenter's Manual, self-study S1–S4)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Enterprise Bean Container and Component Architecture (Sessions 1 &amp; 2)</li>
+        <li>Resource Management, Connection Pooling and JNDI (Session 3)</li>
+        <li>Container-Managed Transactions, Concurrency and Security (Session 4)</li>
+        <li>Web Presentation with Facelets and Composite Components (Session 5)</li>
+        <li>Component Remoting and Client Topologies (Session 6)</li>
+        <li>Asynchronous Messaging with Jakarta JMS and MDBs (Session 7)</li>
+        <li>Enterprise Information System integration via JCA (Session 8)</li>
+      </ol>
+      Target: Jakarta EE 10, WildFly 30+, Java 17+. Suggested study allocation: four to six hours of
+      active reading, architecture mapping and code review.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — REVISION GUIDE
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · The revision guide</h2>
+
+  <p>Sessions 1 to 8 form one connected machine. Before the details, look at the whole shape of it. Read
+    this map top to bottom: a web page at the top talks to beans in the middle, and those beans reach
+    down to messaging and databases at the bottom.</p>
+
+  <div class="code-head">The architecture of everything in Sessions 1 to 8</div>
+  <pre><code>       ┌─────────────────────────────────────────────────────────────┐
+       │                   PRESENTATION TIER (S5)                    │
+       │     JSF / Facelets Templates (&lt;ui:composition&gt;)             │
+       │     Composite Components (&lt;composite:interface&gt;)            │
+       └──────────────────────────────┬──────────────────────────────┘
+                                      │ In-JVM Local Call / EL Binding
+                                      ▼
+       ┌─────────────────────────────────────────────────────────────┐
+       │                    BUSINESS TIER (S1-S4, S6)                │
+       │  @Stateless EJB   │  @Stateful EJB   │  @Singleton EJB      │
+       │  (Pooled Workers) │  (Client State)  │  (Shared In-Memory)  │
+       │  ─────────────────────────────────────────────────────────  │
+       │  Container Services: CMT Transactions, Security, @Lock      │
+       └──────────────┬──────────────────────────────┬───────────────┘
+                      │                              │
+         Asynchronous │ JMS                          │ JCA Connection Pool
+         Message Flow │ (S7)                         │ (S3, S8)
+                      ▼                              ▼
+       ┌──────────────────────────────┐ ┌─────────────────────────────┐
+       │    MESSAGING TIER (S7)       │ │     ENTERPRISE DATA (S3, S8)│
+       │  Queue (P2P) / Topic (PubSub)│ │  PostgreSQL / Oracle / EIS  │
+       │  @MessageDriven Bean (MDB)   │ │  JNDI: java:jboss/datasources│
+       └──────────────────────────────┘ └─────────────────────────────┘</code></pre>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Three shelves. The <strong>top shelf</strong> draws the screen with Facelets (Session 5). The
+      <strong>middle shelf</strong> holds your beans — the classes that do the actual thinking (Sessions 1
+      to 4 and 6). The <strong>bottom shelf</strong> is everything outside your application: a message
+      queue that carries work away to be done later (Session 7), and a database reached through a managed
+      connection pool (Sessions 3 and 8).</p>
+    <p>The whole point of an <em>enterprise</em> application is that the middle shelf — the container —
+      does the hard, boring, dangerous work for you: transactions, security, threading and pooling. You
+      write the business rule; the container keeps it safe.</p>
+  </div>
+
+  <h3>1.1 Enterprise bean types and their lifecycles (Sessions 1 &amp; 2)</h3>
+  <p>There are three bean types, and picking the wrong one is the most common design mistake in this
+    course. The question to ask is always: <em>who owns the state, and for how long?</em></p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Feature</th><th><code>@Stateless</code></th><th><code>@Stateful</code></th><th><code>@Singleton</code></th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Primary use case</strong></td>
+        <td>Business services, calculations, dispatchers</td>
+        <td>Shopping carts, multi-step wizards, conversational state</td>
+        <td>Caching, application counters, global locks</td>
+      </tr>
+      <tr>
+        <td><strong>Client association</strong></td>
+        <td>Unbound; any client gets any pooled instance</td>
+        <td>Dedicated one-to-one binding per client session</td>
+        <td>Exactly one instance shared across all clients</td>
+      </tr>
+      <tr>
+        <td><strong>Instance pooling</strong></td>
+        <td>Yes (WildFly default: 20 to 64 instances)</td>
+        <td>No (an instance is created per client)</td>
+        <td>No (a single instance, loaded eagerly or lazily)</td>
+      </tr>
+      <tr>
+        <td><strong>Passivation</strong></td>
+        <td>Never (no conversational state to preserve)</td>
+        <td>Yes (<code>@PrePassivate</code> / <code>@PostActivate</code> to disk)</td>
+        <td>Never</td>
+      </tr>
+      <tr>
+        <td><strong>Lifecycle callbacks</strong></td>
+        <td><code>@PostConstruct</code>, <code>@PreDestroy</code></td>
+        <td><code>@PostConstruct</code>, <code>@PrePassivate</code>, <code>@PostActivate</code>, <code>@PreDestroy</code>, <code>@Remove</code></td>
+        <td><code>@PostConstruct</code>, <code>@PreDestroy</code></td>
+      </tr>
+      <tr>
+        <td><strong>Thread safety</strong></td>
+        <td>Container ensures one thread per instance</td>
+        <td>Container ensures one thread per instance</td>
+        <td>Container-managed concurrency (<code>@Lock(READ/WRITE)</code>)</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Pooling</strong> means the container keeps a shelf of ready-made instances and lends one
+      out per call, then takes it back. That is why <code>@Stateless</code> is fast and why you must never
+      keep a customer's data in its fields.</p>
+    <p><strong>Passivation</strong> is the container putting a <code>@Stateful</code> bean to sleep on
+      disk when it has not been used for a while, and waking it up later (<em>activation</em>) with its
+      state intact. A stateless bean has no state, so there is nothing to put to sleep.</p>
+    <p><strong>Concurrency</strong> is two threads touching the same object at once. For
+      <code>@Singleton</code> the container guards the single shared instance: many readers may enter at
+      once under <code>@Lock(READ)</code>, but a writer takes an exclusive <code>@Lock(WRITE)</code>.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍽️</span>
+    <div class="callout__b"><b>Analogy — a restaurant</b>
+      A <strong><code>@Stateless</code></strong> bean is the counter staff: any one of them can serve you,
+      and none of them remembers you afterwards. A <strong><code>@Stateful</code></strong> bean is the
+      waiter assigned to your table: they remember your order across the whole meal, and leave when you
+      do. A <strong><code>@Singleton</code></strong> bean is the one wall clock everyone in the building
+      reads — there is only one, it is shared, and reading it is safe for many people at once while
+      setting it must be done by one person.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Gotcha alert: never store client-specific state in a
+      <code>@Stateless</code> bean</b>
+      The container returns instances to the pool and hands them to other callers. A field that held
+      customer A's data on one call can be handed, unchanged, to customer B on the next. That is
+      <strong>cross-tenant data leakage</strong>, and it is a serious bug, not a style point. Keep every
+      value the method needs as a parameter or a local variable.</div>
+  </div>
+
+  <h3>1.2 JNDI portable naming architecture (Session 3)</h3>
+  <p><strong>JNDI</strong> (the Java Naming and Directory Interface) is the phone book of the application
+    server. Everything the container manages — beans, data sources, queues — is looked up by name rather
+    than created by you. Jakarta EE fixes four portable namespaces so the same lookup works on WildFly,
+    GlassFish or WebLogic without change:</p>
+
+  <div class="code-head">The four portable JNDI namespaces</div>
+  <pre><code>java:global[/&lt;app-name&gt;]/&lt;module-name&gt;/&lt;bean-name&gt;[!&lt;fully-qualified-interface-name&gt;]
+java:app/&lt;module-name&gt;/&lt;bean-name&gt;[!&lt;fully-qualified-interface-name&gt;]
+java:module/&lt;bean-name&gt;[!&lt;fully-qualified-interface-name&gt;]
+java:comp/env/&lt;resource-ref-name&gt;</code></pre>
+
+  <p>The difference between them is <em>how far the name reaches</em>. Think of it as four sizes of
+    address:</p>
+  <ul>
+    <li><strong><code>java:global</code></strong> — reachable by every application running on the whole
+      server instance, and by remote standalone Java SE clients too. The widest address there is.</li>
+    <li><strong><code>java:app</code></strong> — reachable only inside the modules that share the same
+      <code>.ear</code> enterprise archive.</li>
+    <li><strong><code>java:module</code></strong> — reachable only inside the same <code>.war</code> or
+      <code>.jar</code> archive. Your own back yard.</li>
+    <li><strong><code>java:comp</code></strong> — private to the one calling component instance
+      (<code>java:comp/env</code> is where a component's own references live). The smallest address.</li>
+  </ul>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Why the brackets</b>
+      The square brackets mark the optional parts. A bean with a named class can use the short form
+      <code>java:module/CalculatorBean</code>; a bean that implements an interface uses the
+      <code>!</code> form — <code>java:module/CalculatorBean!com.aptech.Calculator</code> — to say exactly
+      which interface you want. If only one interface exists, the short form is enough.</div>
+  </div>
+
+  <h3>1.3 Container-Managed Transaction (CMT) propagation (Session 4)</h3>
+  <p>A <strong>transaction</strong> is a group of changes that must all happen or none happen. In
+    <strong>Container-Managed Transactions (CMT)</strong> you never write <code>begin()</code> or
+    <code>commit()</code> — the container opens, commits and rolls back for you, following the
+    <strong>propagation attribute</strong> you put on the method. Propagation answers one question:
+    <em>if the caller already has a transaction, what should I do?</em></p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Attribute</th><th>Client has an active transaction</th><th>Client has no transaction</th><th>Best used for</th></tr></thead>
+    <tbody>
+      <tr><td><strong><code>REQUIRED</code></strong> <em>(default)</em></td><td>Joins the existing transaction</td><td>Starts a new transaction</td><td>General database operations (updates, inserts)</td></tr>
+      <tr><td><strong><code>REQUIRES_NEW</code></strong></td><td>Suspends the client's transaction; starts a new independent one</td><td>Starts a new transaction</td><td>Audit logging and notifications that must persist even if the parent rolls back</td></tr>
+      <tr><td><strong><code>MANDATORY</code></strong></td><td>Joins the existing transaction</td><td>Throws <code>TransactionRequiredException</code></td><td>Internal helper methods that must never run without a transaction</td></tr>
+      <tr><td><strong><code>SUPPORTS</code></strong></td><td>Joins the existing transaction</td><td>Executes non-transactionally</td><td>Read-only search methods</td></tr>
+      <tr><td><strong><code>NOT_SUPPORTED</code></strong></td><td>Suspends the client's transaction; runs non-transactionally</td><td>Executes non-transactionally</td><td>Long-running operations and network calls</td></tr>
+      <tr><td><strong><code>NEVER</code></strong></td><td>Throws <code>RemoteException</code></td><td>Executes non-transactionally</td><td>Strictly non-transactional operations</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--key"><span class="callout__i">🔁</span>
+    <div class="callout__b"><b>Key rule for rollback</b>
+      By default the container <strong>only rolls back for unchecked exceptions</strong>
+      (<code>RuntimeException</code> and <code>Error</code>). A <em>checked</em> application exception —
+      one that <code>extends Exception</code> — <strong>commits</strong> by default. If you want a checked
+      exception to undo the work, you must mark it
+      <code>@ApplicationException(rollback = true)</code>, or call <code>ctx.setRollbackOnly()</code>
+      before it is thrown.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><em>Suspends</em> here means “pauses and puts aside for a moment”. Under
+      <code>REQUIRES_NEW</code> the caller's transaction is not cancelled — it is frozen while the new one
+      runs, then resumed afterwards.</p>
+    <p><em>Unchecked</em> means the compiler does not force you to catch it — usually a bug or a system
+      failure. <em>Checked</em> means the compiler makes you declare it — usually a business outcome you
+      expected, such as “not enough funds”. The container treats the two differently: unexpected trouble
+      rolls everything back, expected outcomes are allowed to commit.</p>
+  </div>
+
+  <h3>1.4 The Facelets and JSF request-processing lifecycle (Session 5)</h3>
+  <p>When a browser submits a JSF form, the request is not handled in one move. It walks through
+    <strong>six phases</strong> in a fixed order. Knowing the order tells you exactly where a validation
+    error stops the request.</p>
+
+  <ol>
+    <li><strong>Restore View.</strong> Rebuild the component tree from session state (or create a fresh
+      one for a first visit).</li>
+    <li><strong>Apply Request Values.</strong> Decode the submitted HTTP form parameters into the
+      components.</li>
+    <li><strong>Process Validations.</strong> Run the validators (<code>required="true"</code>, custom
+      validators, Bean Validation). <strong>If any fail, JSF jumps directly to Phase 6.</strong></li>
+    <li><strong>Update Model Values.</strong> Convert and copy the validated values into your backing bean
+      properties.</li>
+    <li><strong>Invoke Application.</strong> Execute the business action methods (for example
+      <code>#{orderBean.submit()}</code>).</li>
+    <li><strong>Render Response.</strong> Generate the resulting HTML markup and send it back to the
+      browser.</li>
+  </ol>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one fact worth memorising</b>
+      Validation lives in <strong>Phase 3</strong>, and a failure skips Phases 4 and 5 entirely and lands
+      on <strong>Phase 6</strong>. That is the whole reason a badly filled-in form is cheap: your business
+      method in Phase 5 never runs, and no database call is made.</div>
+  </div>
+
+  <h3>1.5 Local versus remote clients (Session 6)</h3>
+  <p>A bean can be reached two ways. A <code>@Local</code> call stays inside the same Java Virtual Machine
+    and simply passes a pointer in memory — fast and free. A <code>@Remote</code> call travels over the
+    network to another JVM, so every parameter and return value must be turned into bytes and back again.
+    That act of turning an object into bytes is called <strong>serialization</strong> (and back again,
+    <em>deserialization</em>).</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Attribute</th><th><code>@Local</code> interface</th><th><code>@Remote</code> interface</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Client location</strong></td><td>Same JVM / same application server</td><td>Different JVM / standalone Java SE client</td></tr>
+      <tr><td><strong>Parameter passing</strong></td><td><strong>Pass-by-reference</strong> (a memory address pointer, fast)</td><td><strong>Pass-by-value</strong> (serialized into bytes over TCP)</td></tr>
+      <tr><td><strong>Serialization requirement</strong></td><td>Not required</td><td><strong>Mandatory</strong> (<code>implements Serializable</code>)</td></tr>
+      <tr><td><strong>Network overhead</strong></td><td>Zero (a direct in-memory call)</td><td>Socket I/O, plus marshalling and unmarshalling overhead</td></tr>
+      <tr><td><strong>Exception handling</strong></td><td>Application exceptions are thrown directly</td><td>Can throw <code>java.rmi.RemoteException</code> or EJB remote exceptions</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">📞</span>
+    <div class="callout__b"><b>Analogy — handing over a document</b>
+      A <strong><code>@Local</code></strong> call is passing a note across the desk: you hand over the
+      actual piece of paper, and any change the other person makes is on that same paper. A
+      <strong><code>@Remote</code></strong> call is faxing the note to another building: you send a
+      <em>copy</em>. Whatever they scribble on their copy never appears on yours — and if the note is not
+      something a fax can carry (a non-serializable object), the whole thing fails.</div>
+  </div>
+
+  <h3>1.6 Jakarta Messaging (JMS 3.0) and Jakarta Connectors (JCA) (Sessions 7 &amp; 8)</h3>
+  <p>Session 7 is about letting work travel <em>asynchronously</em> — meaning the sender does not wait for
+    the receiver. Session 8 is about reaching systems outside Jakarta EE entirely.</p>
+
+  <ul>
+    <li><strong>Point-to-Point (Queue).</strong> Exactly <strong>one consumer</strong> processes each
+      message. Suitable for payment dispatch, order fulfilment and ticket processing — work that must be
+      done once, not broadcast.</li>
+    <li><strong>Publish/Subscribe (Topic).</strong> <strong>Every active subscriber</strong> receives a
+      copy of each published message. Suitable for price broadcasts, notifications and cache
+      invalidation.</li>
+    <li><strong>Message-Driven Beans (<code>@MessageDriven</code>).</strong> Asynchronous,
+      transaction-aware listeners managed by the container. They implement <code>MessageListener</code>
+      and, unlike session beans, expose <strong>no client interface</strong> — you cannot call them, you
+      can only send them a message.</li>
+    <li><strong>Jakarta Connectors Architecture (JCA).</strong> A standardised adapter framework that
+      bridges Jakarta EE to external <strong>Enterprise Information Systems</strong> (EIS) — databases,
+      mainframes and ERPs. It implements three critical <em>system contracts</em>:
+      <ol>
+        <li><em>Connection Management Contract</em> — pooling.</li>
+        <li><em>Transaction Management Contract</em> — two-phase commit (XA).</li>
+        <li><em>Work Management Contract</em> — thread scheduling.</li>
+      </ol>
+    </li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Asynchronous</strong> is the difference between a phone call and a text message. A phone
+      call (synchronous) makes you wait until the other person answers. A text (asynchronous) lets you
+      carry on immediately; the message is delivered when the other side is ready.</p>
+    <p><strong>Two-phase commit</strong> is how two databases agree. Phase one asks both “can you
+      commit?”; only if both say yes does phase two tell them both to do it. Either both write or neither
+      does — the same all-or-nothing promise, stretched across systems.</p>
+    <p><strong>EIS</strong> is just the industry's umbrella term for the big systems a company already
+      runs, which your Jakarta EE application has to talk to.</p>
+  </div>
+
+  <h3>1.7 The high-frequency exam questions</h3>
+  <p>These three are asked again and again. Cover the answer and try first.</p>
+
+  <div class="callout"><span class="callout__i">❓</span>
+    <div class="callout__b"><b>Q1: Why can a client not invoke a method on a <code>@Stateful</code> bean
+      concurrently from two threads?</b>
+      <p style="margin:.4rem 0 0">Because the EJB specification prohibits concurrent access to stateful
+        session beans. If a second thread invokes a method while an invocation is already in progress, the
+        container throws a <code>ConcurrentAccessException</code>. If shared concurrent state is really
+        needed, use a <code>@Singleton</code> bean with
+        <code>@Lock(LockType.READ)</code> and <code>@Lock(LockType.WRITE)</code> instead.</p>
+    </div>
+  </div>
+
+  <div class="callout"><span class="callout__i">❓</span>
+    <div class="callout__b"><b>Q2: What happens if a method annotated
+      <code>@TransactionAttribute(TransactionAttributeType.REQUIRES_NEW)</code> throws a
+      <code>RuntimeException</code>?</b>
+      <p style="margin:.4rem 0 0">The newly spawned independent transaction rolls back. The suspended
+        parent transaction then resumes. Unless the parent method catches the exception, the uncaught
+        exception propagates upward and causes the parent transaction to roll back as well — so a
+        “separate” transaction does not protect the caller if the caller ignores the failure.</p>
+    </div>
+  </div>
+
+  <div class="callout"><span class="callout__i">❓</span>
+    <div class="callout__b"><b>Q3: What is the purpose of <code>&lt;ui:insert&gt;</code> and
+      <code>&lt;ui:define&gt;</code> in Facelets?</b>
+      <p style="margin:.4rem 0 0">In a master template, <code>&lt;ui:insert name="regionName"&gt;</code>
+        declares a dynamic placeholder where child pages can inject content. A child page uses
+        <code>&lt;ui:composition template="..."&gt;</code> together with
+        <code>&lt;ui:define name="regionName"&gt;</code> to supply page-specific markup for that region.
+        The template keeps the frame; the child fills the holes.</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>You need an object that counts how many users have logged in, shared by everyone. Which bean
+        type, and why not the other two?</li>
+      <li>A remote client calls your bean and the call fails with a serialization error. What is the most
+        likely cause?</li>
+      <li>Your service method throws a checked <code>PaymentFailedException</code>. By default, does the
+        transaction commit or roll back — and how do you change that?</li>
+      <li>Give one real situation where a Topic is right and a Queue is wrong.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A <strong><code>@Singleton</code></strong>. There must be exactly one shared instance, and the
+          counter must be protected from two threads writing at once. A <code>@Stateless</code> bean is
+          pooled, so each instance would have its own copy of the count; a <code>@Stateful</code> bean is
+          bound to one client, so nobody else would see the count.</li>
+        <li>A parameter or return value in the remote call does not
+          <strong><code>implements Serializable</code></strong>. Remote calls pass values by copy over
+          the network, so every object in the call must be serializable.</li>
+        <li>By default it <strong>commits</strong> — checked application exceptions commit. To make it
+          roll back, annotate the exception class with
+          <code>@ApplicationException(rollback = true)</code>, or call <code>ctx.setRollbackOnly()</code>
+          before throwing it.</li>
+        <li>A price update that <strong>every</strong> connected screen must receive — for example, a
+          trading dashboard broadcast to many users. A Queue would deliver it to only one consumer, so the
+          other screens would never update.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — ASSIGNMENTS
+       ===================================================================== -->
+
+  <span class="eyebrow">assignment</span>
+  <h2>Part 2 · The assignments (Sessions 1 to 8)</h2>
+
+  <p>This is the assigned hands-on work for the first eight book sessions, collected in one place. It is
+    conducted around Week 3, after the tenth teaching session. These assignments reinforce the concepts
+    taught in TL01 through TL10, and every one of them must be completed and submitted yourself.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">📋</span>
+    <div class="callout__b"><b>How each assignment is written up</b>
+      Every session has two pieces of work: an <strong>Assignment</strong> and a <strong>Lab</strong>.
+      Each is given as three lines: <strong>What to do</strong> (the task), <strong>Done looks like</strong>
+      (how you know you finished), and <strong>If you are stuck</strong> (a nudge without giving the
+      answer away). Tick them off as you go.</div>
+  </div>
+
+  <h3>Session 1 · Introduction to Jakarta Enterprise Beans</h3>
+  <h4>Assignment — Java SE versus Jakarta EE</h4>
+  <p><strong>What to do.</strong> Research and write a comparison between a traditional Java SE
+    application and a Jakarta EE application. Focus on three things: <em>scalability</em>,
+    <em>transaction management</em>, and <em>resource pooling</em>.</p>
+  <p><strong>Done looks like.</strong> A written comparison that names all three areas and explains, for
+    each, what the plain Java SE application has to do for itself and what the Jakarta EE container does
+    for you.</p>
+  <p><strong>If you are stuck.</strong> Start from a sentence: “In Java SE, my code has to… but in
+    Jakarta EE, the container…” Then write one such sentence for each of the three areas.</p>
+
+  <h4>Lab — set up WildFly and deploy the sample</h4>
+  <p><strong>What to do.</strong> Set up WildFly 30+ and deploy the provided sample EJB application.
+    Confirm that the JNDI bindings appear in the server log.</p>
+  <p><strong>Done looks like.</strong> The server log shows your application deploying, and you can point
+    at the JNDI name the container printed for your bean.</p>
+  <p><strong>If you are stuck.</strong> If the server will not start, read the <em>first</em> error line,
+    not the last — most often a port is already in use. If nothing binds, check the bean was actually
+    packaged into the archive.</p>
+
+  <h3>Session 2 · Session beans and their types</h3>
+  <h4>Assignment — one of each bean type</h4>
+  <p><strong>What to do.</strong> Build a demonstration application containing one
+    <code>@Stateless</code>, one <code>@Stateful</code>, and one <code>@Singleton</code> bean. From a test
+    client, call all three. Document the lifecycle differences you observe.</p>
+  <p><strong>Done looks like.</strong> A short write-up contrasting the three: which one is pooled, which
+    one is bound to your client, and which one is shared. Include the printed output from each bean
+    proving the difference.</p>
+  <p><strong>If you are stuck.</strong> Put a <code>@PostConstruct</code> in each bean that prints its
+    own name and a counter. Call each bean twice and watch how many times the messages print.</p>
+
+  <h4>Lab — the <code>@Singleton</code> counter pattern</h4>
+  <p><strong>What to do.</strong> Demonstrate the <code>@Singleton</code> counter pattern. Increment the
+    counter from two concurrent clients and show that the state is shared.</p>
+  <p><strong>Done looks like.</strong> Both clients read back the same growing number — proof there is one
+    instance, not one per client.</p>
+  <p><strong>If you are stuck.</strong> “Concurrent” just means two callers in quick succession. Call the
+    increment method from two browser tabs or two loops and compare the values each reports.</p>
+
+  <h3>Session 3 · Resource creation and JNDI</h3>
+  <h4>Assignment — a pooled DataSource</h4>
+  <p><strong>What to do.</strong> Create a PostgreSQL <code>DataSource</code> in the WildFly Admin
+    Console, inject it with <code>@Resource</code>, and write an EJB that reads one row from a table and
+    returns it as a string.</p>
+  <p><strong>Done looks like.</strong> A bean that, when called, prints or returns a real row from the
+    database — with no connection string or password anywhere in your Java source.</p>
+  <p><strong>If you are stuck.</strong> The <code>@Resource(lookup = "…")</code> value must match the JNDI
+    name the console gave the data source exactly. Copy it, do not retype it.</p>
+
+  <h4>Lab — list every JNDI name</h4>
+  <p><strong>What to do.</strong> Use the WildFly CLI to list all registered JNDI names in the server:</p>
+  <pre><code>ls java:</code></pre>
+  <p><strong>Done looks like.</strong> A long printed tree of names, and inside it the data source you
+    just created.</p>
+  <p><strong>If you are stuck.</strong> You must be connected first — start the CLI with
+    <code>--connect</code>, and confirm the server is running.</p>
+
+  <h3>Session 4 · Working with Jakarta Enterprise Beans</h3>
+  <h4>Assignment — a transactional PaymentService</h4>
+  <p><strong>What to do.</strong> Build a <code>@Stateless</code> <code>PaymentService</code> EJB that
+    uses <strong>Container-Managed Transactions</strong>. Test that an exception causes a full rollback
+    using a two-phase operation (debit then credit), and simulate a failure <em>after</em> the debit.</p>
+  <p><strong>Done looks like.</strong> When the simulated failure fires, the debit is undone — the
+    balance is exactly what it was before the call.</p>
+  <p><strong>If you are stuck.</strong> Your simulated failure must be an <em>unchecked</em> exception
+    (a <code>RuntimeException</code>) if you want the rollback for free. A checked exception would commit
+    by default.</p>
+
+  <h4>Lab — secure one method</h4>
+  <p><strong>What to do.</strong> Add a security annotation (<code>@RolesAllowed</code>) to one method and
+    test it with, and without, the correct role.</p>
+  <p><strong>Done looks like.</strong> A caller with the role gets the result; a caller without it gets
+    access denied, and the method body never runs.</p>
+  <p><strong>If you are stuck.</strong> Role names are case-sensitive. If your store returns
+    <code>teller</code> and your annotation says <code>TELLER</code>, you will always be denied.</p>
+
+  <h3>Session 5 · Facelets in Jakarta EE</h3>
+  <h4>Assignment — a grade calculator with a master template</h4>
+  <p><strong>What to do.</strong> Build a student grade calculator JSF application using a
+    <strong>Facelets master template</strong> with a header, navigation and footer. The page must use one
+    <strong>composite component</strong> — for example a reusable <code>inputField</code> with a label and
+    validation error display.</p>
+  <p><strong>Done looks like.</strong> At least two pages that share the same header, navigation and
+    footer without repeating that markup, and a reusable field component used more than once.</p>
+  <p><strong>If you are stuck.</strong> The template uses <code>&lt;ui:insert name="content"&gt;</code> for
+    the hole; each child page uses <code>&lt;ui:define name="content"&gt;</code> to fill it.</p>
+
+  <h4>Lab — print the phases</h4>
+  <p><strong>What to do.</strong> Add a <code>PhaseListener</code> and print each phase name to the console
+    as the form processes a submission.</p>
+  <p><strong>Done looks like.</strong> Submitting the form prints the phase names in order; a validation
+    failure visibly skips from Phase 3 to Phase 6.</p>
+  <p><strong>If you are stuck.</strong> Register the listener in <code>faces-config.xml</code>, or the
+    container will never call it.</p>
+
+  <h3>Session 6 · Jakarta local and remote clients</h3>
+  <h4>Assignment — one bean, two doors</h4>
+  <p><strong>What to do.</strong> Create an EJB (<code>InventoryService</code>) with both a
+    <code>@Local</code> and a <code>@Remote</code> interface. Demonstrate local access from a JSF bean and
+    remote access from a standalone Java SE <code>main()</code> class using a JNDI lookup.</p>
+  <p><strong>Done looks like.</strong> The same service answering both callers — the JSF page locally, the
+    standalone program remotely — with the remote one using the <code>java:global</code> name.</p>
+  <p><strong>If you are stuck.</strong> The standalone client is a separate program on the same machine.
+    It needs the Jakarta EE client libraries on its classpath to look the remote bean up.</p>
+
+  <h4>Lab — send a POJO across the wire</h4>
+  <p><strong>What to do.</strong> Pass a <code>Serializable</code> POJO as a parameter to the remote call
+    and print it on both sides.</p>
+  <p><strong>Done looks like.</strong> The object arrives at the server and its contents print identically
+    on both sides.</p>
+  <p><strong>If you are stuck.</strong> If you get a serialization error, the POJO — and the classes it
+    holds — must all implement <code>Serializable</code>.</p>
+
+  <h3>Session 7 · Jakarta Messaging Services</h3>
+  <h4>Assignment — a point-to-point order pipeline</h4>
+  <p><strong>What to do.</strong> Build a JMS Point-to-Point order submission system. A JSF form collects
+    the order details, a producer sends an <code>ObjectMessage</code> to a queue, and an MDB processes and
+    prints the order details.</p>
+  <p><strong>Done looks like.</strong> Submitting the form causes the MDB to print the order — with the
+    sender not waiting around for it.</p>
+  <p><strong>If you are stuck.</strong> The queue must exist before you send to it. Create it in the Admin
+    Console or via the CLI, and give the MDB the exact same lookup name.</p>
+
+  <h4>Lab — fan out with a Topic</h4>
+  <p><strong>What to do.</strong> Switch from a Queue to a Topic. Subscribe two MDB classes to the same
+    topic, send one message, and verify that both MDBs process it.</p>
+  <p><strong>Done looks like.</strong> One send, two sets of processing lines in the log.</p>
+  <p><strong>If you are stuck.</strong> A Topic only reaches subscribers that were already active when
+    the message was published. Deploy the MDBs first, then send.</p>
+
+  <h3>Session 8 · Jakarta Connectors Architecture</h3>
+  <h4>Assignment — a pooled DAO</h4>
+  <p><strong>What to do.</strong> Configure a WildFly JDBC <code>DataSource</code> using the Admin
+    Console. Write a DAO class that uses the pooled <code>DataSource</code> to perform CRUD operations on
+    a <code>Product</code> table, and demonstrate that connections are returned to the pool after each
+    operation.</p>
+  <p><strong>Done looks like.</strong> Create, read, update and delete all work, and the pool's in-use
+    count returns to zero after each call.</p>
+  <p><strong>If you are stuck.</strong> Use try-with-resources — <code>try (Connection c = …) { … }</code>
+    — so the connection is closed automatically and handed back to the pool.</p>
+
+  <h4>Lab — draw the JCA architecture</h4>
+  <p><strong>What to do.</strong> Draw the JCA three-layer architecture — Application Layer, Resource
+    Adapter Layer, EIS Layer — and annotate it with the three system contracts.</p>
+  <p><strong>Done looks like.</strong> A labelled diagram with the Connection Management Contract,
+    Transaction Management Contract and Work Management Contract each pointing at the layer they connect.</p>
+  <p><strong>If you are stuck.</strong> Think of the resource adapter as a translator sitting between your
+    application and the foreign system, translating Jakarta EE's expectations into that system's own
+    language.</p>
+
+  <h3>Submission guidelines</h3>
+  <div class="callout callout--key"><span class="callout__i">✅</span>
+    <div class="callout__b"><b>What the marker expects</b>
+      <ul style="margin:.5rem 0 0">
+        <li>All code must <strong>compile and deploy to WildFly 30+ without errors</strong>.</li>
+        <li>Each submission must include a short write-up (<strong>maximum 200 words</strong>) explaining
+          what was observed — especially for the lifecycle and transaction tests.</li>
+        <li>Submit via the <strong>OnlineVarsity Work Assignments portal</strong> before the Week 3
+          deadline.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <p>These are about the work, not the theory. Answer in your head, then check.</p>
+    <ol>
+      <li>Which two assignments require you to <em>prove</em> that a change was undone? How is that proof
+        shown?</li>
+      <li>Which assignment asks for the same service to be reached two different ways, and what is the one
+        technical requirement that makes the remote half work?</li>
+      <li>What is the maximum length of the write-up attached to each submission, and where does it go?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Session 2's lifecycle test and, above all, Session 4's
+          <strong><code>PaymentService</code> rollback</strong> (and Session 8's pooled-connection test).
+          Proof comes from <em>reading the state back</em> — the balance or the pool count is unchanged
+          after the failure.</li>
+        <li>Session 6 — the <code>InventoryService</code> is called locally from a JSF bean and remotely
+          from a standalone Java SE program. The remote half requires every object passed to
+          <strong>implement <code>Serializable</code></strong>.</li>
+        <li>A maximum of <strong>200 words</strong>, submitted through the <strong>OnlineVarsity Work
+          Assignments portal</strong> before the Week 3 deadline.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — PRACTICAL LAB PROJECTS
+       ===================================================================== -->
+
+  <span class="eyebrow">practical lab</span>
+  <h2>Part 3 · The three practical lab projects</h2>
+
+  <p>Three end-to-end, multi-tier projects tie the whole block together. Each one is a small but complete
+    enterprise system, and each one tests a different cluster of concepts. Build them in order — they get
+    more demanding, and the third one assumes the second.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What you will have at the end</b>
+      Three projects deployed on your own WildFly: a banking core (beans plus transactions), a templated
+      web portal (Facelets plus a local EJB call), and an asynchronous audit trail (JMS plus a JCA data
+      source). All three write recognisable lines to <code>server.log</code>, so you can prove they
+      worked.</div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">📁</span>
+    <div class="callout__b"><b>About the database</b>
+      Lab 3 stores its audit rows in the H2 database WildFly already ships with —
+      <code>java:jboss/datasources/ExampleDS</code> — so there is nothing to install. The manual's version
+      uses a company data source, <code>java:/jdbc/GlobalBankDB</code>; the only change is that one lookup
+      line.</div>
+  </div>
+
+  <h3>Before you begin</h3>
+  <p>Three tools must already be installed. If any is missing, do <a href="01-setup.html">Set up your
+    workshop</a> first.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>What</th><th>Check it with</th><th>You want to see</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>JDK 17</td><td><code>java -version</code></td><td><code>openjdk version "17…"</code></td></tr>
+      <tr><td>2</td><td>Maven</td><td><code>mvn -v</code></td><td><code>Apache Maven 3.9…</code></td></tr>
+      <tr><td>3</td><td>WildFly 30+</td><td>the folder exists</td><td>an unzipped <code>wildfly-30…</code> folder</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>3.1 Lab Project 1 — Enterprise multi-tier banking core</h3>
+  <p><strong>Concepts tested:</strong> <code>@Stateful</code>, <code>@Stateless</code>,
+    <code>@Singleton</code>, <code>@Lock</code>, JNDI injection, CMT rollback.</p>
+
+  <p><strong>The scenario.</strong> A commercial bank needs a core transactional backend with three
+    distinct enterprise services:</p>
+  <ol>
+    <li><code>CurrencyRateCache</code> (<code>@Singleton</code>) — holds real-time exchange rates
+      (USD/EUR/GBP). It needs high-concurrency read access and an exclusive write lock for updates.</li>
+    <li><code>CustomerSessionBean</code> (<code>@Stateful</code>) — holds the logged-in customer's active
+      session, a cart of pending transfers, and a verification token.</li>
+    <li><code>TransferServiceBean</code> (<code>@Stateless</code>) — performs atomic debit and credit
+      operations under Container-Managed Transactions. It must roll back both accounts if either the
+      debit or the credit fails.</li>
+  </ol>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>This one project uses all three bean types <em>on purpose</em>, so you can feel the difference.
+      The rate cache is shared by everyone (singleton). The customer session belongs to one person
+      (stateful). The transfer service is a pooled worker anyone can call (stateless).</p>
+    <p><strong>Atomic</strong> means “all or nothing”: the pair of account updates is one indivisible
+      unit. A <code>@Lock(LockType.READ)</code> lets many readers in at once; a
+      <code>@Lock(LockType.WRITE)</code> locks the door so only one writer may change the map.</p>
+  </div>
+
+  <h4>Step 1 — the singleton currency cache</h4>
+  <div class="code-head">src/main/java/com/aptech/bank/service/CurrencyRateCache.java</div>
+  <pre><code>package com.aptech.bank.service;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.ejb.ConcurrencyManagement;
+import jakarta.ejb.ConcurrencyManagementType;
+import jakarta.ejb.Lock;
+import jakarta.ejb.LockType;
+import jakarta.ejb.Singleton;
+import jakarta.ejb.Startup;
+import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
+
+@Singleton
+@Startup
+@ConcurrencyManagement(ConcurrencyManagementType.CONTAINER)
+public class CurrencyRateCache {
+
+    private Map&lt;String, BigDecimal&gt; exchangeRates;
+
+    @PostConstruct
+    public void init() {
+        exchangeRates = new HashMap&lt;&gt;();
+        exchangeRates.put("USD_TO_EUR", new BigDecimal("0.92"));
+        exchangeRates.put("USD_TO_GBP", new BigDecimal("0.78"));
+        exchangeRates.put("USD_TO_NGN", new BigDecimal("1450.00"));
+        System.out.println("[CurrencyRateCache] Initialized currency rates in memory.");
+    }
+
+    @Lock(LockType.READ)
+    public BigDecimal getRate(String currencyPair) {
+        return exchangeRates.getOrDefault(currencyPair, BigDecimal.ONE);
+    }
+
+    @Lock(LockType.WRITE)
+    public void updateRate(String currencyPair, BigDecimal newRate) {
+        exchangeRates.put(currencyPair, newRate);
+        System.out.println("[CurrencyRateCache] Rate updated: " + currencyPair + " = " + newRate);
+    }
+}</code></pre>
+
+  <h4>Step 2 — the stateful customer session</h4>
+  <div class="code-head">src/main/java/com/aptech/bank/session/CustomerSessionBean.java</div>
+  <pre><code>package com.aptech.bank.session;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.ejb.Stateful;
+import jakarta.ejb.Remove;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+@Stateful
+public class CustomerSessionBean implements Serializable {
+
+    private String customerId;
+    private List&lt;String&gt; pendingTransferIds;
+
+    @PostConstruct
+    public void init() {
+        this.pendingTransferIds = new ArrayList&lt;&gt;();
+    }
+
+    public void login(String customerId) {
+        this.customerId = customerId;
+        System.out.println("[CustomerSession] Customer logged in: " + customerId);
+    }
+
+    public void queueTransfer(String transferId) {
+        pendingTransferIds.add(transferId);
+    }
+
+    public List&lt;String&gt; getPendingTransfers() {
+        return new ArrayList&lt;&gt;(pendingTransferIds);
+    }
+
+    @Remove
+    public void logout() {
+        System.out.println("[CustomerSession] Logging out customer: " + customerId);
+        pendingTransferIds.clear();
+    }
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Why <code>@Remove</code> matters</b>
+      A <code>@Stateful</code> bean lives until someone ends it. The <code>@Remove</code> annotation tells
+      the container “this method finishes the conversation — destroy the instance afterwards”. Without it
+      the bean would linger in memory after the customer has gone.</div>
+  </div>
+
+  <h4>Step 3 — the stateless transactional transfer service</h4>
+  <div class="code-head">src/main/java/com/aptech/bank/service/TransferServiceBean.java</div>
+  <pre><code>package com.aptech.bank.service;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.SessionContext;
+import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionAttribute;
+import jakarta.ejb.TransactionAttributeType;
+import java.math.BigDecimal;
+
+@Stateless
+public class TransferServiceBean {
+
+    @Resource
+    private SessionContext sessionContext;
+
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public void executeTransfer(String fromAccount, String toAccount, BigDecimal amount) {
+        System.out.println("[TransferService] Initiating transfer of " + amount + " from " + fromAccount + " to " + toAccount);
+
+        // Step 1: Debit source account
+        debitAccount(fromAccount, amount);
+
+        // Simulated validation check for demonstration
+        if (amount.compareTo(new BigDecimal("10000.00")) &gt; 0) {
+            System.err.println("[TransferService] Transaction exceeds limit! Forcing rollback.");
+            throw new IllegalArgumentException("Single transfer cannot exceed $10,000.00");
+        }
+
+        // Step 2: Credit target account
+        creditAccount(toAccount, amount);
+
+        System.out.println("[TransferService] Transfer completed successfully.");
+    }
+
+    private void debitAccount(String accountId, BigDecimal amount) {
+        System.out.println(" -&gt; Debited " + amount + " from " + accountId);
+    }
+
+    private void creditAccount(String accountId, BigDecimal amount) {
+        System.out.println(" -&gt; Credited " + amount + " to " + accountId);
+    }
+}</code></pre>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>The debit prints <em>before</em> the limit check. That ordering is deliberate: if the amount is over
+      $10,000, the debit has already “happened” when the <code>IllegalArgumentException</code> (an
+      unchecked exception) is thrown. Because the method is <code>REQUIRED</code>, the container rolls the
+      whole thing back — and the debit never really stands.</p>
+    <p><code>SessionContext</code> is your handle on the container. In a fuller version you would call
+      <code>sessionContext.setRollbackOnly()</code> to ask for a rollback yourself.</p>
+  </div>
+
+  <h4>Step 4 — build, deploy and verify</h4>
+  <ol class="steps">
+    <li>
+      <h4>Start WildFly and build</h4>
+      <p>Start the server in one terminal, then build in a second terminal from the folder holding
+        <code>pom.xml</code>:</p>
+      <pre><code>standalone.bat          REM  Windows
+./standalone.sh         #    macOS / Linux</code></pre>
+      <pre><code>mvn clean package</code></pre>
+      <p><strong>You should see</strong> <code>BUILD SUCCESS</code> and a new
+        <code>target/aptech-bank.war</code>.</p>
+    </li>
+    <li>
+      <h4>Deploy by copying the file</h4>
+      <p>WildFly watches its <code>deployments</code> folder. Copy the war in and the server deploys it
+        for you:</p>
+      <pre><code>copy target\aptech-bank.war  C:\wildfly\standalone\deployments\      REM  Windows
+cp   target/aptech-bank.war  ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> in the server window:</p>
+      <pre><code>[CurrencyRateCache] Initialized currency rates in memory.
+Deployed "aptech-bank.war"</code></pre>
+      <p>The first line is the <code>@Startup</code> singleton running. <strong>If it is missing, the
+        singleton never started</strong> — check the annotation and redeploy.</p>
+    </li>
+    <li>
+      <h4>Drive the beans and watch the log</h4>
+      <p>Call each service from a small servlet or a test client — login a customer, queue a transfer,
+        then execute a normal transfer and an over-limit one.</p>
+      <p><strong>You should see</strong>, for the good transfer, the debit and the credit; and for the
+        over-limit one, the debit printed <em>followed by</em> <code>Transaction exceeds limit! Forcing
+        rollback.</code> The absence of <code>Transfer completed successfully.</code> on the second call
+        is your proof the transaction was rolled back.</p>
+    </li>
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 3a · Lab 1</b>
+    <p>Answer before moving to Lab 2.</p>
+    <ol>
+      <li>Why is the currency cache a <code>@Singleton</code> rather than a <code>@Stateless</code> bean?</li>
+      <li>Which annotation on the transfer method starts the transaction, and which attribute type does it
+        use?</li>
+      <li>The over-limit transfer prints the debit line but does not print the success line. What does that
+        tell you?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because there must be <strong>one shared copy</strong> of the rates for everybody. A
+          <code>@Stateless</code> bean is pooled, so each pooled instance would have its own map and the
+          rates would not be consistent.</li>
+        <li><code>@TransactionAttribute(TransactionAttributeType.REQUIRED)</code> — <code>REQUIRED</code>
+          joins an existing transaction or starts a new one.</li>
+        <li>The debit ran, then the limit check threw an unchecked exception, so the container
+          <strong>rolled the whole transaction back</strong>. The absence of the success line shows the
+          method never reached its normal end.</li>
+      </ol>
+    </details>
+  </div>
+
+  <h3>3.2 Lab Project 2 — Facelets templated portal with EJB integration</h3>
+  <p><strong>Concepts tested:</strong> Facelets master template, composite components,
+    <code>@Local</code> EJB integration.</p>
+
+  <p><strong>The structure.</strong> Create these files under <code>src/main/webapp/</code>:</p>
+  <pre><code>src/main/webapp/
+├── templates/
+│   └── masterLayout.xhtml     # Master layout (&lt;ui:insert name="content"&gt;)
+├── resources/
+│   └── components/
+│       └── balanceWidget.xhtml # Composite Component
+└── portal.xhtml               # Child view (&lt;ui:composition&gt;)</code></pre>
+
+  <h4>Step 1 — the master template</h4>
+  <div class="code-head">src/main/webapp/templates/masterLayout.xhtml</div>
+  <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"
+      xmlns:ui="jakarta.faces.facelets"&gt;
+&lt;h:head&gt;
+    &lt;title&gt;&lt;ui:insert name="title"&gt;Enterprise Banking Portal&lt;/ui:insert&gt;&lt;/title&gt;
+    &lt;h:outputStylesheet name="css/portal.css" /&gt;
+&lt;/h:head&gt;
+&lt;h:body&gt;
+    &lt;header class="portal-header"&gt;
+        &lt;h2&gt;Enterprise Commercial Bank&lt;/h2&gt;
+        &lt;nav&gt;
+            &lt;a href="portal.xhtml"&gt;Home&lt;/a&gt; | &lt;a href="transfers.xhtml"&gt;Transfers&lt;/a&gt;
+        &lt;/nav&gt;
+    &lt;/header&gt;
+
+    &lt;main class="portal-content"&gt;
+        &lt;ui:insert name="content"&gt;Default content placeholder&lt;/ui:insert&gt;
+    &lt;/main&gt;
+
+    &lt;footer class="portal-footer"&gt;
+        &lt;p&gt;&amp;copy; 2026 Aptech Jakarta EE Module. Secure Enterprise Banking.&lt;/p&gt;
+    &lt;/footer&gt;
+&lt;/h:body&gt;
+&lt;/html&gt;</code></pre>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>master template</strong> is a picture frame with holes cut in it. The frame — header,
+      navigation and footer — is written <em>once</em>, here. The holes are the
+      <code>&lt;ui:insert&gt;</code> tags. Every child page supplies only the contents of its hole, via
+      <code>&lt;ui:define&gt;</code>, so no page ever repeats the frame.</p>
+  </div>
+
+  <h4>Step 2 — the composite component</h4>
+  <div class="code-head">src/main/webapp/resources/components/balanceWidget.xhtml</div>
+  <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:cc="jakarta.faces.composite"
+      xmlns:h="jakarta.faces.html"&gt;
+&lt;cc:interface&gt;
+    &lt;cc:attribute name="accountNumber" required="true" /&gt;
+    &lt;cc:attribute name="balance" required="true" /&gt;
+    &lt;cc:attribute name="currency" default="USD" /&gt;
+&lt;/cc:interface&gt;
+
+&lt;cc:implementation&gt;
+    &lt;div class="balance-card"&gt;
+        &lt;span class="acc-num"&gt;Account: #{cc.attrs.accountNumber}&lt;/span&gt;
+        &lt;h3 class="acc-bal"&gt;#{cc.attrs.currency} #{cc.attrs.balance}&lt;/h3&gt;
+    &lt;/div&gt;
+&lt;/cc:implementation&gt;
+&lt;/html&gt;</code></pre>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>composite component</strong> is a reusable widget you build once and drop in anywhere. The
+      <code>&lt;cc:interface&gt;</code> block declares its knobs — the attributes callers must set — and
+      the <code>&lt;cc:implementation&gt;</code> block is its body. Inside the body, <code>cc.attrs</code>
+      reads whatever the caller passed in. Because the file lives in
+      <code>resources/components/</code>, you can use it as
+      <code>&lt;components:balanceWidget … /&gt;</code>.</p>
+  </div>
+
+  <h4>Step 3 — build and verify</h4>
+  <ol class="steps">
+    <li>
+      <h4>Write <code>portal.xhtml</code> as a child page</h4>
+      <p>Start it with <code>&lt;ui:composition template="/templates/masterLayout.xhtml"&gt;</code> and
+        fill the <code>content</code> region with a <code>&lt;ui:define name="content"&gt;</code> that
+        uses your <code>balanceWidget</code> twice with different attributes.</p>
+      <p><strong>You should see</strong> the header, navigation and footer appear on the page without you
+        having written them in <code>portal.xhtml</code>.</p>
+    </li>
+    <li>
+      <h4>Call the local EJB from the page</h4>
+      <p>Inject your <code>@Local</code> service into a JSF backing bean with <code>@EJB</code> (or
+        <code>@Inject</code>) and bind its value to the widget with an EL expression such as
+        <code>#{portalBean.balance}</code>.</p>
+      <p><strong>You should see</strong> real numbers from the bean on the page — proving the local call
+        worked with no network involved.</p>
+    </li>
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 3b · Lab 2</b>
+    <ol>
+      <li>What is the difference between <code>&lt;ui:insert&gt;</code> and <code>&lt;ui:define&gt;</code>?</li>
+      <li>What does the <code>&lt;cc:interface&gt;</code> block declare, and what does
+        <code>cc.attrs</code> give you?</li>
+      <li>Why is the portal's call to the service bean a <code>@Local</code> call, and what does that mean
+        for the objects passed?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>&lt;ui:insert&gt;</code> lives in the <strong>master template</strong> and declares a
+          placeholder. <code>&lt;ui:define&gt;</code> lives in the <strong>child page</strong> and supplies
+          the markup for that placeholder.</li>
+        <li>The interface block declares the component's <strong>attributes</strong> — the knobs a caller
+          must or may set. <code>#{cc.attrs.name}</code> reads the value the caller passed for that
+          attribute.</li>
+        <li>Both the JSF page and the EJB run inside the <strong>same JVM</strong>, so it is a
+          pass-by-reference call with no serialization required.</li>
+      </ol>
+    </details>
+  </div>
+
+  <h3>3.3 Lab Project 3 — Asynchronous JMS auditing with a JCA data source</h3>
+  <p><strong>Concepts tested:</strong> JMS 3.0 Queue, Message-Driven Bean (<code>@MessageDriven</code>),
+    JDBC data source via JCA.</p>
+
+  <p><strong>The scenario.</strong> Every important action in the bank should be written to an audit
+    trail — but the customer should never wait for that writing. So the action is turned into a message
+    and posted to a queue, and a separate listener stores it later.</p>
+
+  <h4>Step 1 — the JMS audit producer</h4>
+  <div class="code-head">src/main/java/com/aptech/audit/AuditMessageProducer.java</div>
+  <pre><code>package com.aptech.audit;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.Stateless;
+import jakarta.inject.Inject;
+import jakarta.jms.JMSContext;
+import jakarta.jms.Queue;
+
+@Stateless
+public class AuditMessageProducer {
+
+    @Resource(lookup = "java:/jms/queue/AuditQueue")
+    private Queue auditQueue;
+
+    @Inject
+    private JMSContext jmsContext;
+
+    public void sendAuditLog(String action, String user, String ipAddress) {
+        String payload = String.format("ACTION=%s;USER=%s;IP=%s;TIMESTAMP=%d", action, user, ipAddress, System.currentTimeMillis());
+        jmsContext.createProducer().send(auditQueue, payload);
+        System.out.println("[AuditProducer] Sent audit message: " + payload);
+    }
+}</code></pre>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>JMSContext</code>, injected with <code>@Inject</code>, is your connection to the messaging
+      system. <code>createProducer().send(queue, payload)</code> drops the message onto the queue and
+      returns immediately — the producer does not sit and wait for anyone to pick it up. That is the
+      asynchronous part.</p>
+  </div>
+
+  <h4>Step 2 — the message-driven bean that stores the log</h4>
+  <div class="code-head">src/main/java/com/aptech/audit/AuditLogConsumerMDB.java</div>
+  <pre><code>package com.aptech.audit;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.ActivationConfigProperty;
+import jakarta.ejb.MessageDriven;
+import jakarta.jms.JMSException;
+import jakarta.jms.Message;
+import jakarta.jms.MessageListener;
+import jakarta.jms.TextMessage;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+@MessageDriven(activationConfig = {
+    @ActivationConfigProperty(propertyName = "destinationLookup", propertyValue = "java:/jms/queue/AuditQueue"),
+    @ActivationConfigProperty(propertyName = "destinationType", propertyValue = "jakarta.jms.Queue"),
+    @ActivationConfigProperty(propertyName = "acknowledgeMode", propertyValue = "Auto-acknowledge")
+})
+public class AuditLogConsumerMDB implements MessageListener {
+
+    @Resource(lookup = "java:jboss/datasources/ExampleDS")
+    private DataSource dataSource;
+
+    @Override
+    public void onMessage(Message message) {
+        if (message instanceof TextMessage) {
+            try {
+                String payload = ((TextMessage) message).getText();
+                System.out.println("[AuditMDB] Received async log: " + payload);
+                persistToDatabase(payload);
+            } catch (JMSException e) {
+                System.err.println("[AuditMDB] JMS error: " + e.getMessage());
+            }
+        }
+    }
+
+    private void persistToDatabase(String logEntry) {
+        String sql = "INSERT INTO audit_logs (log_entry, created_at) VALUES (?, CURRENT_TIMESTAMP)";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, logEntry);
+            ps.executeUpdate();
+            System.out.println("[AuditMDB] Successfully stored log in database using JCA pool.");
+        } catch (SQLException e) {
+            System.err.println("[AuditMDB] SQL error persisting log: " + e.getMessage());
+        }
+    }
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Reading the three activation properties</b>
+      <code>destinationLookup</code> says <em>which queue to listen to</em> — it must match the producer's
+      lookup exactly. <code>destinationType</code> says <em>what kind of destination it is</em> (a queue,
+      not a topic). <code>acknowledgeMode</code> set to <code>Auto-acknowledge</code> says <em>tell the
+      messaging system the message is done as soon as it is handled</em>. There is no client interface
+      here — nobody calls an MDB; the container calls it when a message arrives.</div>
+  </div>
+
+  <h4>Step 3 — build, deploy and verify</h4>
+  <ol class="steps">
+    <li>
+      <h4>Create the queue and a table</h4>
+      <p>Create <code>java:/jms/queue/AuditQueue</code> in the Admin Console (or with the CLI), and make
+        sure an <code>audit_logs</code> table exists in the example database with
+        <code>log_entry</code> and <code>created_at</code> columns.</p>
+      <p><strong>You should see</strong> the queue listed in the console. If the queue is missing, the
+        producer will fail the moment it tries to send.</p>
+    </li>
+    <li>
+      <h4>Deploy and trigger an audit</h4>
+      <p>Build and copy the war into <code>deployments/</code>, then call the producer — for example log a
+        login for <code>CUST-88310</code>.</p>
+      <p><strong>You should see</strong> both the producer line and the MDB lines in the server log. When
+        you deploy and test all three projects together, your <code>server.log</code> should look like
+        this:</p>
+      <pre><code>[CurrencyRateCache] Initialized currency rates in memory.
+[CustomerSession] Customer logged in: CUST-88310
+[TransferService] Initiating transfer of 250.00 from ACC-101 to ACC-102
+ -&gt; Debited 250.00 from ACC-101
+ -&gt; Credited 250.00 to ACC-102
+[TransferService] Transfer completed successfully.
+[AuditProducer] Sent audit message: ACTION=LOGIN;USER=CUST-88310;IP=192.168.1.15;TIMESTAMP=1727958100000
+[AuditMDB] Received async log: ACTION=LOGIN;USER=CUST-88310;IP=192.168.1.15;TIMESTAMP=1727958100000
+[AuditMDB] Successfully stored log in database using JCA pool.</code></pre>
+    </li>
+    <li>
+      <h4>Watch the whole flow replay</h4>
+      <p>Press <strong>Run</strong> to see the same nine log lines arrive one at a time — the full
+        journey from the in-memory rate cache, through the transactional transfer, out to the message
+        queue, and finally into the database through the JCA pool.</p>
+
+      <div class="bench" data-run="canned">
+        <div class="bench__head">
+          <span class="dot"></span>
+          <span class="kind">interactive simulation</span>
+          <span class="mode">Self-Study Block 1 — Three Projects Startup Replay</span>
+        </div>
+        <pre class="bench__code"><code>// Deploying aptech-bank.war (Lab 1) and audit-service.war (Lab 3)
+// Lab 1: @Startup singleton seeds rates; @Stateful logs in; @Stateless transfers.
+// Lab 3: producer posts to java:/jms/queue/AuditQueue;
+//         @MessageDriven consumer stores the row via the ExampleDS pool.</code></pre>
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Run the three projects</button>
+          <span class="bench__hint">Replays the expected WildFly server.log output for all three lab projects.</span>
+        </div>
+        <script type="text/plain" class="bench__canned">
+[CurrencyRateCache] Initialized currency rates in memory.
+[CustomerSession] Customer logged in: CUST-88310
+[TransferService] Initiating transfer of 250.00 from ACC-101 to ACC-102
+ -> Debited 250.00 from ACC-101
+ -> Credited 250.00 to ACC-102
+[TransferService] Transfer completed successfully.
+[AuditProducer] Sent audit message: ACTION=LOGIN;USER=CUST-88310;IP=192.168.1.15;TIMESTAMP=1727958100000
+[AuditMDB] Received async log: ACTION=LOGIN;USER=CUST-88310;IP=192.168.1.15;TIMESTAMP=1727958100000
+[AuditMDB] Successfully stored log in database using JCA pool.
+        </script>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+
+      <p><strong>You should see</strong> the nine lines appear in order. Read them as the story of the
+        block: the singleton caches rates → the stateful bean remembers the customer → the stateless bean
+        moves the money inside a transaction → the producer hands a message to the queue → the MDB picks
+        it up later and writes it through the pooled data source.</p>
+    </li>
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 3c · Lab 3, before the quiz</b>
+    <ol>
+      <li>Why does the customer not have to wait while the audit row is written?</li>
+      <li>Which two lines in the expected log prove the message travelled asynchronously through the
+        queue?</li>
+      <li>How does the MDB get its database connection, and what returns it to the pool?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because the producer only <strong>posts the message and returns</strong>. The MDB consumes it
+          in a separate, asynchronous step, so the customer's request finishes without waiting.</li>
+        <li><code>[AuditProducer] Sent audit message: …</code> and
+          <code>[AuditMDB] Received async log: …</code> — a send and a later, separate receive.</li>
+        <li>It is injected with <code>@Resource(lookup = "java:jboss/datasources/ExampleDS")</code>. The
+          <code>try (Connection conn = …)</code> block closes it automatically, handing it back to the JCA
+          pool.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Self-Study Block 1 Assessment (Sessions 1 to 8)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "Why must you never keep client-specific data in the instance fields of a @Stateless bean?",
+        "opts": [
+          "The container serialises every field to disk on each call",
+          "The bean is pooled, so the same instance is handed to other callers and one client's data leaks into another's request",
+          "Instance fields are not allowed in EJB classes at all",
+          "Stateless beans are destroyed after every single method call"
+        ],
+        "a": 1,
+        "why": "A @Stateless bean is pooled and unbound to any client. The container returns the instance to the pool and may give it to someone else, so instance fields leak data between callers."
+      },
+      {
+        "q": "A method is annotated @TransactionAttribute(TransactionAttributeType.REQUIRES_NEW) and the caller already has a transaction. What happens?",
+        "opts": [
+          "The method simply joins the caller's transaction",
+          "The caller's transaction is suspended and a brand-new independent transaction is started",
+          "The call fails immediately with TransactionRequiredException",
+          "The caller's transaction is committed first and then reopened"
+        ],
+        "a": 1,
+        "why": "REQUIRES_NEW suspends the caller's transaction and opens a separate one, so the new work can commit or roll back on its own."
+      },
+      {
+        "q": "Which portable JNDI namespace is visible only inside the same .war or .jar archive?",
+        "opts": [
+          "java:global",
+          "java:app",
+          "java:module",
+          "java:comp"
+        ],
+        "a": 2,
+        "why": "java:module is scoped to a single module (one .war or one .jar). java:app spans an EAR's modules, java:global spans the whole server, and java:comp is private to one component."
+      },
+      {
+        "q": "During the JSF request lifecycle, which phase runs the validators, and where does JSF jump if validation fails?",
+        "opts": [
+          "Phase 1 (Restore View); it jumps to Phase 5",
+          "Phase 3 (Process Validations); it jumps straight to Phase 6 (Render Response)",
+          "Phase 4 (Update Model Values); it jumps back to Phase 1",
+          "Phase 5 (Invoke Application); it jumps to Phase 2"
+        ],
+        "a": 1,
+        "why": "Phase 3 runs all validators. If any constraint fails, JSF skips the remaining phases and goes directly to Phase 6, Render Response, so the page is redisplayed with error messages."
+      },
+      {
+        "q": "What is the core difference between a JMS Queue and a JMS Topic?",
+        "opts": [
+          "A Queue is asynchronous and a Topic is synchronous",
+          "Exactly one consumer processes each Queue message, while every active subscriber receives a copy of each Topic message",
+          "A Topic can only be used by MDBs, a Queue only by stateless beans",
+          "A Queue stores messages and a Topic does not store anything"
+        ],
+        "a": 1,
+        "why": "Point-to-point (Queue) delivers each message to exactly one consumer; publish/subscribe (Topic) delivers a copy to every active subscriber."
+      }
+    ]
+    </script>
+  </section>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP, COMMON MISTAKES, WHERE NEXT
+       ===================================================================== -->
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Bean types</strong></td><td><code>@Stateless</code> is pooled and stateless; <code>@Stateful</code> is one-per-client; <code>@Singleton</code> is one shared instance guarded by <code>@Lock</code>.</td></tr>
+    <tr><td><strong>JNDI reach</strong></td><td><code>java:global</code> &gt; <code>java:app</code> &gt; <code>java:module</code> &gt; <code>java:comp</code>.</td></tr>
+    <tr><td><strong>CMT propagation</strong></td><td><code>REQUIRED</code> joins or starts; <code>REQUIRES_NEW</code> suspends and starts fresh; <code>MANDATORY</code> demands one already.</td></tr>
+    <tr><td><strong>Rollback rule</strong></td><td>Unchecked exceptions roll back; checked application exceptions commit unless flagged <code>rollback = true</code>.</td></tr>
+    <tr><td><strong>JSF lifecycle</strong></td><td>Six phases; validation is Phase 3, and a failure jumps to Phase 6.</td></tr>
+    <tr><td><strong>Local vs remote</strong></td><td>Local is pass-by-reference in one JVM; remote is pass-by-value and needs <code>Serializable</code>.</td></tr>
+    <tr><td><strong>Messaging</strong></td><td>Queue delivers to exactly one consumer; Topic delivers to every active subscriber.</td></tr>
+    <tr><td><strong>JCA contracts</strong></td><td>Connection Management (pooling), Transaction Management (two-phase commit), Work Management (thread scheduling).</td></tr>
+  </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Storing client-specific data in a <code>@Stateless</code> bean's fields</td>
+        <td>Keep it in parameters or local variables. The pooled instance is shared between callers, so fields leak data.</td>
+      </tr>
+      <tr>
+        <td>Making a login counter or cache a <code>@Stateful</code> bean</td>
+        <td>Use <code>@Singleton</code>. State that must be shared belongs in the one shared instance, guarded by <code>@Lock</code>.</td>
+      </tr>
+      <tr>
+        <td>Expecting a checked exception to roll back the transaction</td>
+        <td>Checked application exceptions <strong>commit</strong> by default. Add <code>@ApplicationException(rollback = true)</code> or call <code>ctx.setRollbackOnly()</code>.</td>
+      </tr>
+      <tr>
+        <td>Passing a non-serializable object to a <code>@Remote</code> method</td>
+        <td>Every object that crosses the network must <code>implements Serializable</code>, because remote calls pass values by copy.</td>
+      </tr>
+      <tr>
+        <td>Retyping a JNDI name by hand</td>
+        <td>Copy it exactly from the Admin Console or the CLI (<code>ls java:</code>). A typo produces a “not bound” error that is hard to spot.</td>
+      </tr>
+      <tr>
+        <td>Sending to a Queue or Topic that was never created</td>
+        <td>Create the destination first and give the producer and the MDB the identical lookup name.</td>
+      </tr>
+      <tr>
+        <td>Expecting a Topic to reach a subscriber that was not active at send time</td>
+        <td>Deploy (start) every subscriber before publishing. A Topic reaches only subscribers that are listening when the message is sent.</td>
+      </tr>
+      <tr>
+        <td>Forgetting <code>@Remove</code> on the logout method of a <code>@Stateful</code> bean</td>
+        <td>Annotate the end-of-conversation method with <code>@Remove</code>, or the container keeps the instance alive in memory.</td>
+      </tr>
+      <tr>
+        <td>Leaving database connections to be cleaned up by hand</td>
+        <td>Use try-with-resources — <code>try (Connection c = …) { … }</code> — so the connection is returned to the JCA pool automatically.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where to go next</h2>
+  <p>Everything in this block turns up again in the rest of the course. Use these pages when you want the
+    full lesson behind a revision point:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this block</th><th>Go deeper in</th></tr></thead>
+    <tbody>
+      <tr><td>Bean types, lifecycle and your first deployable bean</td><td><a href="session-01-02-intro-and-beans.html">Sessions 1 &amp; 2 — Introduction and Beans</a></td></tr>
+      <tr><td>Working with EJB beans, CMT and security on a method</td><td><a href="session-04-tiy.html">Session 4 — Try It Yourself lab</a></td></tr>
+      <tr><td>JMS messaging, queues, topics and MDBs</td><td><a href="session-07-tiy.html">Session 7 — Try It Yourself lab</a></td></tr>
+      <tr><td>JCA, connection pooling and data sources</td><td><a href="session-08-tiy.html">Session 8 — Try It Yourself lab</a></td></tr>
+      <tr><td>A complete, guided multi-tier build to practise with</td><td><a href="practical-01-core.html">Practical 1 — Build the Core (GlobalBank)</a></td></tr>
+      <tr><td>Any term from this block that you need defined quickly</td><td><a href="glossary.html">Glossary</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>Further study</h2>
+    <p>When you want the official wording behind a revision point, these two specifications are where the
+      exam and the textbook get their language:</p>
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official guides &amp; specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/enterprise-beans/" target="_blank" rel="noopener">Jakarta Enterprise Beans Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/connectors/" target="_blank" rel="noopener">Jakarta Connectors (JCA) Specification</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly Documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

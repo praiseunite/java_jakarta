@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<!-- ==========================================================================
+     login-error.xhtml — the page named by @LoginToContinue(errorPage = …).
+
+     Be clear about what this page is and is not, because it is easy to assume it
+     does more than it does.
+
+     It is the page the CONTAINER sends a visitor to when the container's own
+     authentication flow fails. With a custom form mechanism that flow is mostly
+     driven by our own LoginBean, which handles a wrong password itself and never
+     hands control back — so in normal use you will not see this page. It exists
+     because @LoginToContinue declares errorPage, and a declared page that is
+     missing is a deployment problem waiting to happen.
+
+     It is NOT a place to put detail. Every sentence here is read by someone who
+     may or may not be who they claim to be, so it says nothing about whether the
+     user name exists, nothing about the password, and nothing about why.
+     ========================================================================== -->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html">
+
+<h:head>
+    <title>GlobalBank — sign in failed</title>
+    <style>
+        body { font-family: system-ui, Segoe UI, Arial, sans-serif;
+               margin: 0 auto; max-width: 30rem; padding: 4rem 1.5rem; color: #1c2530; }
+        h1   { margin-bottom: .5rem; }
+        p    { color: #3a4553; line-height: 1.5; }
+        a    { color: #1f5f9e; }
+    </style>
+</h:head>
+
+<h:body>
+
+    <h1>Sign-in failed</h1>
+
+    <p>
+        GlobalBank could not sign you in. Check your user name and password and
+        try again.
+    </p>
+
+    <p>
+        <!-- A plain link, not h:link. h:link would try to resolve a JSF view
+             outcome, and this page's only job is to get the visitor back to a
+             form — an ordinary anchor does that with less machinery. -->
+        <a href="login.xhtml">Back to the sign-in page</a>
+    </p>
+
+</h:body>
+</html>

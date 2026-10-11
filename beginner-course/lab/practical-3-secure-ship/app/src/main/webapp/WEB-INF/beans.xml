@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     beans.xml — the marker file that says "CDI, look in this archive".
+
+     Nothing in Practical 1 strictly needs it: our beans are enterprise beans,
+     and those are discovered with or without this file. It is here because
+     Practicals 2 and 3 are built on CDI, and because an empty beans.xml is the
+     most common file in every Jakarta EE project. No harm, no cost.
+
+     ========================================================================
+     PRACTICAL 3: note what is NOT in this file.
+
+     The application has an interceptor (BankAuditInterceptor), and the version
+     of CDI most tutorials were written against required it to be listed here:
+
+         <interceptors>
+             <class>com.globalbank.interceptors.BankAuditInterceptor</class>
+         </interceptors>
+
+     It is not listed, because it does not need to be. Since CDI 1.1 an
+     interceptor annotated @Priority is enabled for the whole application with no
+     XML at all, and that is the route this project takes — there is no file to
+     forget to update, and no way for the annotation and the XML to disagree.
+
+     The XML form is still worth recognising when you meet it in somebody else's
+     project, and worth using when you want to switch an interceptor on and off
+     per deployment without recompiling. The rule of thumb:
+
+         listed here  -> someone can turn it off by editing this file
+         @Priority    -> it is simply on
+
+     ========================================================================
+
+     bean-discovery-mode="all" means "treat every class as a candidate bean".
+     A one-line file is perfectly valid — the version and schema attributes are
+     the only required content.
+     ========================================================================== -->
+<beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="all">
+</beans>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<!-- ==========================================================================
+     login.xhtml — the bank's front door, and the only page in this project a
+     logged-out visitor is allowed to see.
+
+     It is deliberately in the SAME style as accounts.xhtml: plain JSF tags, an
+     inline <style>, no theme, nothing to distract. If you can read one of these
+     pages you can read all of them.
+
+     The three things that matter here:
+
+       #{login.username}   -> LoginBean.username    (bound two ways)
+       #{login.password}   -> LoginBean.password
+       #{login.login}      -> LoginBean.login()     (the action)
+
+     The third one is the one to notice. That method is where
+     SecurityContext.authenticate() is called. Delete it and this form becomes a
+     very convincing page that logs nobody in.
+     ========================================================================== -->
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html">
+
+<h:head>
+    <title>GlobalBank — sign in</title>
+    <style>
+        body   { font-family: system-ui, Segoe UI, Arial, sans-serif;
+                 margin: 0 auto; max-width: 26rem; padding: 3rem 1.5rem; color: #1c2530; }
+        h1     { margin-bottom: .25rem; }
+        .lede  { color: #55606e; margin-top: 0; margin-bottom: 2rem; }
+        table  { border-collapse: collapse; width: 100%; }
+        td     { padding: .35rem 0; vertical-align: top; }
+        label  { display: inline-block; padding-top: .4rem; font-size: .95rem; }
+        input[type=text], input[type=password] {
+                 width: 100%; box-sizing: border-box; padding: .45rem .5rem;
+                 border: 1px solid #c3ccd7; border-radius: 4px; font-size: 1rem; }
+        input[type=submit] { margin-top: 1rem; padding: .55rem 1.1rem; font-size: 1rem;
+                 border: 1px solid #1f5f9e; border-radius: 4px;
+                 background: #1f5f9e; color: #fff; cursor: pointer; }
+        .refused { color: #a52020; font-weight: 600; margin: 1rem 0 0; }
+        .demo  { margin-top: 2.5rem; padding: .8rem 1rem; border-radius: 4px;
+                 background: #f4f6f9; border-left: 4px solid #1f5f9e;
+                 font-size: .9rem; color: #3a4553; }
+        .demo code { background: #e7ecf2; padding: .1rem .3rem; border-radius: 3px; }
+    </style>
+</h:head>
+
+<h:body>
+
+    <h1>GlobalBank</h1>
+    <p class="lede">Sign in to move money.</p>
+
+    <h:form>
+        <table>
+            <tr>
+                <td style="width:8rem"><label for="username">User name</label></td>
+                <td>
+                    <!-- autocomplete="username" is a hint to the browser's password
+                         manager. Small, and the difference between a form people
+                         use and a form people retype. -->
+                    <h:inputText id="username" value="#{login.username}"
+                                 autocomplete="username"/>
+                </td>
+            </tr>
+            <tr>
+                <td><label for="password">Password</label></td>
+                <td>
+                    <!-- h:inputSecret, not h:inputText. It renders as
+                         type="password" so the characters are not shown on screen,
+                         and it does not echo the value back into the HTML the way
+                         an ordinary text field does. -->
+                    <h:inputSecret id="password" value="#{login.password}"
+                                   autocomplete="current-password" redisplay="false"/>
+                </td>
+            </tr>
+        </table>
+
+        <h:commandButton value="Sign in" action="#{login.login}"/>
+
+        <!-- Rendered only once LoginBean has something to say, which is only
+             after a failed attempt. -->
+        <h:panelGroup rendered="#{not empty login.message}">
+            <p class="refused"><h:outputText value="#{login.message}"/></p>
+        </h:panelGroup>
+    </h:form>
+
+    <div class="demo">
+        <strong>The two demo users.</strong> They are created by
+        <code>UserInitializer</code> when the application deploys, with their
+        passwords hashed at that moment.<br/>
+        Customer: <code>ada@globalbank.test</code> / <code>secret</code><br/>
+        Manager: <code>manager@globalbank.test</code> / <code>manager</code>
+    </div>
+
+</h:body>
+</html>

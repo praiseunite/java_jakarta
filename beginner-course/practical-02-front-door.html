@@ -1,0 +1,1401 @@
+<title>Practical 2 — The Front Door (GlobalBank)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Practical 2 of the GlobalBank practicum: give the bank a Facelets web page, a queue that works in the background, bean validation on the form, an audit log that survives a rolled-back transfer, and a standalone remote client — on WildFly.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "p2";</script>
+
+<main class="page">
+
+  <h1>Practical 2 · The Front Door</h1>
+  <p class="lede">Practical 1 built a bank that only a URL could reach. This one gives it a
+    <strong>page a person can use</strong> — and then adds the four things that only start to matter once
+    something outside your application is talking to it: a program on your laptop that calls the beans
+    directly, a queue that does work while nobody is waiting, a form that checks itself before the bank
+    ever sees it, and an audit log that <em>survives a rollback</em>. That last one is the single most
+    surprising thing in the course, and by the end of Part 4 you will have watched it happen.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>Nothing from Practical 1 is thrown away.</strong> Same entities, same
+          <code>AccountService</code>, same database, same three seeded accounts. This project is the last
+          one plus more files.</li>
+        <li><strong>There is still nothing to install.</strong> No database, no message broker. WildFly
+          ships both an in-memory database and Artemis, its message broker, and this project is configured
+          to use them.</li>
+        <li><strong>The queue creates itself.</strong> Messaging normally begins with an administrator
+          running a command to make a queue. You will not run one — the queue is declared in the Java
+          code, and the container builds it at deploy time.</li>
+        <li><strong>You will see a rule break, and then understand why it exists.</strong> You will watch
+          an audit line outlive the transaction that wrote it, and then switch the rule off and watch it
+          vanish.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Six concrete things, not a list copied from a manual:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Explain how a Facelet page finds a Java object by name, with no lookup and no <code>new</code></td><td>Part 1 &amp; 3</td></tr>
+      <tr><td>Build and deploy a war that contains a web page, and explain why it needs a <code>web.xml</code> when Practical 1 did not</td><td>Part 2</td></tr>
+      <tr><td>Say why an audit line about a <em>refused</em> transfer is still in the database after the transfer was rolled back</td><td>Part 4</td></tr>
+      <tr><td>Put work on a queue and explain who runs it, on what thread, and at what moment</td><td>Part 5</td></tr>
+      <tr><td>Call a bean from a plain Java program in another process, and say what had to be true for that to work</td><td>Part 6</td></tr>
+      <tr><td>Explain why a message-driven bean must not let a refusal escape as an exception</td><td>Part 5 &amp; 7</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// lab</code> — a numbered step with something to type and something to check.</li>
+        <li><code>// terminal</code> — a fake shell. Type the commands yourself and see realistic output,
+          with no server and no risk.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch a real deployment replay.</li>
+        <li><code>// checkpoint</code> — a self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      If you have not set up Java, Maven and WildFly yet, do
+      <a href="01-setup.html">Set up your workshop</a> first. And do
+      <a href="practical-01-core.html">Practical 1</a> before this one — this project starts from its
+      finished state, and the steps assume you have already watched a war deploy.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · What you are building</h2>
+
+  <p>Practical 1's bank answered plain text at a URL. That works for testing and it is hopeless for a
+    customer. A real application needs a page: boxes to type in, a button to press, and an answer that
+    appears without anybody editing an address bar.</p>
+
+  <p>This practical adds that page — and every other part of Jakarta EE that only becomes relevant once
+    something <em>outside</em> your application is involved. Three different outsiders, in fact:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>The outsider</th><th>How it reaches the bank</th><th>Part</th></tr></thead>
+    <tbody>
+      <tr><td>A person with a browser</td><td>A Facelets page, backed by a CDI bean</td><td>Parts 3–4</td></tr>
+      <tr><td>Another program on your machine</td><td>A <code>@Remote</code> interface over the network</td><td>Part 6</td></tr>
+      <tr><td>Nothing at all — the work waits</td><td>A message queue and a message-driven bean</td><td>Part 5</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>Facelet</strong> is an ordinary HTML page with holes in it. Where a value goes, you write
+      <code>#{something}</code> instead of typing the value, and the server fills the holes in before
+      sending the page. That is the whole idea. It is not a new language to learn — it is HTML plus
+      placeholders.</p>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>backing bean</strong> is the Java object behind a page. The page asks it questions
+      (<code>#{bank.accounts}</code> calls <code>getAccounts()</code>) and tells it what happened
+      (<code>#{bank.submit}</code> calls <code>submit()</code>). You never write the connection between
+      the two — you give the bean a name with <code>@Named</code> and use that name in the page.</p>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>message-driven bean</strong> is the only bean in this entire course that nobody calls.
+      Every other bean waits to be asked. This one is <em>told</em>: the container watches a queue, and
+      when something arrives it wakes the bean up on a thread of its own. There is no request, no user and
+      no browser involved.</p>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>remote interface</strong> is a promise published on the network. Mark an interface
+      <code>@Remote</code> and any Java program that can reach the server may call its methods as if the
+      object were local. It cannot be local, of course — every argument is copied, posted, and rebuilt on
+      the far side — but the code that calls it does not have to know that.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚪</span>
+    <div class="callout__b"><b>The analogy: a bank branch gets a lobby</b>
+      <p>Practical 1 was a bank with no lobby. You could get money moved, but only by shouting the exact
+        right instructions through a letterbox — which is roughly what
+        <code>?action=transfer&amp;id=1001&amp;to=1002&amp;amount=100.00</code> is.</p>
+      <p>This practical builds the lobby. A counter with a form on it (<strong>the Facelets page</strong>),
+        a clerk who reads the form and decides what it means (<strong>the backing bean</strong>), a
+        clerk at the door who refuses forms that are filled in wrongly before they reach the counter
+        (<strong>bean validation</strong>), a back office where paperwork waits to be processed when
+        somebody is free (<strong>the queue and the message-driven bean</strong>), and a driver who can
+        phone the branch from outside the building and speak to the same clerks
+        (<strong>the remote client</strong>).</p>
+      <p>The clerks are the same people as before. <code>AccountService</code> has not changed its job —
+        it has just acquired four new ways to be reached.</p>
+    </div>
+  </div>
+
+  <h3>What is in the project folder</h3>
+  <p>Practical 2's lab is at <code>lab/practical-2-web-messaging/</code>. Files marked
+    <b>NEW</b> did not exist in Practical 1:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>File</th><th>What it is</th><th>Session</th></tr></thead>
+    <tbody>
+      <tr><td><code>entity/Account.java</code></td><td>Unchanged — the account, still a JPA entity</td><td>3</td></tr>
+      <tr><td><code>entity/AuditEntry.java</code></td><td><b>NEW</b> — one line of audit log, its own table</td><td>3</td></tr>
+      <tr><td><code>ejb/AccountService.java</code></td><td><b>CHANGED</b> — now also implements the remote interface</td><td>1–3</td></tr>
+      <tr><td><code>ejb/AccountServiceRemote.java</code></td><td><b>NEW</b> — the <code>@Remote</code> view, the bank's outside face</td><td>6</td></tr>
+      <tr><td><code>ejb/AuditService.java</code></td><td><b>NEW</b> — writes the log in its <em>own</em> transaction</td><td>10</td></tr>
+      <tr><td><code>ejb/BatchTransferBean.java</code></td><td><b>NEW</b> — transactions driven by hand (BMT)</td><td>10</td></tr>
+      <tr><td><code>messaging/TransferQueueSender.java</code></td><td><b>NEW</b> — puts a transfer on the queue, and declares the queue</td><td>7</td></tr>
+      <tr><td><code>messaging/TransferMDB.java</code></td><td><b>NEW</b> — picks it up in the background</td><td>7</td></tr>
+      <tr><td><code>dao/RawAccountDao.java</code></td><td><b>NEW</b> — the same rows, in hand-written SQL</td><td>8</td></tr>
+      <tr><td><code>web/AccountsBean.java</code></td><td><b>NEW</b> — the bean behind the page</td><td>5</td></tr>
+      <tr><td><code>web/TransferRequest.java</code></td><td><b>NEW</b> — the form, and the rules it must obey</td><td>9</td></tr>
+      <tr><td><code>webapp/accounts.xhtml</code></td><td><b>NEW</b> — the page</td><td>5</td></tr>
+      <tr><td><code>webapp/WEB-INF/web.xml</code></td><td><b>NEW</b> — registers the Faces servlet</td><td>5</td></tr>
+      <tr><td><code>remote-client/…/RemoteClient.java</code></td><td><b>NEW</b> — a program that is <em>not</em> deployed</td><td>6</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>What changed in Practical 1's files</h3>
+  <p>Three files, five small changes. It is worth knowing exactly what moved, because "the same project
+    plus more" is only true if you can see the joins:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>File</th><th>Change</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>AccountService</code></td>
+        <td><code>implements AccountServiceRemote</code></td>
+        <td>The methods were already the right shape. Adding the interface is what publishes them to the
+          outside world.</td>
+      </tr>
+      <tr>
+        <td><code>AccountService.findAll()</code></td>
+        <td>wraps its result in <code>new ArrayList&lt;&gt;(…)</code></td>
+        <td>A remote call has to serialise the list. A JPA provider's <code>List</code> is not guaranteed
+          to be serialisable; a plain <code>ArrayList</code> is.</td>
+      </tr>
+      <tr>
+        <td><code>AccountService</code></td>
+        <td>new method <code>transferOrRefuse(…)</code></td>
+        <td>A refusal that is <em>thrown</em> poisons the transaction. A message-driven bean needs one that
+          is <em>returned</em>. Part 5 is entirely about this.</td>
+      </tr>
+      <tr>
+        <td><code>AccountServlet</code></td>
+        <td>new <code>?action=raw</code> case</td>
+        <td>So the same rows can be read a second way, with hand-written SQL, side by side with JPA.</td>
+      </tr>
+      <tr>
+        <td><code>persistence.xml</code></td>
+        <td><code>&lt;class&gt;…AuditEntry&lt;/class&gt;</code></td>
+        <td>JPA has to be told the new table exists.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you build anything</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Practical 1's <code>AccountService</code> was already correct. What did adding
+        <code>implements AccountServiceRemote</code> actually change — the code, or who can reach it?</li>
+      <li>The page will show <code>#{bank.accounts}</code>. Where in the Java code is the method that
+        answers that?</li>
+      <li>Why does <code>findAll()</code> now copy its list into an <code>ArrayList</code>, when
+        Practical 1 was perfectly happy without it?</li>
+      <li>Which of the three outsiders in the table above needs the bank to do something at a moment when
+        no request is in progress?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Not the code — the <strong>reach</strong>. The methods are identical; the annotation on the
+          interface is what publishes them on the network. This is worth remembering: an interface is a
+          promise about how something may be used, and adding one does not change how it works.</li>
+        <li>In <code>AccountsBean.getAccounts()</code>. The name <code>bank</code> comes from
+          <code>@Named("bank")</code> on the class, and <code>accounts</code> is the property behind
+          <code>getAccounts()</code>. The page never names the class.</li>
+        <li>Because the list now has to survive being turned into bytes, sent, and rebuilt. JPA's
+          <code>List</code> <em>happens</em> to be an <code>ArrayList</code> with Hibernate; the point is
+          that nothing guarantees it, and the copy costs one small object.</li>
+        <li>The queue. Work sitting on a queue has nobody waiting for it — it is processed whenever the
+          container gets round to it, which may be after the user has closed the browser.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Build it and put it on a server</h2>
+
+  <p>If WildFly is still running from Practical 1, leave it. This is the same server.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Build the project</h4>
+      <p>Open a terminal in the project folder — the one containing <code>pom.xml</code>:</p>
+      <pre><code>cd beginner-course/lab/practical-2-web-messaging
+mvn clean package</code></pre>
+      <p><strong>You should see</strong> <code>BUILD SUCCESS</code>, and a few lines above it:</p>
+      <pre><code>[INFO] Building war: target/globalbank-web.war</code></pre>
+      <p>Note the name: <code>globalbank-web</code>, not <code>globalbank-core</code>. It is a new
+        project with its own <code>pom.xml</code>, not an edit of the old one. That is deliberate —
+        Practical 1 stays exactly as you left it, so you can always go back and compare.</p>
+    </li>
+
+    <li>
+      <h4>Deploy it</h4>
+      <p>Copy the war into WildFly's deployment folder:</p>
+      <pre><code>copy target\globalbank-web.war  c:\wildfly\standalone\deployments\      REM  Windows
+cp target/globalbank-web.war    ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> <code>Deployed "globalbank-web.war"</code> in the server window
+        within a few seconds. But this time, look for two more things in the log:</p>
+      <ul>
+        <li>a line saying the <strong>queue</strong> was created and bound to
+          <code>java:/jms/queue/TransferQueue</code>;</li>
+        <li>JPA creating <strong>two</strong> tables — <code>accounts</code> and <code>audit_log</code> —
+          not one.</li>
+      </ul>
+      <p>If the server window has scrolled too far, that is what the management CLI is for. In a third
+        terminal:</p>
+      <pre><code>jboss-cli.bat --connect                    REM  Windows
+./jboss-cli.sh --connect                   #    macOS / Linux
+[standalone@localhost:9990 /] deployment-info --name=globalbank-web.war</code></pre>
+      <p><strong>You should see</strong> the deployment listed with runtime status <code>OK</code>. When
+        a deployment fails, it shows <code>FAILED</code> here, and the reason is in the
+        <code>.failed</code> marker file next to the war.</p>
+    </li>
+
+    <li>
+      <h4>See the whole deployment, replayed</h4>
+      <p>If you would rather try the commands before touching your real machine, the terminal below is a
+        safe one. Type <code>help</code> to see what it knows.</p>
+
+      <div class="terminal" data-terminal="practicum2"></div>
+
+      <p>Then press <strong>Run</strong> to replay what the server actually logged while you were copying
+        that file. Read it as a sequence, and notice the two things that are new since Practical 1: the
+        queue being bound, and a bean that is registered but never called.</p>
+
+      <div class="bench" data-run="canned">
+        <div class="bench__head">
+          <span class="dot"></span>
+          <span class="kind">interactive simulation</span>
+          <span class="mode">GlobalBank Web Deployment Replay</span>
+        </div>
+        <pre class="bench__code"><code>copy target\globalbank-web.war  c:\wildfly\standalone\deployments\
+WildFly creates the queue from @JMSDestinationDefinition, generates accounts AND audit_log,
+and registers an MDB that is listening on java:/jms/queue/TransferQueue</code></pre>
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Replay the deployment</button>
+          <span class="bench__hint">Simulated WildFly server log — offline, no server needed.</span>
+        </div>
+        <script type="text/plain" class="bench__canned">
+[10:31:02,004 INFO] [org.jboss.as.server] WFLYSRV0010: Deployed "globalbank-web.war" (runtime-name: "globalbank-web.war")
+[10:31:02,011 INFO] [org.hibernate] HHH000204: Processing PersistenceUnitInfo [name: globalbankPU]
+[10:31:02,019 INFO] [org.hibernate] create table accounts (id integer not null, holder varchar(60) not null, balance decimal(12,2) not null, version integer not null, primary key (id))
+[10:31:02,024 INFO] [org.hibernate] create table audit_log (id bigint generated by default as identity, action varchar(40) not null, outcome varchar(20) not null, detail varchar(255) not null, happened_at timestamp(6) not null, primary key (id))
+[10:31:02,041 INFO] [org.jboss.as.messaging] AMQ122005: Deployed queue "TransferQueue"
+[10:31:02,043 INFO] [org.jboss.as.messaging] <span class='g'>Bound "TransferQueue" to java:/jms/queue/TransferQueue</span>  <span class='y'>&lt;-- from @JMSDestinationDefinition</span>
+[10:31:02,061 INFO] [org.jboss.weld] CDI container started (beans.xml, bean-discovery-mode="all")
+[10:31:02,066 INFO] [org.jboss.as.ejb3] Starting EJB module globalbank-web.war
+[10:31:02,070 INFO] [org.jboss.as.ejb3] <span class='g'>AccountService</span>          -> @Stateless -> java:global/globalbank-web/AccountService
+[10:31:02,071 INFO] [org.jboss.as.ejb3] <span class='g'>AccountService</span>          -> REMOTE view -> !com.globalbank.ejb.AccountServiceRemote
+[10:31:02,072 INFO] [org.jboss.as.ejb3] <span class='g'>AuditService</span>            -> record() is REQUIRES_NEW
+[10:31:02,073 INFO] [org.jboss.as.ejb3] <span class='g'>BatchTransferBean</span>       -> @TransactionManagement(BEAN)
+[10:31:02,075 INFO] [org.jboss.as.ejb3] <span class='g'>TransferMDB</span>             -> listening on java:/jms/queue/TransferQueue
+[10:31:02,076 INFO] [org.jboss.as.ejb3] <span class='y'>TransferMDB is not called by any code in this application.</span>
+[10:31:02,080 INFO] [Ledger] seeded 3 accounts: 1001, 1002, 1003
+[10:31:02,086 INFO] [org.jboss.as.web] WFLYUT0021: Registered web context: '/globalbank-web'
+[10:31:02,090 INFO] [jakarta.faces] FacesServlet initialised, mapped to *.xhtml
+[10:31:02,095 INFO] [org.jboss.as.server] globalbank-web.war.deployed created  <span class='g'>&lt;-- green light</span>
+        </script>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+    </li>
+
+  </ol>
+
+  <h3>Troubleshooting: if it did not work</h3>
+  <p>Find your symptom in this table before changing anything.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>BUILD FAILURE … release version 17 not supported</code></td>
+        <td>Your JDK is older than 17</td>
+        <td>Install Temurin JDK 17 and point <code>JAVA_HOME</code> at it</td>
+      </tr>
+      <tr>
+        <td>Red underlines under <code>@Named</code> or <code>@Path</code></td>
+        <td>Maven has not downloaded the API yet</td>
+        <td>Right-click <code>pom.xml</code> → Maven → Reload project</td>
+      </tr>
+      <tr>
+        <td><code>404 Not Found</code> at <code>/globalbank-web/</code></td>
+        <td>The war name or the welcome file</td>
+        <td>Check <code>finalName</code> is <code>globalbank-web</code>, and that
+          <code>accounts.xhtml</code> is directly in <code>src/main/webapp/</code></td>
+      </tr>
+      <tr>
+        <td>A page showing the text <code>#{bank.accounts}</code></td>
+        <td><code>FacesServlet</code> is not processing the file</td>
+        <td>Check <code>web.xml</code> maps it to <code>*.xhtml</code> — an unmapped Facelet is served as
+          a raw template</td>
+      </tr>
+      <tr>
+        <td><code>Unable to find queue java:/jms/queue/TransferQueue</code></td>
+        <td>The queue was not created</td>
+        <td>Check the <code>@JMSDestinationDefinition</code> is on <code>TransferQueueSender</code> and
+          survived into the war</td>
+      </tr>
+      <tr>
+        <td>Tables render, but every value is blank</td>
+        <td>A getter name does not match the page</td>
+        <td><code>#{bank.message}</code> needs <code>getMessage()</code>; <code>#{a.holder}</code> needs
+          <code>getHolder()</code>. JSF finds methods by name, and a typo fails silently</td>
+      </tr>
+      <tr>
+        <td><code>500</code> and <code>ConstraintViolationException</code></td>
+        <td>Validation rejected the request</td>
+        <td>Read the message — it names the field and the rule it broke</td>
+      </tr>
+      <tr>
+        <td>Red <code>WFLYSRV0021</code> or <code>Failed to deploy</code></td>
+        <td>The deployment was rejected</td>
+        <td>Open the <code>.failed</code> marker file and read the <em>deepest</em>
+          <code>Caused by:</code> — the last one. That is the root cause</td>
+      </tr>
+      <tr>
+        <td><code>Port 8080 already in use</code></td>
+        <td>Another program owns the port</td>
+        <td>Close it, or start WildFly with <code>-Djboss.socket.binding.port-offset=100</code> and use
+          port 8180</td>
+      </tr>
+      <tr>
+        <td>Everything is <code>404</code> after restarting WildFly</td>
+        <td><code>ExampleDS</code> is in memory</td>
+        <td>Restarting wipes the data and the deployment. Redeploy and start again from Part 3</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you open the page</b>
+    <ol>
+      <li>The war is called <code>globalbank-web</code>. What is the URL folder going to be?</li>
+      <li>Practical 1 had no <code>web.xml</code> and deployed fine. Why does this one need it?</li>
+      <li>Predict: when you open the page, how many accounts will be listed, and why that number?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>/globalbank-web/</code>. The <code>finalName</code> in <code>pom.xml</code> becomes the
+          context path — that is true of every war you will ever build.</li>
+        <li>Because of Faces. <code>@WebServlet</code> and <code>@Stateless</code> are annotations the
+          container reads off your own classes, so nothing had to be declared. But
+          <code>FacesServlet</code> is somebody else's class and it has to be
+          <em>registered</em> and told which URLs it owns. That is what a deployment descriptor is for.</li>
+        <li>Three — 1001, 1002 and 1003 — because <code>LedgerInitializer</code> is a
+          <code>@Singleton @Startup</code> bean that seeded them at deploy time, exactly as in
+          Practical 1.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 3 · A page a person can use</h2>
+
+  <p>The whole front door is two files: <code>accounts.xhtml</code>, which is HTML with holes in it, and
+    <code>AccountsBean.java</code>, which fills them. Read them together — neither makes sense alone.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>@ViewScoped</code> decides how long the bean lives. A <strong>scope</strong> is a lifetime:
+      the container creates the object when the page opens and throws it away when you leave. Compare the
+      two you have now met:</p>
+    <ul>
+      <li><code>@SessionScoped</code> (Session 5) — lives until the <em>browser</em> closes. Two tabs share
+        one object, and yesterday's half-typed form is still in memory.</li>
+      <li><code>@ViewScoped</code> (this bean) — lives until you leave <em>this page</em>. Each tab gets
+        its own, and the memory is released when you navigate away.</li>
+    </ul>
+    <p>For a form like this one, the data belongs to the page rather than to the person, so view scope is
+      the honest choice.</p>
+  </div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Open the bank</h4>
+      <pre><code>http://localhost:8080/globalbank-web/</code></pre>
+      <p><strong>You should see</strong> three accounts in a table, a transfer form with four boxes, and an
+        "Audit log" heading with nothing under it.</p>
+      <p>Compare that with Practical 1, where the same three rows arrived as plain text in the browser.
+        No SQL was written for either version. The page asks <code>#{bank.accounts}</code>, that calls
+        <code>AccountService.findAll()</code>, and JPA does the rest.</p>
+    </li>
+
+    <li>
+      <h4>Move some money, and watch the version counters</h4>
+      <p>Fill in the form: <b>From</b> <code>1001</code>, <b>To</b> <code>1002</code>, <b>Amount</b>
+        <code>25</code>, and click <b>Transfer now</b>.</p>
+      <p><strong>You should see</strong> the balances change, and the <code>@Version</code> column for
+        <em>both</em> accounts go up by one.</p>
+      <p>Same lesson as Practical 1, now visible in a table: one click, one transaction, two rows written
+        together. Ada Lovelace should now hold <code>1475.00</code> and Grace Hopper
+        <code>275.00</code>.</p>
+    </li>
+
+    <li>
+      <h4>Make the bank refuse, and find the refusal on record</h4>
+      <p>Now try to move <code>99999</code> out of account <code>1003</code>.</p>
+      <p><strong>You should see</strong> a red message, and the balances unchanged. Then look at the
+        <b>audit log</b> at the bottom of the page:</p>
+      <pre><code>09 Oct 06:41:12 | TRANSFER | REFUSED | Account 1003 holds 0.00, so 99999 cannot be transferred</code></pre>
+      <p><strong>Stop and look at that line.</strong> The transfer was rolled back — everything it did was
+        undone. So why is the record of it still in the database? That is Part 4, and it is the most
+        important thing on this page.</p>
+    </li>
+
+    <li>
+      <h4>Watch validation refuse the form before the bank sees it</h4>
+      <p>Try to submit the form with <b>Amount</b> <code>0</code>, then with <code>10.999</code>, then
+        with the <b>Reference</b> box emptied, then with <b>From</b> and <b>To</b> both set to
+        <code>1001</code>.</p>
+      <p><strong>You should see</strong> a different message each time, next to the box that is wrong:</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>What you typed</th><th>What the page says</th></tr></thead>
+        <tbody>
+          <tr><td>Amount <code>0</code></td><td>The smallest transfer is 0.01</td></tr>
+          <tr><td>Amount <code>10.999</code></td><td>Money has at most 2 decimal places</td></tr>
+          <tr><td>Reference empty</td><td>Every transfer needs a reference</td></tr>
+          <tr><td>From and To both <code>1001</code></td><td>Money cannot be sent from an account to itself</td></tr>
+        </tbody>
+      </table></div>
+      <p>Now the important part. <strong>Open <code>AccountsBean.submit()</code> and look for the
+        validation code. There is none.</strong> Nor is there any in <code>accounts.xhtml</code>. Every
+        one of those messages lives as a one-line annotation on a field in
+        <code>TransferRequest.java</code> — and the method that would have run never ran at all.</p>
+    </li>
+
+  </ol>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Declarative</strong> means you <em>state the rule</em> instead of <em>running it</em>.
+      Writing <code>if (amount == null || amount.signum() &lt;= 0) throw …</code> is imperative — you are
+      performing the check. Writing <code>@DecimalMin("0.01")</code> on the field is declarative — you are
+      describing what a valid value looks like, and letting something else do the checking.</p>
+    <p>Bean Validation is declarative, and that is why the same rule is enforced by the web page, by the
+      EJB container, and by JPA before an <code>INSERT</code> — without you repeating it once.</p>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The trap in the cross-field rule</b>
+      <p>Four of those five rules sit on a single field. The fifth — "money cannot be sent from an account
+        to itself" — mentions <em>two</em> fields, and no annotation can express that. So it is written as
+        a method returning <code>boolean</code>, named like a property, marked <code>@AssertTrue</code>.</p>
+      <p>Here is the trap. A brand-new form has both fields at zero, so
+        <code>fromAccount == toAccount</code> is true — and the rule would fail, greeting every visitor
+        with "you cannot transfer from an account to itself" before they had typed anything. Open
+        <code>TransferRequest.isAccountsDiffer()</code> and read the first line of the condition. Guarding
+        against the untouched form is part of writing the rule, not a way of cheating it.</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · the page and its bean</b>
+    <ol>
+      <li>Where is <code>new AccountsBean()</code>?</li>
+      <li>What single word connects <code>accounts.xhtml</code> to that bean?</li>
+      <li>You typed an amount of <code>0</code> and <code>submit()</code> was never called. So who
+        rejected it, and at what point?</li>
+      <li>Why does this bean use <code>@ViewScoped</code> rather than <code>@SessionScoped</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Nowhere. The container creates it, because <code>@Named</code> plus a scope annotation makes it
+          a bean it is responsible for.</li>
+        <li><code>@Named("bank")</code>. That is the entire wiring — no registration file, no lookup, no
+          <code>new</code>.</li>
+        <li><code>jakarta.faces</code> did, during the <strong>validation phase</strong> of the JSF
+          lifecycle, before the action was invoked. Session 5's six phases are not theory: a Phase 3
+          failure skips the phases that would have called your method and jumps straight to rendering the
+          errors.</li>
+        <li>Because the form's data belongs to the page, not to the person. View scope also means two
+          browser tabs do not share one half-filled form.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 4 · The line that should not exist</h2>
+
+  <p>Part 3 left you with a puzzle. A transfer was refused, and the transaction that attempted it was
+    rolled back. Yet the record of the refusal is sitting in the database.</p>
+
+  <p>Roll that back in your head, because it is genuinely strange. A transaction is supposed to be
+    all-or-nothing. Everything that happened inside it should have been undone. The audit line was written
+    inside it. So the audit line should be gone.</p>
+
+  <p>Open <code>ejb/AuditService.java</code> and look at the annotation on <code>record()</code>:</p>
+
+  <pre><code>@TransactionAttribute(TransactionAttributeType.REQUIRES_NEW)
+public void record(String action, String outcome, String detail) {
+    em.persist(new AuditEntry(action, outcome, detail));
+}</code></pre>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>What <code>REQUIRES_NEW</code> means</b>
+      <p>It is the container being told:</p>
+      <blockquote style="margin:.5rem 0;padding-left:.8rem;border-left:3px solid #c3ccd7">
+        <em>"Suspend whatever transaction the caller is in. Start a brand new one for me. Commit mine when
+        I finish, and then resume theirs."</em></blockquote>
+      <p>So the audit line is committed <strong>on its own</strong>, before the transfer it describes has
+        succeeded or failed. When the transfer later rolls back, the audit line is in a different
+        transaction that has already committed, and nothing can reach it.</p>
+    </div>
+  </div>
+
+  <p>Compare the alternatives, because the difference between them is exactly what Session 10 is about:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Attribute</th><th>What happens</th><th>Right for an audit log?</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>REQUIRED</code> <span class="hint">(the default)</span></td>
+        <td>Joins the caller's transaction</td>
+        <td><b>No.</b> A rollback erases the audit line along with the transfer — including the refusals,
+          which are the most valuable lines in the log</td>
+      </tr>
+      <tr>
+        <td><code>REQUIRES_NEW</code></td>
+        <td>Suspends the caller's, runs in its own, commits independently</td>
+        <td><b>Yes.</b> This is the textbook example of the attribute</td>
+      </tr>
+      <tr>
+        <td><code>MANDATORY</code></td>
+        <td>Refuses to run unless the caller already has a transaction</td>
+        <td>No — but useful for "this must never run outside a transaction" rules</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">📝</span>
+    <div class="callout__b"><b>The analogy: the incident book</b>
+      <p>Think of a workshop with an <strong>incident book</strong> bolted to the wall, and a rule that
+        says: whoever tries a risky job must write it in the book <em>first</em>, then do the job.</p>
+      <p>If the job succeeds, the entry says so. If the job goes wrong and everything is undone, the
+        <em>job</em> is undone — but the book entry is not, because writing in the book was its own
+        separate act, finished before the job started.</p>
+      <p>That is exactly the relationship between <code>AuditService</code> and
+        <code>AccountService</code>. One writes the record in its own transaction; the other does the work
+        in its own. Neither can undo the other.</p>
+      <p>And the entry that matters most is the one describing the job that <em>failed</em> — which is
+        precisely the entry a normal transaction would throw away.</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · the important one</b>
+    <ol>
+      <li>Which transaction wrote the audit line about the refused transfer?</li>
+      <li>Which transaction was rolled back, and what did it contain?</li>
+      <li>If <code>record()</code> used the default <code>REQUIRED</code>, what would the audit log look
+        like after a refused transfer?</li>
+      <li>Why is a <em>refusal</em> worth recording at all?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Its own — a second transaction, started by the container when <code>record()</code> was
+          called, committed before <code>record()</code> returned.</li>
+        <li>The transfer's. It contained the two <code>setBalance</code> calls (or, in this case, nothing
+          at all, because the balance check happens before any change — either way it was undone).</li>
+        <li>Empty. The line would have joined the transfer's transaction, and rolled back with it. You
+          would see successful transfers logged and refused ones silently missing — which is the worst
+          possible audit log, because it looks complete.</li>
+        <li>Because "somebody tried to move £9,000 and the bank refused" is exactly the pattern a fraud
+          investigator needs. A log of only successes cannot show you an attack; it shows you the two
+          attempts that worked and hides the forty that did not.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 5
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 5 · Work that happens without you</h2>
+
+  <p>Every path into the bank so far has been synchronous: somebody asks, the bank answers, and the
+    somebody waits. This part breaks that. The <b>Queue it instead</b> button puts the request on a queue
+    and returns immediately — and a bean you never call picks it up later.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Queue a transfer</h4>
+      <p>Fill the form in as <b>From</b> <code>1001</code>, <b>To</b> <code>1003</code>, <b>Amount</b>
+        <code>50</code>, and click <b>Queue it instead</b>.</p>
+      <p><strong>You should see</strong> a blue message saying it was queued — and
+        <strong>the balances unchanged</strong>. That is correct, and it is the whole point: all you did
+        was put a message on a queue. Nobody has processed it yet.</p>
+      <p>Now <strong>reload the page</strong>. Now look again.</p>
+      <p><strong>You should see</strong> the balances have moved, and there are two new lines in the audit
+        log whose Action column reads <code>QUEUED-TRANSFER</code>:</p>
+      <pre><code>09 Oct 06:52:40 | QUEUED-TRANSFER | OK      | Transferred 50.00 from 1001 (Ada Lovelace) to 1003 (Alan Turing)
+09 Oct 06:52:40 | QUEUED-TRANSFER | OK      | ...</code></pre>
+      <p>Nobody clicked anything between the first reload and the second. <code>TransferMDB</code> — a bean
+        that <em>nothing in this application calls</em> — woke up on its own thread and did the work while
+        you were reading.</p>
+    </li>
+
+    <li>
+      <h4>Queue something you know will be refused</h4>
+      <p>Now the interesting one. Queue <code>99999</code> out of account <code>1003</code> — a transfer
+        the bank cannot possibly allow.</p>
+      <p><strong>You should see exactly one new audit line.</strong> Not two, not ten, not an endless
+        stream of them.</p>
+      <p>If you have written a message-driven bean before, or if your instinct is "catch the exception and
+        log it", you should now be suspicious. Try it and see what happens — then read on, because this is
+        the sharpest edge in the whole practical.</p>
+    </li>
+
+  </ol>
+
+  <div class="callout callout--warn"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b>Why a thrown refusal breaks the queue</b>
+      <p>Open <code>AccountService.transferOrRefuse()</code> and read its comment. Here is the problem it
+        exists to solve.</p>
+      <p>An MDB method runs inside a container-managed transaction, and the message acknowledgement is
+        <em>part of that transaction</em>. That gives you a guarantee you want: if
+        <code>onMessage</code> throws, the transaction rolls back and <strong>the message comes back</strong>.
+        A crash never loses a transfer.</p>
+      <p>Now the mirror image. <code>AccountService.transfer()</code> throws
+        <code>InsufficientFundsException</code>, and that exception is marked
+        <code>@ApplicationException(rollback = true)</code>. The instant it leaves a bean method, the
+        container marks the current transaction rollback-only — and <strong>no catch block anywhere can
+        undo that</strong>. So a message-driven bean that catches the refusal still sees its transaction
+        roll back, which means the message is delivered again. And again. A refusal that can never succeed
+        loops until the broker gives up.</p>
+      <p><code>transferOrRefuse()</code> refuses by <em>returning a sentence</em> instead of throwing. A
+        returned value is a success, so the transaction commits and the message is acknowledged.</p>
+      <p>Choosing which failures to throw and which to return is the whole skill of writing a
+        message-driven bean. It is also a lesson that only makes sense once you have watched the
+        alternative loop.</p>
+    </div>
+  </div>
+
+  <h3>The two names of one queue</h3>
+  <p>There is one detail in <code>TransferQueueSender</code> worth stopping on, because mixing these two
+    names up is the most common messaging mistake there is:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Name</th><th>What it is</th><th>Where you use it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>java:jboss/exported/jms/queue/TransferQueue</code></td>
+        <td>The <b>JNDI</b> name — how code finds the queue. The <code>exported</code> part means "visible
+          to clients outside the server"</td>
+        <td>In the <code>@JMSDestinationDefinition</code>, which asks the container to create it</td>
+      </tr>
+      <tr>
+        <td><code>java:/jms/queue/TransferQueue</code></td>
+        <td>The same queue under its shorter internal name. WildFly publishes both</td>
+        <td>In the <code>@Resource(lookup = …)</code> and in the MDB's
+          <code>destinationLookup</code></td>
+      </tr>
+      <tr>
+        <td><code>TransferQueue</code></td>
+        <td>The <b>physical</b> name — what the queue is called inside the broker</td>
+        <td>In <code>destinationName</code>, and when you go looking in Artemis</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p>Session 7 taught that a queue must exist before you can look it up — and that is still true. What is
+    new here is that the application can now <em>state the requirement itself</em> instead of relying on
+    somebody having run a CLI command first. <code>@JMSDestinationDefinition</code> is that statement, and
+    the container honours it at deploy time, before anything is injected.</p>
+
+  <div class="checkpoint"><b>Checkpoint 5 · the queue</b>
+    <ol>
+      <li>Who called <code>TransferMDB.onMessage()</code>?</li>
+      <li>You clicked "Queue it instead" and the balances did not change. Was something broken?</li>
+      <li>Why did queueing a <em>refused</em> transfer produce exactly one audit line rather than a loop?</li>
+      <li>Why does the queue's <code>destinationName</code> differ from its JNDI name?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The container. Nothing in the application refers to <code>TransferMDB</code> at all — no
+          <code>new</code>, no <code>@EJB</code>, no lookup. It watches the queue and calls the bean when
+          a message arrives.</li>
+        <li>No. Putting a message on a queue is the entire job of that button. The message was processed a
+          moment later by a different thread, which is exactly why reloading showed the change.</li>
+        <li>Because <code>transferOrRefuse()</code> returns the refusal as a value. A returned value means
+          the transaction commits, which means the message is acknowledged and is not redelivered. Had it
+          been thrown, the transaction would have been marked rollback-only and the message would have
+          come back — repeatedly.</li>
+        <li>Because they are two different things. One is how Java code finds the queue (JNDI); the other
+          is what the queue is called inside the broker. Having one name for both would be convenient
+          right up until you needed to point two JNDI names at the same physical queue.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 6
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 6 · Calling the bank from outside the server</h2>
+
+  <p>Everything so far has run <em>inside</em> WildFly — the servlet, the page, the beans, the MDB. This
+    part is different: <code>RemoteClient.java</code> is an ordinary Java program with a
+    <code>main</code> method, running in its own process on your machine, calling beans that happen to live
+    somewhere else.</p>
+
+  <p>It is not deployed. It is not in the war. It is not a web request. It is two JVMs talking to each
+    other.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Compile the client</h4>
+      <p>You need two things on the classpath: this project's compiled classes (for the interface), and
+        WildFly's own client library (for the protocol). Build the war first if you have not.</p>
+      <pre><code>javac -cp "target/classes;c:\wildfly\bin\client\jboss-client.jar" -d remote-client/classes remote-client/src/com/globalbank/client/RemoteClient.java       REM  Windows
+
+javac -cp "target/classes:$WILDFLY_HOME/bin/client/jboss-client.jar" -d remote-client/classes remote-client/src/com/globalbank/client/RemoteClient.java   #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> no output at all. <code>javac</code> is silent when it succeeds.</p>
+      <p><strong>Look at what is not on that classpath: the war, and the bean.</strong> The client needs
+        the <em>interface</em> and the <code>Account</code> class. The implementation stays on the server,
+        where it belongs — that is the entire point of a remote interface.</p>
+    </li>
+
+    <li>
+      <h4>Run it</h4>
+      <pre><code>java -cp "remote-client/classes;target/classes;c:\wildfly\bin\client\jboss-client.jar" com.globalbank.client.RemoteClient       REM  Windows
+
+java -cp "remote-client/classes:target/classes:$WILDFLY_HOME/bin/client/jboss-client.jar" com.globalbank.client.RemoteClient   #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> the three accounts printed, a transfer, the accounts again with
+        changed balances, and finally a refusal:</p>
+      <pre><code>Connected to the bank running inside WildFly.
+
+3 account(s), copied down the wire:
+  Account 1001 | Ada Lovelace | balance 1500.00 | @Version 0
+  ...
+
+Asking the server to move 25.00 from 1001 to 1002...
+  Transferred 25.00 from 1001 (Ada Lovelace) to 1002 (Grace Hopper)
+
+3 account(s), copied down the wire:
+  ...
+
+Now asking for something the bank will refuse:
+The call reached the server, and the bank refused:
+  com.globalbank.ejb.InsufficientFundsException
+  Account 1003 holds 0.00, so 99999.00 cannot be transferred</code></pre>
+      <p>Your balances depend on what Parts 3 and 5 did — after a fresh redeploy you would see the
+        original <code>1500.00</code>, <code>250.00</code> and <code>0.00</code>.</p>
+    </li>
+
+    <li>
+      <h4>Check the page</h4>
+      <p>Reload <code>http://localhost:8080/globalbank-web/</code> and look at the audit log.</p>
+      <p><strong>You should see</strong> the remote client's two transfers recorded there — one
+        <code>OK</code>, one <code>REFUSED</code>.</p>
+      <p>The same <code>AccountService</code> served a web page and a standalone program, and neither
+        knows the other exists. That is the sentence to take away from this part.</p>
+    </li>
+
+    <li>
+      <h4>Try it in the simulator, if you prefer</h4>
+      <p>The same two commands are in the terminal from Part 2. Type them exactly as printed above:</p>
+      <pre><code>javac -cp "target/classes;c:\wildfly\bin\client\jboss-client.jar" -d remote-client/classes remote-client/src/com/globalbank/client/RemoteClient.java
+java -cp "remote-client/classes;target/classes;c:\wildfly\bin\client\jboss-client.jar" com.globalbank.client.RemoteClient</code></pre>
+    </li>
+
+  </ol>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>JNDI</strong> is a phone book for objects. You do not create the thing you want and you do
+      not hold a reference to it — you ask a directory for it by name and get back something you can use.
+      Session 6 introduced it; here is what the name actually looks like:</p>
+    <pre style="margin:.5rem 0"><code>ejb:/globalbank-web/AccountService!com.globalbank.ejb.AccountServiceRemote
+     └── module ──┘ └── bean ──┘ └──────── interface ────────┘</code></pre>
+    <p>Read it as a sentence: <em>an enterprise bean, in the module called <code>globalbank-web</code>, the
+      bean class <code>AccountService</code>, seen through this interface</em>. The <code>!</code> matters
+      — a bean can have several interfaces, and the lookup has to say which one you want.</p>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Do not "fix" the <code>javax</code> imports</b>
+      <p>Open <code>RemoteClient.java</code> and you will see
+        <code>import javax.naming.InitialContext;</code>. This is correct, and it is not a leftover from
+        before the rename.</p>
+      <p>Jakarta EE 9 renamed the <em>Enterprise Edition</em> specifications from <code>javax</code> to
+        <code>jakarta</code>. JNDI and JDBC belong to Java SE, not to Jakarta EE, and kept their names. So
+        <code>javax.naming.*</code> and <code>javax.sql.DataSource</code> are right, and an IDE that
+        "helpfully" offers to rewrite them is wrong.</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 6 · across the wire</b>
+    <ol>
+      <li>Why does the client need the interface but not the bean class?</li>
+      <li>The client printed <code>Account 1001 | Ada Lovelace | …</code>. Were those <code>Account</code>
+        objects created on the client?</li>
+      <li>Why did <code>Account</code> need a <code>serialVersionUID</code> in this practical but not
+        really in Practical 1?</li>
+      <li>Why is <code>AccountService.findAll()</code> copying its list into an
+        <code>ArrayList</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because the interface is what the client calls, and the implementation runs on the server. A
+          copy of the bean class on the client would be dead weight at best.</li>
+        <li>No. They were created inside WildFly by JPA, turned into bytes, sent over the network, and
+          rebuilt in the client's JVM. That round trip is what serialisation means, and it is why changing
+          an <code>Account</code> on the client would not affect the server's copy.</li>
+        <li>Because serialisation writes that number into the byte stream. Two sides that disagree about
+          it refuse the object rather than silently misreading it. In Practical 1 nothing was ever
+          serialised between processes, so it did not matter.</li>
+        <li>Because a remote call has to serialise the result, and the <code>List</code> a JPA provider
+          returns is not guaranteed to be serialisable. Copying into a plain
+          <code>ArrayList</code> makes the method safe for the local caller and the remote one.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 7
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 7 · Break it on purpose, and learn why the rules exist</h2>
+
+  <p>Every rule you met in this practical has an obvious-looking shortcut that breaks it. This part takes
+    the two best ones and breaks them, so you can see the failure instead of taking it on trust.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Break the audit log</h4>
+      <p>In <code>ejb/AuditService.java</code>, change the annotation on <code>record()</code> from
+        <code>REQUIRES_NEW</code> to <code>REQUIRED</code> — the default. Rebuild, redeploy, and make a
+        transfer the bank will refuse.</p>
+      <p><strong>You should see</strong> the refusal reported on the page, and
+        <strong>the audit log unchanged</strong>. The line recording what happened is gone, because it
+        joined the transfer's transaction and rolled back with it.</p>
+      <p>Now make a transfer that <em>succeeds</em>. That one <em>is</em> logged.</p>
+      <div class="callout callout--mistake" style="margin:.8rem 0"><span class="callout__i">⚠️</span>
+        <div class="callout__b">That combination is the dangerous one. An audit log that shows successes
+          and silently omits refusals looks <em>complete</em>. You would never notice the missing lines
+          unless you went looking for a specific one — which is exactly what an investigation does.</div>
+      </div>
+      <p><strong>Put it back</strong> to <code>REQUIRES_NEW</code> before you continue.</p>
+    </li>
+
+    <li>
+      <h4>Break the queue</h4>
+      <p>In <code>messaging/TransferMDB.java</code>, change the call from
+        <code>service.transferOrRefuse(from, to, amount)</code> to
+        <code>service.transfer(from, to, amount)</code>. Rebuild, redeploy, and queue a transfer you know
+        will be refused.</p>
+      <p><strong>You should see</strong> the same audit line appear over and over in the server log, and
+        WildFly reporting redelivery attempts in the console. The message is being delivered, refused,
+        rolled back, and delivered again — because a thrown
+        <code>@ApplicationException(rollback = true)</code> dooms the transaction, and catching it in
+        <code>onMessage</code> cannot undo that.</p>
+      <p>This is what a <strong>poison message</strong> looks like in production: one bad message that
+        occupies a worker forever. WildFly will retry a fixed number of times and then park it on a dead
+        letter queue.</p>
+      <p><strong>Put it back</strong> to <code>transferOrRefuse</code>.</p>
+    </li>
+
+    <li>
+      <h4>See what JPA was doing for you</h4>
+      <p>Open these two side by side in two browser tabs:</p>
+      <pre><code>http://localhost:8080/globalbank-web/account?action=all
+http://localhost:8080/globalbank-web/account?action=raw</code></pre>
+      <p><strong>You should see</strong> the same rows twice. The second one is <code>RawAccountDao</code>,
+        which opens a pooled <code>DataSource</code>, writes
+        <code>SELECT id, holder, balance, version FROM accounts</code> by hand, and maps the result itself
+        with <code>rs.getInt</code> and <code>rs.getString</code>.</p>
+      <p>Put the two side by side. Everything JPA saves you is the difference between them — and the one
+        string it had been hiding from you all along,
+        <code>java:jboss/datasources/ExampleDS</code>, is now visible in two places at once.</p>
+      <p>Then open <code>RawAccountDao</code> and find the <code>try (</code> block. Look at what happens
+        when you <code>close()</code> a connection you got from a pool: you are not closing it, you are
+        <strong>giving it back</strong>. Leaking one is a slow-motion outage — the pool empties and the
+        application stops answering.</p>
+    </li>
+
+  </ol>
+
+  <div class="callout callout--key"><span class="callout__i">➡️</span>
+    <div class="callout__b"><b>Restore everything before Practical 3</b>
+      Both files should be back as they were: <code>REQUIRES_NEW</code> on
+      <code>AuditService.record()</code>, and <code>transferOrRefuse</code> in
+      <code>TransferMDB.onMessage()</code>. Rebuild and redeploy once more, and confirm a refused queued
+      transfer produces exactly one audit line. Practical 3 starts from this state — do not leave a
+      deliberate bug in place.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 7 · the quiz comes next</b>
+    <ol>
+      <li>With <code>REQUIRED</code> on <code>record()</code>, why were successful transfers still logged?</li>
+      <li>Why does catching the exception inside <code>onMessage</code> fail to stop the redelivery?</li>
+      <li>What is a poison message, and what does WildFly eventually do with one?</li>
+      <li>In <code>RawAccountDao</code>, what does <code>close()</code> on a pooled connection actually do?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because a successful transfer's transaction <em>committed</em>, and the audit write was part
+          of it. It only vanishes when the transaction it joined rolls back.</li>
+        <li>Because the damage is done when the exception leaves the bean method — the container marks the
+          transaction rollback-only at that moment. Your <code>catch</code> runs afterwards and cannot
+          reverse a decision the container has already made.</li>
+        <li>A message that can never be processed successfully. Retrying it forever occupies a worker and
+          blocks the queue. After a configured number of attempts WildFly moves it to a dead letter
+          queue so the rest can proceed.</li>
+        <li>Returns it to the pool for somebody else to use. The physical database connection is not
+          closed — which is the entire reason a pool is fast.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE
+       ===================================================================== -->
+
+  <span class="eyebrow">reference</span>
+  <h2>Reference · everything on one screen</h2>
+
+  <h3>The address cheat-sheet</h3>
+  <p>Everything this application answers. It has two front doors now — a page for people and a servlet for
+    scripts.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Address</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>/globalbank-web/</code></td><td>The Facelets page — the front door for people</td></tr>
+      <tr><td><code>/globalbank-web/accounts.xhtml</code></td><td>The same page, named explicitly</td></tr>
+      <tr><td><code>/globalbank-web/account?action=all</code></td><td>The Practical 1 servlet, unchanged</td></tr>
+      <tr><td><code>/globalbank-web/account?action=find&amp;id=1001</code></td><td>One account, as plain text</td></tr>
+      <tr><td><code>/globalbank-web/account?action=deposit&amp;id=1001&amp;amount=250.00</code></td><td>Adds money</td></tr>
+      <tr><td><code>/globalbank-web/account?action=transfer&amp;id=1001&amp;to=1002&amp;amount=100.00</code></td><td>Moves money</td></tr>
+      <tr><td><code>/globalbank-web/account?action=raw</code></td><td><b>NEW</b> — the same rows, read with hand-written SQL instead of JPA</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The annotations, one line each</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>What it tells the container</th><th>Seen on</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Named("bank")</code></td><td>"Publish this object under this name in the view."</td><td><code>AccountsBean</code></td></tr>
+      <tr><td><code>@ViewScoped</code></td><td>"One instance per page, discarded when the user leaves."</td><td><code>AccountsBean</code></td></tr>
+      <tr><td><code>@Remote</code></td><td>"Publish these methods on the network for outside programs."</td><td><code>AccountServiceRemote</code></td></tr>
+      <tr><td><code>@MessageDriven</code></td><td>"Listen on a destination; call <code>onMessage</code> when something arrives."</td><td><code>TransferMDB</code></td></tr>
+      <tr><td><code>@ActivationConfigProperty</code></td><td>"Here is which destination, and what kind."</td><td><code>TransferMDB</code></td></tr>
+      <tr><td><code>@JMSDestinationDefinition</code></td><td>"Create this queue at deploy time."</td><td><code>TransferQueueSender</code></td></tr>
+      <tr><td><code>@JMSConnectionFactory</code></td><td>"Inject a managed connection to the broker."</td><td><code>TransferQueueSender</code></td></tr>
+      <tr><td><code>@Resource(lookup = …)</code></td><td>"Give me the server resource registered under this JNDI name."</td><td><code>TransferQueueSender</code>, <code>RawAccountDao</code>, <code>BatchTransferBean</code></td></tr>
+      <tr><td><code>@TransactionAttribute(REQUIRES_NEW)</code></td><td>"Suspend the caller's transaction and run in my own."</td><td><code>AuditService.record()</code></td></tr>
+      <tr><td><code>@TransactionManagement(BEAN)</code></td><td>"I will call <code>begin()</code> and <code>commit()</code> myself."</td><td><code>BatchTransferBean</code></td></tr>
+      <tr><td><code>@Min</code> / <code>@Max</code></td><td>"A whole number within this range."</td><td><code>TransferRequest</code></td></tr>
+      <tr><td><code>@NotNull</code> / <code>@NotBlank</code></td><td>"Must be present" / "must be present and not only spaces."</td><td><code>TransferRequest</code></td></tr>
+      <tr><td><code>@DecimalMin</code> / <code>@Digits</code></td><td>"At least this much" / "at most this many digits, and this many after the point."</td><td><code>TransferRequest</code></td></tr>
+      <tr><td><code>@AssertTrue</code></td><td>"This method must return true — used for rules spanning two fields."</td><td><code>TransferRequest.isAccountsDiffer()</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <details>
+    <summary><strong>📄 The code, in full — click any file to read it</strong></summary>
+
+    <p><strong><code>web/TransferRequest.java</code></strong> — the form and its rules, with no checking
+      code anywhere.</p>
+    <pre><code>public class TransferRequest implements Serializable {
+
+    @Min(value = 1000, message = "Account numbers have at least 4 digits")
+    @Max(value = 9999, message = "Account numbers have at most 4 digits")
+    private int fromAccount;
+
+    @NotNull(message = "Enter an amount")
+    @DecimalMin(value = "0.01", message = "The smallest transfer is 0.01")
+    @Digits(integer = 10, fraction = 2, message = "Money has at most 2 decimal places")
+    private BigDecimal amount = new BigDecimal("10.00");
+
+    @NotBlank(message = "Every transfer needs a reference")
+    @Size(max = 40, message = "Keep the reference under 40 characters")
+    private String reference = "web transfer";
+
+    /** Two fields at once — no single-field annotation can express this. */
+    @AssertTrue(message = "Money cannot be sent from an account to itself")
+    public boolean isAccountsDiffer() {
+        // The guard matters: an untouched form has both fields at zero, and
+        // without it every visitor would be told off before typing anything.
+        return fromAccount == 0 || toAccount == 0 || fromAccount != toAccount;
+    }
+}</code></pre>
+    <p>Nothing here checks anything. That is the point of declarative validation: you state what a valid
+      request looks like, and the web page, the EJB container and JPA all enforce it for you — from this
+      one description.</p>
+
+    <p><strong><code>ejb/AuditService.java</code></strong> — the transaction that has to survive.</p>
+    <pre><code>@Stateless
+public class AuditService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @TransactionAttribute(TransactionAttributeType.REQUIRES_NEW)
+    public void record(String action, String outcome, String detail) {
+        em.persist(new AuditEntry(action, outcome, detail));
+    }
+
+    public List&lt;AuditEntry&gt; recent() {
+        return em.createQuery("SELECT a FROM AuditEntry a ORDER BY a.id DESC", AuditEntry.class)
+                 .setMaxResults(25)
+                 .getResultList();
+    }
+}</code></pre>
+    <p>One annotation, and an audit line that a rolled-back transfer cannot erase. Note also that
+      <code>recent()</code> is deliberately capped — an audit log grows forever, and a page that tried to
+      show all of it would fall over.</p>
+
+    <p><strong><code>messaging/TransferMDB.java</code></strong> — the bean nobody calls.</p>
+    <pre><code>@MessageDriven(activationConfig = {
+        @ActivationConfigProperty(propertyName = "destinationLookup",
+                                  propertyValue = "java:/jms/queue/TransferQueue"),
+        @ActivationConfigProperty(propertyName = "destinationType",
+                                  propertyValue = "jakarta.jms.Queue")
+})
+public class TransferMDB implements MessageListener {
+
+    @EJB private AccountService service;
+    @EJB private AuditService audit;
+
+    @Override
+    public void onMessage(Message message) {
+        String body = message.getBody(String.class);        // "from:to:amount"
+        String[] parts = body.split(":");
+        // …
+        String receipt = service.transferOrRefuse(from, to, amount);
+        audit.record("QUEUED-TRANSFER", receipt.startsWith("REFUSED") ? "REFUSED" : "OK", receipt);
+    }
+}</code></pre>
+    <p>Two things to notice. <code>onMessage</code> cannot declare a checked exception — the
+      <code>MessageListener</code> interface does not allow it — so failures must be handled here or
+      turned into runtime ones. And the refusal is <em>returned</em>, not thrown, so the transaction
+      commits and the message is acknowledged.</p>
+
+    <p><strong><code>dao/RawAccountDao.java</code></strong> — the SQL JPA was writing for you.</p>
+    <pre><code>@Stateless
+public class RawAccountDao {
+
+    @Resource(lookup = "java:jboss/datasources/ExampleDS")
+    private DataSource dataSource;
+
+    public List&lt;String&gt; allAccountsByHand() throws SQLException {
+
+        String sql = "SELECT id, holder, balance, version FROM accounts ORDER BY id";
+        List&lt;String&gt; lines = new ArrayList&lt;&gt;();
+
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+
+            while (rs.next()) {
+                lines.add("Account " + rs.getInt("id")
+                        + " | " + rs.getString("holder")
+                        + " | balance " + rs.getBigDecimal("balance").toPlainString()
+                        + " | @Version " + rs.getInt("version"));
+            }
+        }
+        return lines;
+    }
+}</code></pre>
+    <p>Compare this with <code>AccountService.findAll()</code>, which is four lines and returns
+      <code>Account</code> objects. Everything in this method is what JPA removes from your code — and the
+      <code>?</code> placeholder with <code>setInt</code> is the part you must never give up, because
+      concatenating user input into SQL is how injection happens.</p>
+
+    <p><strong><code>remote-client/src/com/globalbank/client/RemoteClient.java</code></strong> — the
+      program outside the server.</p>
+    <pre><code>Properties env = new Properties();
+env.put(Context.INITIAL_CONTEXT_FACTORY,
+        "org.wildfly.naming.client.WildFlyInitialContextFactory");
+env.put(Context.PROVIDER_URL, "remote+http://localhost:8080");
+
+Context ctx = new InitialContext(env);
+
+AccountServiceRemote bank = (AccountServiceRemote) ctx.lookup(
+        "ejb:/globalbank-web/AccountService!com.globalbank.ejb.AccountServiceRemote");
+
+System.out.println(bank.transfer(1001, 1002, new BigDecimal("25.00")));</code></pre>
+    <p>To the code below that lookup, <code>bank</code> is an ordinary object. It is not: it is a
+      <strong>stub</strong>, and every method call on it is serialised, posted to WildFly, executed there,
+      and the answer posted back. Session 6's rule of thumb applies — a bean that needs ten calls to do
+      one job is a bad remote bean.</p>
+
+  </details>
+
+  <h3>Debugging: the four things that actually go wrong</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you are looking at</th><th>Where to look first</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>A page full of empty values</td>
+        <td>Getter names. <code>#{bank.message}</code> needs <code>getMessage()</code>. JSF finds methods
+          by name and fails quietly — no exception, just a blank cell.</td>
+      </tr>
+      <tr>
+        <td>A page showing <code>#{…}</code> literally</td>
+        <td><code>FacesServlet</code> is not mapped to <code>*.xhtml</code> in <code>web.xml</code>. The
+          template was served without being processed.</td>
+      </tr>
+      <tr>
+        <td>The same audit line, over and over</td>
+        <td>A refusal is being thrown where it should be returned. Read
+          <code>AccountService.transferOrRefuse</code> — the transaction is marked rollback-only the
+          moment <code>@ApplicationException(rollback = true)</code> leaves a bean method.</td>
+      </tr>
+      <tr>
+        <td><code>NamingException</code> from the remote client</td>
+        <td>Three things, in order: is WildFly running, is the war deployed
+          (<code>globalbank-web.war.deployed</code>), and is the JNDI name exact — including the
+          <code>!</code> and the interface's full package.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Practical 2 Assessment</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "The audit log contains a line about a transfer that was refused and rolled back. Why is that line still in the database?",
+        "opts": [
+          "AuditService.record() is not part of any transaction, so it is never rolled back",
+          "AuditService.record() is annotated REQUIRES_NEW, so the container suspends the caller's transaction, commits its own, and resumes",
+          "The audit log is written to a separate database that transactions cannot reach",
+          "The exception was caught before the transaction could roll back"
+        ],
+        "a": 1,
+        "why": "REQUIRES_NEW tells the container to suspend the caller's transaction, run the method in a brand new one, commit it, and then resume the caller's. The audit line is committed before the transfer has succeeded or failed, so the transfer's rollback cannot reach it. Option 4 is the trap: catching the exception does not stop a rollback the container has already decided on."
+      },
+      {
+        "q": "A message-driven bean catches InsufficientFundsException inside onMessage and logs it. The message is then redelivered, over and over. Why?",
+        "opts": [
+          "The broker did not receive an acknowledgement because the queue was configured wrongly",
+          "onMessage must always rethrow, so catching is pointless",
+          "The exception is marked @ApplicationException(rollback = true), so the container marks the transaction rollback-only the moment it leaves the bean method — no catch block can undo that, so the transaction rolls back and the message returns",
+          "TransferMDB is missing a @TransactionAttribute annotation"
+        ],
+        "a": 2,
+        "why": "The damage happens when the exception leaves the CMT bean method: the container marks the current transaction rollback-only. Your catch runs afterwards and cannot reverse a decision already made. Because the acknowledgement is part of that same transaction, the message is redelivered. AccountService.transferOrRefuse exists precisely to turn the refusal into a return value instead."
+      },
+      {
+        "q": "Why does AccountService.findAll() wrap its result in new ArrayList&lt;&gt;(…)?",
+        "opts": [
+          "ArrayList is faster than the List a JPA provider returns",
+          "To sort the results before returning them",
+          "Because the method is now reachable over a remote interface, and the List a JPA provider hands back is not guaranteed to be serialisable",
+          "To detach the entities from the persistence context"
+        ],
+        "a": 2,
+        "why": "A remote call has to turn the result into bytes. Hibernate happens to return an ArrayList, but nothing in the specification promises it, so copying into a plain ArrayList makes the method safe for both the local caller and the remote one. The cost is one small object."
+      },
+      {
+        "q": "The page shows #{bank.accounts} and you never wrote that name anywhere in the page's Java. Where does \"bank\" come from?",
+        "opts": [
+          "From faces-config.xml, which registers the bean under that name",
+          "From the class name AccountsBean, lowercased automatically",
+          "From @Named(\"bank\") on AccountsBean — the annotation is the entire wiring",
+          "From web.xml, which maps the page to a bean"
+        ],
+        "a": 2,
+        "why": "@Named gives the object a name in the view. That single annotation is the whole connection between the page and the Java class — no registration, no lookup, no new. And there is no faces-config.xml in this project at all: it is not required."
+      },
+      {
+        "q": "You submit the form with an amount of 0. The page shows a message, and AccountsBean.submit() is never entered. Who rejected it?",
+        "opts": [
+          "AccountService, which threw IllegalArgumentException",
+          "Jakarta Faces, during the validation phase of the lifecycle, reading the constraints on TransferRequest",
+          "The EJB container, which threw ConstraintViolationException",
+          "The database, which refused the INSERT"
+        ],
+        "a": 1,
+        "why": "JSF runs validation in Phase 3 of its lifecycle, reading the Bean Validation constraints on the model object. A failure there short-circuits the remaining phases, so the action method is never invoked. The same constraints would also be enforced by the EJB container and by JPA — that is the point of declaring a rule once."
+      },
+      {
+        "q": "Why does RemoteClient need the AccountServiceRemote interface on its classpath but not AccountService?",
+        "opts": [
+          "Because interfaces are smaller than classes, so the download is faster",
+          "Because AccountService is abstract and cannot be loaded by the client JVM",
+          "Because the client calls methods declared by the interface, and the implementation runs on the server — shipping the bean class would be dead weight",
+          "Because the interface contains the JNDI name, which the bean class does not have"
+        ],
+        "a": 2,
+        "why": "A remote interface is a contract; the implementation stays where it can actually do the work. The client holds a stub that looks like the interface and performs its work across the network. This is also why Account must be Serializable and why the remote interface must not be changed casually."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="summary">
+    <p>The same bank, reached four new ways. <strong>@Named + @ViewScoped</strong> gives a page a Java
+      object and a lifetime. <strong>@Remote</strong> publishes methods to programs outside the server.
+      <strong>@JMSDestinationDefinition</strong> creates a queue in code and
+      <strong>@MessageDriven</strong> lets a bean nobody calls pick work up off it.
+      <strong>Bean Validation</strong> states a rule once and every layer enforces it. And
+      <strong>REQUIRES_NEW</strong> writes one thing in its own transaction so that a rollback elsewhere
+      cannot erase it — which is the only reason a bank can keep a record of what it
+      <em>refused</em> to do.</p>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Throwing a refusal out of a message-driven bean, or catching one and expecting the transaction to survive</td>
+        <td>Return the refusal as a value. Once <code>@ApplicationException(rollback = true)</code> leaves a bean method, the transaction is doomed and no <code>catch</code> can save it.</td>
+      </tr>
+      <tr>
+        <td>Using the default transaction attribute for an audit log</td>
+        <td>Use <code>REQUIRES_NEW</code>. With <code>REQUIRED</code> the log rolls back with the thing it was describing, and you lose the refusals — the entries that matter most.</td>
+      </tr>
+      <tr>
+        <td>Returning a JPA provider's <code>List</code> from a remote method</td>
+        <td>Copy it: <code>new ArrayList&lt;&gt;(…)</code>. Serialisation is not guaranteed otherwise, and this fails only in production.</td>
+      </tr>
+      <tr>
+        <td>Confusing the queue's JNDI name with its physical <code>destinationName</code></td>
+        <td>They are different things on purpose. JNDI is for Java code; <code>destinationName</code> is what the broker calls it.</td>
+      </tr>
+      <tr>
+        <td>Renaming <code>javax.naming</code> to <code>jakarta.naming</code> because "everything moved"</td>
+        <td>JNDI and JDBC are Java SE and kept their names. Only the Jakarta EE specifications were renamed.</td>
+      </tr>
+      <tr>
+        <td>Putting the cross-field rule on one field</td>
+        <td>It cannot go there. Use a <code>boolean</code> method with <code>@AssertTrue</code> — and guard the untouched form, or every new visitor gets an error before typing.</td>
+      </tr>
+      <tr>
+        <td>Letting a getter return something different from what the setter stored</td>
+        <td>Keep them boring. JSF reads and writes through them, and the page breaks in a way that produces no exception and no clue.</td>
+      </tr>
+      <tr>
+        <td>Adding <code>@SessionScoped</code> to a page bean out of habit</td>
+        <td>Use <code>@ViewScoped</code> when the data belongs to the page. Session scope means two tabs share one half-filled form, and memory is held long after the user has gone.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you just used</th><th>Where it comes back</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Named</code>, <code>@ViewScoped</code>, Facelets, <code>web.xml</code></td><td><a href="session-05-facelets.html">Session 5</a> — and Practical 3 adds CDI producers and qualifiers to the same page</td></tr>
+      <tr><td><code>@Remote</code>, JNDI, stubs, serialisation</td><td><a href="session-06-local-remote.html">Session 6</a>, and <a href="15-rest-jaxrs.html">REST with JAX-RS</a> as the modern alternative front door</td></tr>
+      <tr><td>Queues, <code>@MessageDriven</code>, message acknowledgement</td><td><a href="session-07-messaging.html">Session 7</a> — and its <a href="session-07-tiy.html">review lab</a></td></tr>
+      <tr><td><code>DataSource</code>, raw JDBC, pooling, <code>PreparedStatement</code></td><td><a href="session-08-connectors.html">Session 8</a> — and <a href="session-08-tiy.html">its review lab</a></td></tr>
+      <tr><td>Bean Validation constraints and <code>@AssertTrue</code></td><td><a href="session-09-bean-validation.html">Session 9</a></td></tr>
+      <tr><td><code>REQUIRES_NEW</code>, BMT, <code>UserTransaction</code>, rollback rules</td><td><a href="session-10-ejb-transactions.html">Session 10</a> — <code>BatchTransferBean</code> is its BMT example</td></tr>
+      <tr><td>Testing any of this</td><td><a href="16-testing.html">Testing a Jakarta EE Application</a> — and Practical 3 adds JUnit tests for <code>AccountService</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--key"><span class="callout__i">➡️</span>
+    <div class="callout__b"><b>What comes next</b>
+      Practical 3 keeps every file you just built and adds the last three things a real application needs:
+        <strong>CDI</strong> wiring (a <code>@Produces</code> config value, <code>@Email</code> and
+        <code>@Sms</code> qualifiers for a notifier, a <code>@Logged</code> interceptor, an
+        <code>@Observes</code> event), <strong>security</strong> (a login form backed by
+        <code>@DatabaseIdentityStoreDefinition</code>, with <code>@RolesAllowed</code> on the beans), and
+        <strong>packaging</strong> (the same application as a multi-module EAR). Do the optional
+        challenges in the project's <code>README.md</code> first — Practical 3 assumes you can read these
+        classes without help.</div>
+  </div>
+
+  <section class="further-study">
+    <h2>Official Guides for This Practical</h2>
+    <p>These are the primary sources behind every annotation you used. You do not need them to finish the
+      practical — but they are where to look when you want the full rule rather than the summary.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Specifications &amp; documentation:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/faces/" target="_blank" rel="noopener">Jakarta Faces Specification</a> — Facelets, the lifecycle, <code>@ViewScoped</code> and CDI integration</li>
+          <li><a href="https://jakarta.ee/specifications/messaging/" target="_blank" rel="noopener">Jakarta Messaging Specification</a> — queues, <code>JMSContext</code>, message-driven beans and acknowledgement</li>
+          <li><a href="https://jakarta.ee/specifications/bean-validation/" target="_blank" rel="noopener">Jakarta Bean Validation Specification</a> — every built-in constraint and how <code>@AssertTrue</code> works</li>
+          <li><a href="https://jakarta.ee/specifications/enterprise-beans/" target="_blank" rel="noopener">Jakarta Enterprise Beans Specification</a> — <code>@Remote</code>, <code>@MessageDriven</code>, transaction attributes and the rollback rules</li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly Documentation</a> — messaging subsystems, datasources and the management CLI</li>
+        </ul>
+        <p style="margin:.6rem 0 0">
+          <a href="index.html">Course index</a> ·
+          <a href="glossary.html">Glossary</a> ·
+          project run guide: <code>lab/practical-2-web-messaging/README.md</code> ·
+          previous practical: <a href="practical-01-core.html">Practical 1 — Build the Core</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
+<script src="assets/js/terminal.js"></script>

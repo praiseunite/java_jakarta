@@ -1,0 +1,1545 @@
+<meta charset="utf-8" />
+<title>Self-Study Block 2 — Sessions 9 to 14 (Revision, Assignments &amp; Labs)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Self-Study Block 2 for Sessions 9 to 14: revise Bean Validation, Bean-Managed Transactions and JNDI, CDI scopes, qualifiers, interceptors and events, role-based security and enterprise packaging, then work the six assignments and the three practical lab projects step by step." />
+<link rel="stylesheet" href="assets/css/styles.css" />
+<script>window.PAGE = "ss2";</script>
+
+<main class="page">
+
+  <h1>Self-Study Block 2 · Sessions 9 to 14 — Revision, Assignments &amp; Labs</h1>
+  <p class="lede">Book Sessions 9 to 14 are where you stop writing single classes and start building a
+    whole enterprise application. <strong>Bean Validation</strong> guards the data at the front door.
+    <strong>Transactions</strong> make sure the work either finishes or leaves nothing behind.
+    <strong>CDI</strong> wires the parts together without them knowing each other. And
+    <strong>packaging</strong> turns the whole thing into one file a server will accept. This page is
+    your whole self-study block in one place: first a revision guide that explains every term, then the
+    six assignments with a clear picture of what "done" looks like, then three practical labs you build
+    and check yourself. Nothing here assumes a teacher in the room.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Every heavy word — <em>constraint, scope,
+          qualifier, interceptor, demarcation, archive</em> — gets a plain-English box the moment it
+          appears.</li>
+        <li><strong>Nothing is summarised away.</strong> Every exercise, command, question and code
+          sample from the three source documents is kept here, in full.</li>
+        <li><strong>Everything is checkable.</strong> Each assignment says what "done" looks like; each
+          lab says what you should see if it worked.</li>
+        <li><strong>You can do this alone.</strong> No teacher, no partner, no discussion group
+          required — read it top to bottom the first time.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Not ten objectives copied from a manual — these nine things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what each Bean Validation constraint actually checks, and when <code>@NotNull</code> is not enough</td><td>Part 1.1</td></tr>
+      <tr><td>Describe a custom constraint as two pieces: the annotation and the validator</td><td>Part 1.1 &amp; Assignment 9</td></tr>
+      <tr><td>Tell CMT from BMT by <em>who</em> opens, commits and rolls back the transaction</td><td>Part 1.2</td></tr>
+      <tr><td>Match each CDI scope to the lifespan it gives a bean</td><td>Part 1.3</td></tr>
+      <tr><td>Explain qualifiers, producers, interceptors and CDI events in one sentence each</td><td>Part 1.4</td></tr>
+      <tr><td>Choose between an EJB JAR, a WAR, an EAR and a Skinny WAR</td><td>Part 1.5</td></tr>
+      <tr><td>Complete the six online assignments, and know exactly what "done" looks like</td><td>Part 2</td></tr>
+      <tr><td>Build and verify the three practical lab projects</td><td>Part 3</td></tr>
+      <tr><td>Answer the exam-style questions on Sessions 9 to 14</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small label above each block tells you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// assignment</code> — a piece of coursework, with what to do and what "done" looks like.</li>
+        <li><code>// practical lab</code> — numbered steps with the exact code and the output you should see.</li>
+        <li><code>// checkpoint</code> — a self-test. The answers stay hidden until you ask.</li>
+        <li><code>// reference</code> — dense lookup material, collapsed. Open only what you need.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it once from top to bottom. Then come back and work Part 2 and Part 3 with your editor open.
+    </div>
+  </div>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What this block consolidates (Self-Study S5–S8, Sessions 9 to 14)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Declarative data integrity with Jakarta <strong>Bean Validation</strong> (Session 9)</li>
+        <li>Fine-grained transaction control with <strong>Bean-Managed Transactions</strong> and JNDI (Session 10)</li>
+        <li>Dependency injection, <strong>contexts and scopes</strong> with CDI, Part I (Session 11)</li>
+        <li>Advanced CDI: qualifiers, producers, <strong>interceptors and events</strong>, Part II (Session 12)</li>
+        <li>Decoupled architecture: <strong>CDI events and role-based security</strong> (Session 13)</li>
+        <li>Enterprise packaging: <strong>EJB JARs, JPA persistence, Skinny WARs and EARs</strong> (Session 14)</li>
+      </ol>
+      Recommended study time: 4 to 6 hours of active reading, architecture mapping and code review.
+    </div>
+  </div>
+
+  <hr />
+
+  <!-- =====================================================================
+       PART 1 — REVISION GUIDE
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · Revision guide — Sessions 9 to 14</h2>
+
+  <p>This part is the whole revision guide, item by item. It is written in the order the sessions were
+    taught, so reading it top to bottom walks the same path your course did: guard the data, then move
+    it safely, then wire the pieces together, then make them talk without knowing each other, then lock
+    the doors, then put it all in one box and ship it.</p>
+
+  <div class="plainwords"><b>In plain words — the six sessions in one breath</b>
+    <p><strong>Session 9 (Validation).</strong> Before anyone acts on data, check its shape and its
+      rules. <strong>Session 10 (Transactions).</strong> When you do act, make the change all-or-nothing.
+      <strong>Sessions 11 and 12 (CDI).</strong> Let the container create and share objects for you,
+      each with a lifespan that suits its job, and add qualifiers and interceptors so the pieces stay
+      decoupled. <strong>Session 13 (Security and events).</strong> Let beans announce things that
+      happened, and let the container decide who is allowed to do what. <strong>Session 14
+      (Packaging).</strong> Zip it into one archive the server recognises, and hand it over.</p>
+  </div>
+
+  <h3>1.1 Jakarta Bean Validation (Session 9)</h3>
+  <p><strong>Bean Validation</strong> lets you write the rules of your data as <em>annotations</em> on
+    the fields themselves. A program called the <em>validation engine</em> reads those annotations and
+    reports every rule that a value breaks — you never write an <code>if</code> statement for it.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>constraint</strong> is a rule written as an annotation, such as <code>@NotNull</code>
+      or <code>@Size(min = 3, max = 50)</code>. A <strong>violation</strong> is one broken rule. A
+      <strong>ConstraintValidator</strong> is the class that does the actual checking for a custom
+      constraint. The constraints are declarations; the engine does the enforcing.</p>
+  </div>
+
+  <p>These are the standard constraints the revision material singles out. Read the last column slowly —
+    plenty of beginners assume the first three behave the same, and they do not:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Constraint</th><th>Works on</th><th>The rule, in plain words</th></tr></thead>
+    <tbody>
+      <tr><td><code>@NotNull</code></td><td>Any object</td><td>The value must be present. Careful: an empty string <code>""</code> is still <em>present</em>, so <code>@NotNull</code> lets it through.</td></tr>
+      <tr><td><code>@NotEmpty</code></td><td>Text, collections, maps</td><td>Must be present <em>and</em> must have something in it: length or size greater than zero.</td></tr>
+      <tr><td><code>@NotBlank</code></td><td>Text only</td><td>Must be present and contain at least one character that is not a space. This is the one you usually want for names.</td></tr>
+      <tr><td><code>@Size(min, max)</code></td><td>Text, collections, arrays</td><td>The length or size must fall between <code>min</code> and <code>max</code>, inclusive.</td></tr>
+      <tr><td><code>@Min(n)</code> / <code>@Max(n)</code></td><td>Numbers</td><td>The value must be at least <code>n</code> / at most <code>n</code>.</td></tr>
+      <tr><td><code>@Email</code></td><td>Text</td><td>Must look like a valid email address.</td></tr>
+      <tr><td><code>@Past</code> / <code>@Future</code></td><td>Dates and timestamps</td><td>The moment must fall strictly before / after the current clock.</td></tr>
+      <tr><td><code>@Pattern(regexp)</code></td><td>Text</td><td>Must match the regular expression you supply.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h4>The architecture of a custom constraint</h4>
+  <p>A custom constraint is always <strong>two</strong> artifacts working as a pair. If you can name the
+    two pieces, you can answer any exam question about them:</p>
+  <ol>
+    <li><strong>The annotation definition.</strong> An interface annotated with
+      <code>@Constraint(validatedBy = MyValidator.class)</code>, plus <code>@Target</code> to say where
+      it may be placed, and <code>@Retention(RUNTIME)</code> so the engine can still read it while the
+      program runs.</li>
+    <li><strong>The validator class.</strong> A class implementing
+      <code>ConstraintValidator&lt;MyAnnotation, TargetType&gt;</code>, whose <code>isValid</code>
+      method returns <code>true</code> or <code>false</code> for one value.</li>
+  </ol>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧩</span>
+    <div class="callout__b"><b>Analogy</b>
+      The annotation is the <strong>label</strong> on a parcel — "fragile". The validator is the
+      <strong>worker</strong> in the depot who actually shakes the box and decides whether the label is
+      telling the truth. A label with no worker checks nothing; a worker with no label never gets
+      called.</div>
+  </div>
+
+  <p>You will build exactly this pair, end to end, in Lab Project 1 (Part 3) and in Assignment 9
+    (Part 2).</p>
+
+  <h3>1.2 EJB transactions: BMT versus CMT (Session 10)</h3>
+  <p>A <strong>transaction</strong> is a unit of work that is all-or-nothing: either every change inside
+    it is written, or none of it is. The only real question is <em>who controls the boundaries</em> —
+    the container, or you. That is the whole difference between CMT and BMT.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>CMT (Container-Managed Transaction).</strong> You add one annotation
+      (<code>@TransactionAttribute</code>) and the container opens, commits and — if something goes
+      wrong — rolls back the transaction for you. This is the default and it is right for about 95% of
+      business code.</p>
+    <p><strong>BMT (Bean-Managed Transaction).</strong> You take the controls yourself with a
+      <code>UserTransaction</code> object. You call <code>begin()</code>, <code>commit()</code> and
+      <code>rollback()</code> by hand. It is more work, but it lets you publish work in
+      <strong>chunks</strong> instead of one giant all-or-nothing block.</p>
+  </div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Criterion</th><th>Container-Managed (CMT)</th><th>Bean-Managed (BMT)</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Who demarcates it</strong> (decides where it starts and ends)</td><td>The container, driven by <code>@TransactionAttribute</code></td><td>You, through the <code>UserTransaction</code> API</td></tr>
+      <tr><td><strong>Methods available</strong></td><td>None to call — it is handled declaratively</td><td><code>utx.begin()</code>, <code>utx.commit()</code>, <code>utx.rollback()</code></td></tr>
+      <tr><td><strong>How it is obtained</strong></td><td>The container manages the lifecycle automatically</td><td><code>@Resource private UserTransaction utx;</code></td></tr>
+      <tr><td><strong>How it is switched on</strong></td><td>The default, or <code>@TransactionManagement(CONTAINER)</code></td><td><code>@TransactionManagement(TransactionManagementType.BEAN)</code></td></tr>
+      <tr><td><strong>Which beans may use it</strong></td><td><code>@Stateless</code>, <code>@Stateful</code>, <code>@Singleton</code>, <code>@MessageDriven</code></td><td><code>@Stateless</code>, <code>@Stateful</code>, <code>@MessageDriven</code> — <strong>not</strong> <code>@Singleton</code></td></tr>
+      <tr><td><strong>Best used for</strong></td><td>Standard create, read, update and delete work, and ordinary business workflows</td><td>Multi-phase batch processing, manual checkpoints, non-standard rollback rules</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--warn"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The crucial rule for BMT</b>
+      In a BMT bean you <strong>cannot</strong> leave a transaction uncommitted across method
+      invocations in a <code>@Stateless</code> bean. The transaction <strong>must begin and end within
+      the same method call</strong>. Stateless beans may be reused freely between calls, so there is no
+      safe place to park an open transaction — if you forget to commit or roll back, it will sit on the
+      thread holding locks until it times out.</div>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏦</span>
+    <div class="callout__b"><b>Analogy</b>
+      CMT is a restaurant where the waiter handles the bill for you — you just eat. BMT is a
+      self-checkout till: you scan each item, and <em>you</em> press "pay". If you walk away mid-scan,
+      the basket stays open and blocks the till.</div>
+  </div>
+
+  <h3>1.3 CDI scopes and lifecycles (Sessions 11 and 12)</h3>
+  <p><strong>CDI</strong> (Contexts and Dependency Injection) is the part of Jakarta EE that creates
+    objects for you and decides <em>how long each one lives</em>. That lifespan is called a
+    <strong>scope</strong>. Choosing the right scope is the whole skill of this section: a shopping
+    cart must survive from page to page, but a search-query bean should be thrown away the moment the
+    response is sent.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>scope</strong> is a bean's lifetime. When you annotate a class with a scope, you are
+      telling the container how long to keep that object and who shares it. CDI 4.0 defines five
+      standard scopes:</p>
+  </div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>CDI scope</th><th>Annotation</th><th>How long it lives</th><th>Typical use</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Dependent</strong> <em>(the default)</em></td>
+        <td><code>@Dependent</code></td>
+        <td>Exactly as long as the bean it was injected into.</td>
+        <td>Utility classes, loggers, stateless helpers.</td>
+      </tr>
+      <tr>
+        <td><strong>Request</strong></td>
+        <td><code>@RequestScoped</code></td>
+        <td>One single HTTP request and its response.</td>
+        <td>Form backing beans, search query parameters.</td>
+      </tr>
+      <tr>
+        <td><strong>Session</strong></td>
+        <td><code>@SessionScoped</code></td>
+        <td>Across many requests from the same browser session. The class must be
+          <code>Serializable</code>.</td>
+        <td>Logged-in user state, shopping cart.</td>
+      </tr>
+      <tr>
+        <td><strong>Application</strong></td>
+        <td><code>@ApplicationScoped</code></td>
+        <td>As long as the deployed application is running. Shared by every user.</td>
+        <td>Configuration caches, global counters.</td>
+      </tr>
+      <tr>
+        <td><strong>Conversation</strong></td>
+        <td><code>@ConversationScoped</code></td>
+        <td>Across several requests, but you decide the start and end by hand with
+          <code>conversation.begin()</code> and <code>conversation.end()</code>.</td>
+        <td>Multi-step registration wizards.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏨</span>
+    <div class="callout__b"><b>Analogy</b>
+      Think of a hotel. A <strong>request</strong> scope is a room key handed out for one night.
+      A <strong>session</strong> scope is your whole stay — the key keeps working until you check out.
+      An <strong>application</strong> scope is the building itself, the same for every guest.
+      A <strong>conversation</strong> is a conference booking: it lasts exactly as long as the organiser
+      says, and can span several rooms and days.</div>
+  </div>
+
+  <h3>1.4 CDI qualifiers, producers, interceptors and events (Sessions 12 and 13)</h3>
+  <p>Four small mechanisms turn a pile of classes into a decoupled architecture. Each one gets a
+    one-sentence meaning and the exact shape of the code.</p>
+
+  <h4>Qualifiers — how to say "this particular one"</h4>
+  <p>A <strong>qualifier</strong> is a custom annotation that disambiguates between several
+    implementations of the same interface. When two classes both implement
+    <code>PaymentGateway</code>, the container cannot guess which one you meant; the qualifier names it,
+    and it does so in a type-safe way rather than with a brittle string lookup.</p>
+  <pre><code>@Inject @CreditCard PaymentGateway gateway;</code></pre>
+  <p>Read it as: "inject <em>the credit-card implementation</em> of the payment gateway".</p>
+
+  <h4>Producer methods — how to make a foreign class injectable</h4>
+  <p>A <strong>producer method</strong> is a method that CDI calls to <em>create</em> an injectable
+    object. It is how you bring a third-party class, a factory output, or a value that must be computed
+    at startup into the world of injection.</p>
+  <pre><code>@Produces @ApplicationScoped public Connection createDBConnection() { ... }</code></pre>
+  <p>Read it as: "whenever something asks for a <code>Connection</code>, call this method and give them
+    what it returns".</p>
+
+  <h4>Interceptors — how to add cross-cutting behaviour</h4>
+  <p>An <strong>interceptor</strong> runs code <em>around</em> a business method — before it, after it,
+    or both — without the business class knowing. Logging, timing, and security auditing are the classic
+    examples: concerns that are not the business's job but must happen on every call anyway.</p>
+  <pre><code>@AroundInvoke public Object audit(InvocationContext ctx) throws Exception { ... return ctx.proceed(); }</code></pre>
+  <p><code>ctx.proceed()</code> is the line that actually runs your business method. Everything you
+    write before it happens on the way in; everything after it happens on the way out.</p>
+
+  <h4>CDI events — how to decouple without a queue</h4>
+  <p>A <strong>CDI event</strong> is an in-memory announcement: one bean says "this happened", and any
+    number of other beans may react, without the sender knowing who is listening. It is fired with an
+    injected <code>Event&lt;T&gt;</code> object and received by an observer method.</p>
+  <pre><code>// fire it
+event.fire(new OrderPlacedEvent(order));            // synchronous: listeners run now
+event.fireAsync(new OrderPlacedEvent(order));       // asynchronous: listeners run on their own thread
+
+// receive it
+void onOrder(@ObservesAsync OrderPlacedEvent event) { ... }</code></pre>
+
+  <div class="plainwords"><b>In plain words — synchronous vs asynchronous</b>
+    <p><code>fire()</code> announces the event and waits while every listener finishes; the sender and
+      the listeners share the same thread. <code>fireAsync()</code> announces it and returns immediately;
+      the listeners run later on separate threads, so a slow listener cannot hold up the caller.</p>
+  </div>
+
+  <h3>1.5 Packaging architectures (Session 14)</h3>
+  <p>Finally, a server will not accept a folder of loose source files. It wants one archive, built to a
+    shape it recognises. There are four shapes worth knowing, and the last one is the modern default.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Package</th><th>What it holds</th><th>In plain words</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>EJB JAR</strong><br /><em>(<code>ejb-jar.xml</code>)</em></td>
+        <td>Compiled business interfaces and session beans.</td>
+        <td>A box of pure business logic. Its descriptor is now optional in modern Jakarta EE.</td>
+      </tr>
+      <tr>
+        <td><strong>Web Archive (WAR)</strong></td>
+        <td>Web resources: <code>WEB-INF/web.xml</code>, JSF views, servlets, and CDI beans under
+          <code>WEB-INF/classes</code>.</td>
+        <td>The web-facing box — the pages and endpoints a user reaches.</td>
+      </tr>
+      <tr>
+        <td><strong>Enterprise Archive (EAR)</strong></td>
+        <td>Several WARs and EJB JARs, plus a shared <code>lib/</code>, declared in
+          <code>META-INF/application.xml</code>.</td>
+        <td>One delivery van carrying several boxes — a whole multi-module suite in one file.</td>
+      </tr>
+      <tr>
+        <td><strong>Skinny WAR</strong></td>
+        <td>EJBs, JPA entities, CDI beans and web views all inside a single <code>.war</code>, with the
+          server's own API libraries left out.</td>
+        <td>The modern recommended shape: one box, no EAR required. "Skinny" because it does not carry a
+          duplicate copy of the Jakarta EE API — the server already has that.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Why "skinny" matters</b>
+      If you bundle the Jakarta EE API inside your WAR instead of marking it
+      <code>&lt;scope&gt;provided&lt;/scope&gt;</code> in Maven, you ship <strong>two copies</strong> of the
+      same classes — yours and the server's. That causes confusing, intermittent errors such as
+      <code>ClassCastException</code> or "loaded by a different classloader". A WAR that carries only
+      your code, and lets the server supply the API, is skinny — and correct.</div>
+  </div>
+
+  <h3>1.6 Exam-style questions you must be able to answer</h3>
+  <p>These three come straight from the revision material. Answer each out loud before you open it.</p>
+
+  <details>
+    <summary><strong>Q1 · What is the difference between <code>@SessionScoped</code> in CDI and <code>@Stateful</code> in EJB?</strong></summary>
+    <p><code>@SessionScoped</code> CDI beans are bound to the <strong>HTTP session</strong> and manage
+      <em>web-tier user state</em>. <code>@Stateful</code> EJBs are <strong>transactional business
+      beans</strong> with container-managed clustering, failover, and passivation
+      (<code>@PrePassivate</code> / <code>@PostActivate</code>). Modern applications frequently inject a
+      <code>@Stateful</code> EJB into a <code>@SessionScoped</code> CDI backing bean — the session bean
+      remembers the web conversation, and the stateful bean does the transactional work.</p>
+  </details>
+
+  <details>
+    <summary><strong>Q2 · What is the difference between CDI Events and JMS Messaging?</strong></summary>
+    <p>CDI Events are <strong>lightweight, in-memory</strong> events dispatched within the same JVM, with
+      no network serialisation overhead. Jakarta <strong>JMS</strong> is an external messaging subsystem
+      supporting distributed queues and topics, persistent message storage on disk, and message delivery
+      <em>across distinct servers</em>. Choose CDI events to decouple beans inside one application;
+      choose JMS to survive a restart or to talk to another machine.</p>
+  </details>
+
+  <details>
+    <summary><strong>Q3 · Why is <code>beans.xml</code> required in <code>WEB-INF/</code> or <code>META-INF/</code>?</strong></summary>
+    <p><code>beans.xml</code> tells the CDI container <strong>how to discover beans</strong> inside the
+      archive. Setting <code>bean-discovery-mode="annotated"</code> scans only classes that carry CDI
+      scope annotations — the fastest startup, and the modern default. Setting
+      <code>bean-discovery-mode="all"</code> scans every class in the JAR or WAR, which is slower but
+      catches beans you forgot to annotate.</p>
+  </details>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Cover Part 1 and answer from memory. Then open the answers.</p>
+    <ol>
+      <li>A field marked <code>@NotNull</code> receives the value <code>""</code> (an empty string). Does
+        validation pass? Which annotation would actually reject it?</li>
+      <li>Name the two artifacts every custom constraint needs, and say what each one does.</li>
+      <li>In one sentence: who opens and commits the transaction in CMT, and who does it in BMT?</li>
+      <li>Which CDI scope lives for exactly one HTTP request, and which one is shared by every user of
+        the application?</li>
+      <li>What does <code>fireAsync()</code> do that <code>fire()</code> does not?</li>
+      <li>Which packaging shape holds EJBs, entities and web views in one <code>.war</code>, and why is
+        it called "skinny"?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>It passes.</strong> <code>@NotNull</code> only checks that a value is present, and
+          <code>""</code> is present. <code>@NotBlank</code> (or <code>@NotEmpty</code>) is what rejects
+          it.</li>
+        <li>The <strong>annotation definition</strong> (with <code>@Constraint(validatedBy = …)</code>,
+          <code>@Target</code>, <code>@Retention(RUNTIME)</code>) and the <strong>validator
+          class</strong> (implementing <code>ConstraintValidator&lt;Annotation, Type&gt;</code>). The
+          annotation is the label; the validator is the worker.</li>
+        <li><strong>CMT:</strong> the container opens and commits it. <strong>BMT:</strong> you do, with
+          <code>utx.begin()</code> and <code>utx.commit()</code> / <code>utx.rollback()</code>.</li>
+        <li><code>@RequestScoped</code> lives for one request; <code>@ApplicationScoped</code> is shared
+          by every user.</li>
+        <li>It announces the event and returns immediately, running observers asynchronously on separate
+          threads; <code>fire()</code> runs them synchronously on the caller's thread.</li>
+        <li>A <strong>Skinny WAR</strong>. "Skinny" because it leaves the Jakarta EE API out — the server
+          supplies its own copy — so it carries no duplicate classes.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr />
+
+  <!-- =====================================================================
+       PART 2 — ASSIGNMENTS
+       ===================================================================== -->
+
+  <span class="eyebrow">assignment</span>
+  <h2>Part 2 · The six assignments — Sessions 9 to 14</h2>
+
+  <p>These are the OnlineVarsity work assignments for Book Sessions 9 through 14. Each one has a
+    <strong>lab</strong> attached. Work them in order; each session builds on the one before. For every
+    assignment below you get three things: <strong>what to do</strong>, <strong>what "done" looks
+    like</strong>, and a <strong>hint</strong> if you get stuck.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>How the block is assessed</b>
+      <ul style="margin:.6rem 0 0">
+        <li>Every Maven sub-module must compile cleanly with <code>mvn clean package</code>.</li>
+        <li>The application must deploy to <strong>WildFly 30+</strong> with no deployment errors and no
+          unresolved CDI dependencies.</li>
+        <li>Submit all source code together with a summary report showing screenshot evidence of
+          execution and log output to the OnlineVarsity Work Assignments portal
+          <strong>before the final evaluation date</strong>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Assignment 9 · Jakarta Bean Validation</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What to do</th><th>What "done" looks like</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <p><strong>Assignment.</strong> Build a <code>PatientRegistration</code> model class
+            annotated with standard constraints: <code>@NotNull</code>,
+            <code>@Size(min = 3, max = 50)</code>, <code>@Email</code>, <code>@Past</code>, and
+            <code>@Pattern</code> for phone numbers.</p>
+          <p>Implement a custom constraint <code>@ValidMedicalRecordNumber</code> together with its
+            corresponding <code>ConstraintValidator</code>.</p>
+          <p><strong>Lab.</strong> Create a standalone test driver using
+            <code>Validation.buildDefaultValidatorFactory()</code> that validates invalid patient
+            objects and prints every violated property path and its constraint message.</p>
+        </td>
+        <td>
+          <ul>
+            <li>Each field carries the right constraint for its job — an email field has
+              <code>@Email</code>, a birth date has <code>@Past</code>, a phone number has a
+              <code>@Pattern</code>.</li>
+            <li><code>@ValidMedicalRecordNumber</code> exists as two files: the annotation and a
+              validator implementing
+              <code>ConstraintValidator&lt;ValidMedicalRecordNumber, String&gt;</code>.</li>
+            <li>The driver prints one line per violation, each showing the
+              <strong>property path</strong> (which field) and the <strong>message</strong> (which
+              rule).</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you get stuck</b>
+      If <code>Validation.buildDefaultValidatorFactory()</code> throws
+      <code>NoProviderFoundException</code>, no validation engine is on the classpath. Add
+      <code>hibernate-validator</code> and an expression-language implementation as normal (non-provided)
+      dependencies for a plain Java program — in a server deployment you would instead keep the API at
+      <code>provided</code> scope and let WildFly supply the engine. Also remember: <code>@Past</code>
+      on a date that is today <em>fails</em>, so use an obviously past date in your test object.</div>
+  </div>
+
+  <h3>Assignment 10 · Enterprise bean transactions and JNDI</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What to do</th><th>What "done" looks like</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <p><strong>Assignment.</strong> Implement a <code>@Stateless</code>
+            <code>FundTransferService</code> with Bean-Managed Transactions
+            (<code>@TransactionManagement(TransactionManagementType.BEAN)</code>).</p>
+          <p>Use <code>UserTransaction</code> to coordinate a debit and a credit across two accounts,
+            explicitly invoking <code>utx.commit()</code> on success and <code>utx.rollback()</code>
+            when it meets insufficient funds or a network exception.</p>
+          <p><strong>Lab.</strong> Perform dynamic JNDI lookups using <code>InitialContext</code> with
+            portable global JNDI names
+            (<code>java:global/appName/moduleName/BeanName!interfaceName</code>), and inspect the
+            environment entries configured in <code>ejb-jar.xml</code>.</p>
+        </td>
+        <td>
+          <ul>
+            <li>The bean is annotated <code>@TransactionManagement(TransactionManagementType.BEAN)</code>
+              and holds a <code>@Resource private UserTransaction utx;</code> field.</li>
+            <li><strong>Both</strong> the success path and the failure path end the transaction: a
+              <code>commit()</code> and a <code>rollback()</code> are both visible in the code, and the
+              rollback sits inside a <code>catch</code> block.</li>
+            <li>The JNDI lookup uses the full portable global name, and the environment entry you read
+              back matches the value configured in <code>ejb-jar.xml</code>.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you get stuck</b>
+      The JNDI name is the usual stumbling block. It is fully spelled out as
+      <code>java:global/&lt;appName&gt;/&lt;moduleName&gt;/&lt;BeanName&gt;!&lt;fully.qualified.InterfaceName&gt;</code>.
+      If your lookup fails with <code>NameNotFoundException</code>, print the exact name you searched for
+      and compare it character by character — the module name and the <code>!</code> interface suffix
+      are the two parts people most often get wrong. Also remember the BMT rule from Part 1.2: in a
+      <code>@Stateless</code> bean the transaction must begin and end inside one method.</div>
+  </div>
+
+  <h3>Assignment 11 · Contexts and Dependency Injection, Part I</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What to do</th><th>What "done" looks like</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <p><strong>Assignment.</strong> Create a CDI-driven report generation subsystem. Implement
+            beans across multiple scopes: <code>@RequestScoped</code>, <code>@SessionScoped</code> and
+            <code>@ApplicationScoped</code>.</p>
+          <p>Demonstrate how state is isolated or shared across concurrent simulated HTTP sessions.</p>
+          <p><strong>Lab.</strong> Implement <code>@PostConstruct</code> and <code>@PreDestroy</code>
+            lifecycle callback methods on CDI beans to verify container initialisation and teardown
+            logging.</p>
+        </td>
+        <td>
+          <ul>
+            <li>Three beans exist, one per scope, each with a field that holds some visible state.</li>
+            <li>You can <em>show</em> the difference: a value set on the request bean is gone on the next
+              request, a value on the session bean survives, and a value on the application bean is seen
+              by every simulated session.</li>
+            <li>Each bean logs a line from its <code>@PostConstruct</code> method at creation and from
+              <code>@PreDestroy</code> at teardown — you see them appear in the server log.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you get stuck</b>
+      To "simulate concurrent sessions" without a browser, drive your beans from a servlet and open two
+      different browsers (or one normal and one private window) — each gets its own HTTP session, so
+      session-scoped state stays separate while application-scoped state is shared. A
+      <code>@SessionScoped</code> bean must implement <code>Serializable</code>, or deployment fails
+      with a passivation error. And remember an <code>@ApplicationScoped</code> bean is created lazily
+      on first use unless you also mark it <code>@Startup</code>.</div>
+  </div>
+
+  <h3>Assignment 12 · Contexts and Dependency Injection, Part II</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What to do</th><th>What "done" looks like</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <p><strong>Assignment.</strong> Create custom qualifiers (<code>@CreditCard</code>,
+            <code>@PayPal</code>, <code>@Crypto</code>) and bind them to different implementations of a
+            <code>PaymentProcessor</code> interface.</p>
+          <p>Inject them dynamically using <code>@Inject @Any Instance&lt;PaymentProcessor&gt;</code> to
+            select the appropriate payment provider at runtime.</p>
+          <p><strong>Lab.</strong> Build a custom CDI interceptor (<code>@Audited</code> and
+            <code>AuditInterceptor</code>) using <code>@AroundInvoke</code> to intercept sensitive
+            business methods and log the invocation duration, the caller credentials, and the method
+            parameters.</p>
+        </td>
+        <td>
+          <ul>
+            <li>Three implementations of <code>PaymentProcessor</code> exist, each carrying its own
+              qualifier annotation.</li>
+            <li>An <code>Instance&lt;PaymentProcessor&gt;</code> field exists, and your code selects one
+              at runtime (for example by matching the qualifier annotations the caller asked for) rather
+              than hard-coding a single implementation.</li>
+            <li>The interceptor logs, on every annotated method: the method name and duration, the
+              caller's name, and the parameter values.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you get stuck</b>
+      For <code>Instance&lt;PaymentProcessor&gt;</code> to see all three implementations, the field must
+      carry <code>@Any</code>; without it the container only considers the beans that match the
+      qualifiers on the injection point. To pick one at runtime, call
+      <code>instance.select(new CreditCardLiteral()).get()</code>, where the literal implements
+      <code>AnnotationLiteral&lt;CreditCard&gt;</code>. For the interceptor, do not forget
+      <code>@Interceptor</code> on the interceptor class and an <code>@Priority</code> — an interceptor
+      with no priority may not be enabled at all.</div>
+  </div>
+
+  <h3>Assignment 13 · CDI beans: advanced features and security</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What to do</th><th>What "done" looks like</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <p><strong>Assignment.</strong> Implement a decoupled event-driven architecture using CDI
+            Events:</p>
+          <ul>
+            <li>Define an <code>OrderPlacedEvent</code> POJO.</li>
+            <li>Fire the event using <code>Event&lt;OrderPlacedEvent&gt;.fire()</code>.</li>
+            <li>Create asynchronous event observers using <code>@ObservesAsync</code> to trigger
+              inventory allocation, email dispatch and invoicing concurrently.</li>
+          </ul>
+          <p><strong>Lab.</strong> Implement declarative Role-Based Access Control (RBAC) using
+            <code>@RolesAllowed({"ADMIN", "MANAGER"})</code> and <code>@PermitAll</code> on CDI beans
+            and servlets. Verify access denial (<strong>403 Forbidden</strong>) when accessing a
+            protected resource with an unauthorised principal.</p>
+        </td>
+        <td>
+          <ul>
+            <li>The event class is a plain object — no annotations required.</li>
+            <li>At least three <code>@ObservesAsync</code> observers exist, one each for inventory, email
+              and invoicing, and they all fire from a single <code>fireAsync(...)</code> call.</li>
+            <li>One method is guarded by <code>@RolesAllowed({"ADMIN", "MANAGER"})</code> and another is
+              open with <code>@PermitAll</code>.</li>
+            <li>A user without the right role gets <strong>HTTP 403</strong> from the protected method,
+              while the <code>@PermitAll</code> method still answers them.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you get stuck</b>
+      Asynchronous observers return a <code>CompletionStage</code>, not a plain value, so do not try to
+      read their return value directly from <code>fireAsync</code> unless you actually need to wait.
+      Role names are <strong>case-sensitive</strong>: if your users are configured with
+      <code>"admin"</code> and your annotation says <code>"ADMIN"</code>, the container will rightly
+      return 403. Compare the two spellings before you change any code. Finally,
+      <code>@PermitAll</code> means "any authenticated caller" unless the method is also
+      <code>@DenyAll</code>-guarded elsewhere — check the class-level and method-level annotations
+      together.</div>
+  </div>
+
+  <h3>Assignment 14 · Packaging of enterprise beans and entities</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What to do</th><th>What "done" looks like</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <p><strong>Assignment.</strong> Construct a complete multi-module Maven enterprise project
+            structure:</p>
+          <ul>
+            <li><code>ecommerce-ejb</code>: contains the stateless EJBs and the JPA entities
+              (<code>persistence.xml</code>).</li>
+            <li><code>ecommerce-web</code>: contains the JSF Facelets templates, servlets and CDI beans
+              (<code>beans.xml</code>, <code>web.xml</code>).</li>
+            <li><code>ecommerce-ear</code>: packages the EJB JAR and the WAR into a single enterprise
+              archive (<code>application.xml</code>).</li>
+          </ul>
+          <p><strong>Lab.</strong> Package the application as a modern Skinny WAR (containing EJBs, JPA
+            entities and web views under <code>WEB-INF/classes</code>) and deploy it to WildFly. Confirm
+            that JNDI lookups, entity-manager injection and web endpoints all behave identically.</p>
+        </td>
+        <td>
+          <ul>
+            <li>Three Maven modules exist, and the parent build produces
+              <code>ecommerce-ear.ear</code> plus the skinny <code>ecommerce-web.war</code>.</li>
+            <li><code>application.xml</code> declares both the web module and the EJB module.</li>
+            <li>Deploying the WAR alone and deploying the EAR both work, but the WAR contains no copy of
+              the Jakarta EE API — that is what makes it skinny.</li>
+            <li>A web endpoint still answers, an <code>@PersistenceContext</code> entity manager is
+              injected and usable, and a JNDI lookup still resolves — proving the two packagings behave
+              the same.</li>
+          </ul>
+        </td>
+      </tr>
+    </tbody>
+  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you get stuck</b>
+      Keep the Jakarta EE API at <code>&lt;scope&gt;provided&lt;/scope&gt;</code>, and set
+      <code>failOnMissingWebXml</code> to <code>false</code> in the Maven WAR plugin so a missing
+      <code>web.xml</code> does not fail the build. For an EAR, shared libraries belong in the
+      <code>lib/</code> folder named by <code>&lt;library-directory&gt;</code> in
+      <code>application.xml</code> — JARs dropped in the EAR root are <em>not</em> on the modules'
+      classpaths. If a deployment fails with <code>DuplicateResourceException</code>, undeploy the old
+      copy first.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before the labs</b>
+    <p>Six quick questions, one per assignment. Answer from memory, then check.</p>
+    <ol>
+      <li>Assignment 9: which standard annotation would you add to reject an empty string in a name
+        field?</li>
+      <li>Assignment 10: in a BMT bean, where exactly must the <code>rollback()</code> call live, and
+        why?</li>
+      <li>Assignment 11: which of the three scopes is shared by every simulated HTTP session?</li>
+      <li>Assignment 12: what does the <code>@Any</code> qualifier on an <code>Instance&lt;T&gt;</code>
+        field change?</li>
+      <li>Assignment 13: name the observer annotation used to receive an event fired with
+        <code>fireAsync()</code>.</li>
+      <li>Assignment 14: which Maven scope keeps the Jakarta EE API out of your WAR?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>@NotBlank</code> — it demands at least one non-whitespace character, so <code>""</code>
+          and <code>"   "</code> both fail.</li>
+        <li>Inside the <code>catch</code> block, before the method returns. In BMT nobody rolls back for
+          you, so an error between <code>begin()</code> and <code>commit()</code> leaves the transaction
+          open on the thread until it times out — unless you explicitly roll it back.</li>
+        <li><code>@ApplicationScoped</code> — one instance for the whole running application, visible to
+          every session.</li>
+        <li>It widens the injection point to consider <strong>all</strong> beans of that type, ignoring
+          the qualifiers on the field — so the code can then select one at runtime.</li>
+        <li><code>@ObservesAsync</code>, on a method such as
+          <code>void onPayment(@ObservesAsync PaymentReceiptEvent e)</code>.</li>
+        <li><code>provided</code> — <code>&lt;scope&gt;provided&lt;/scope&gt;</code> means "needed to
+          compile, but the server supplies its own copy at runtime", which keeps the WAR skinny.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr />
+
+  <!-- =====================================================================
+       PART 3 — PRACTICAL LAB PROJECTS
+       ===================================================================== -->
+
+  <span class="eyebrow">practical lab</span>
+  <h2>Part 3 · Practical lab projects</h2>
+
+  <p>Three complete projects, one for each big idea in Sessions 9 to 14: <strong>validate and
+    roll back</strong>, <strong>decouple and react</strong>, and <strong>lock down and ship</strong>.
+    Each is written as a lab you can build by hand. The code is given in full; your job is to assemble
+    it, run it, and match the output you are told to expect.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>The three projects, and the concepts each one tests</b>
+      <ul style="margin:.6rem 0 0">
+        <li><strong>Lab 1 — Validated hospital patient triage service.</strong> Custom Bean Validation
+          annotations, class-level validators, Bean-Managed Transactions and manual rollback.</li>
+        <li><strong>Lab 2 — Pluggable multi-gateway payment system.</strong> CDI qualifiers,
+          interceptors (<code>@AroundInvoke</code>) and asynchronous CDI events
+          (<code>@ObservesAsync</code>).</li>
+        <li><strong>Lab 3 — Secured multi-module enterprise skinny WAR.</strong> Skinny WAR structure,
+          <code>beans.xml</code>, role-based access control (<code>@RolesAllowed</code>) and
+          <code>SecurityContext</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Lab Project 1 · Validated hospital patient triage service</h3>
+
+  <h4>The scenario</h4>
+  <p>A hospital admission intake system must enforce strict medical data constraints:</p>
+  <ol>
+    <li>A patient's National Health ID must follow the format <code>NHID-XXXX-YYYY</code>, enforced by a
+      custom constraint <code>@ValidHealthId</code>.</li>
+    <li>Blood pressure readings must validate that the <strong>systolic</strong> reading is strictly
+      greater than the <strong>diastolic</strong> reading — a rule that compares two fields, so it needs
+      a class-level validator, <code>@ValidBloodPressure</code>.</li>
+    <li>The admission is executed with <strong>Bean-Managed Transactions (BMT)</strong>. If either the
+      bed assignment or the insurance verification fails, the whole admission is rolled back with
+      <code>utx.rollback()</code>.</li>
+  </ol>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>class-level validator</strong> is a constraint placed on the class itself rather than
+      on one field. It exists for rules that need to see two or more fields at once — "systolic must be
+      greater than diastolic" cannot be checked by looking at either number alone.</p>
+  </div>
+
+  <h4>Step 1 — the custom constraint and its validator</h4>
+  <div class="code-head">com/aptech/hospital/validation/ValidHealthId.java</div>
+  <pre><code>package com.aptech.hospital.validation;
+
+import jakarta.validation.Constraint;
+import jakarta.validation.ConstraintValidator;
+import jakarta.validation.ConstraintValidatorContext;
+import jakarta.validation.Payload;
+import java.lang.annotation.*;
+
+@Target({ElementType.FIELD, ElementType.PARAMETER})
+@Retention(RetentionPolicy.RUNTIME)
+@Constraint(validatedBy = ValidHealthId.HealthIdValidator.class)
+@Documented
+public @interface ValidHealthId {
+    String message() default "Invalid National Health ID format. Must match 'NHID-XXXX-YYYY'";
+    Class&lt;?&gt;[] groups() default {};
+    Class&lt;? extends Payload&gt;[] payload() default {};
+
+    class HealthIdValidator implements ConstraintValidator&lt;ValidHealthId, String&gt; {
+        private static final String PATTERN = "^NHID-\\d{4}-[A-Z]{4}$";
+
+        @Override
+        public boolean isValid(String value, ConstraintValidatorContext context) {
+            if (value == null) return false;
+            return value.matches(PATTERN);
+        }
+    }
+}
+</code></pre>
+  <p>Read the two halves as the label and the worker from Part 1.1: the annotation names the validator
+    with <code>validatedBy</code>, and the nested <code>HealthIdValidator</code> does the actual
+    matching. The pattern says: the letters <code>NHID</code>, a hyphen, four digits, a hyphen, then
+    exactly four capital letters.</p>
+  <p><strong>What you should see:</strong> a file with no red underlines once Maven has downloaded the
+    Jakarta Validation API.</p>
+
+  <h4>Step 2 — the validated admission model</h4>
+  <div class="code-head">com/aptech/hospital/model/PatientAdmissionDTO.java</div>
+  <pre><code>package com.aptech.hospital.model;
+
+import com.aptech.hospital.validation.ValidHealthId;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+public class PatientAdmissionDTO {
+
+    @NotBlank(message = "Patient name is required")
+    private String fullName;
+
+    @ValidHealthId
+    private String healthId;
+
+    @NotNull
+    @Min(value = 60, message = "Systolic BP below safe human threshold")
+    @Max(value = 250, message = "Systolic BP above measurable threshold")
+    private Integer systolicBP;
+
+    @NotNull
+    @Min(value = 40, message = "Diastolic BP below safe human threshold")
+    @Max(value = 150, message = "Diastolic BP above measurable threshold")
+    private Integer diastolicBP;
+
+    public PatientAdmissionDTO(String fullName, String healthId, Integer systolicBP, Integer diastolicBP) {
+        this.fullName = fullName;
+        this.healthId = healthId;
+        this.systolicBP = systolicBP;
+        this.diastolicBP = diastolicBP;
+    }
+
+    // Getters and setters
+    public String getFullName() { return fullName; }
+    public String getHealthId() { return healthId; }
+    public Integer getSystolicBP() { return systolicBP; }
+    public Integer getDiastolicBP() { return diastolicBP; }
+}
+</code></pre>
+  <p><strong>What you should see:</strong> a compile-clean class. Note that the field rules give you the
+    systolic and diastolic <em>ranges</em>; the <em>relationship</em> between the two readings is the
+    class-level rule the scenario asks for, which you would add as a class-level
+    <code>@ValidBloodPressure</code> constraint on this same class.</p>
+
+  <h4>Step 3 — the BMT transactional admission service</h4>
+  <div class="code-head">com/aptech/hospital/service/PatientAdmissionServiceBean.java</div>
+  <pre><code>package com.aptech.hospital.service;
+
+import com.aptech.hospital.model.PatientAdmissionDTO;
+import jakarta.annotation.Resource;
+import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionManagement;
+import jakarta.ejb.TransactionManagementType;
+import jakarta.transaction.UserTransaction;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import java.util.Set;
+
+@Stateless
+@TransactionManagement(TransactionManagementType.BEAN)
+public class PatientAdmissionServiceBean {
+
+    @Resource
+    private UserTransaction utx;
+
+    public boolean processAdmission(PatientAdmissionDTO dto) {
+        // Step 1: Validate payload using Bean Validation API
+        Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+        Set&lt;ConstraintViolation&lt;PatientAdmissionDTO&gt;&gt; violations = validator.validate(dto);
+
+        if (!violations.isEmpty()) {
+            System.err.println("[AdmissionService] Validation failed for: " + dto.getFullName());
+            for (ConstraintViolation&lt;PatientAdmissionDTO&gt; v : violations) {
+                System.err.println(" -> " + v.getPropertyPath() + ": " + v.getMessage());
+            }
+            return false;
+        }
+
+        // Step 2: Execute programmatic BMT transaction
+        try {
+            utx.begin();
+            System.out.println("[AdmissionService] Started UserTransaction for: " + dto.getHealthId());
+
+            allocateBed(dto);
+            verifyInsurance(dto);
+
+            utx.commit();
+            System.out.println("[AdmissionService] Admission committed successfully.");
+            return true;
+        } catch (Exception ex) {
+            System.err.println("[AdmissionService] Error occurred: " + ex.getMessage() + ". Rolling back.");
+            try {
+                utx.rollback();
+            } catch (Exception rbEx) {
+                System.err.println("Rollback error: " + rbEx.getMessage());
+            }
+            return false;
+        }
+    }
+
+    private void allocateBed(PatientAdmissionDTO dto) {
+        System.out.println(" -> Allocated bed in Ward 3 for " + dto.getFullName());
+    }
+
+    private void verifyInsurance(PatientAdmissionDTO dto) {
+        if (dto.getHealthId().endsWith("FAIL")) {
+            throw new IllegalStateException("Insurance authorization rejected by payer network");
+        }
+        System.out.println(" -> Insurance pre-authorization approved.");
+    }
+}
+</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The detail that makes the failure path reachable</b>
+      The health ID must match <code>NHID-XXXX-YYYY</code> — four characters, any of the letters A to Z.
+      So an ID such as <code>NHID-4421-FAIL</code> is a perfectly <em>valid</em> ID, and yet it ends in
+      <code>FAIL</code>, which trips the insurance rule and rolls the admission back. That is the whole
+      point of the lab: valid <em>shape</em> is not the same as an approved <em>decision</em>.</div>
+  </div>
+
+  <h4>Step 4 — run it and read the result</h4>
+  <p>Send one good admission (for example health ID <code>NHID-4421-WXYZ</code>) and one that ends in
+    <code>FAIL</code>. The first prints the committed path; the second prints the rollback path.
+    Because the insurance check happens <em>after</em> the bed is allocated, a rollback means the bed
+    allocation is discarded too — nothing is half-done.</p>
+  <p><strong>What you should see</strong> for a successful admission:</p>
+  <pre><code>[AdmissionService] Started UserTransaction for: NHID-4421-WXYZ
+ -> Allocated bed in Ward 3 for Johnathan Vance
+ -> Insurance pre-authorization approved.
+[AdmissionService] Admission committed successfully.</code></pre>
+  <p><strong>What you should see</strong> when the insurance check fails: the same first two lines, then
+    an <code>[AdmissionService] Error occurred: Insurance authorization rejected by payer network.
+    Rolling back.</code> line instead of the commit line.</p>
+
+  <h3>Lab Project 2 · Pluggable multi-gateway payment system</h3>
+
+  <h4>The architecture</h4>
+  <p>A checkout controller calls a payment gateway, an interceptor times the call, and the gateway
+    announces success as an asynchronous event that a receipt observer picks up. Read the picture from
+    top to bottom: the call flows down, and the reaction flows sideways.</p>
+  <div class="code-head">How the call flows</div>
+  <pre><code>              ┌───────────────────────────┐
+              │    CheckoutController     │
+              └─────────────┬─────────────┘
+                            │ @Inject @Stripe
+                            ▼
+     ┌──────────────────────────────────────────────┐
+     │  @Logged (AuditInterceptor intercepts call)  │
+     │  StripePaymentGateway.processPayment()       │
+     └──────────────────────┬───────────────────────┘
+                            │ event.fireAsync(PaymentSuccessEvent)
+                            ▼
+         ┌──────────────────────────────────────┐
+         │ @ObservesAsync onPaymentSuccess(...) │
+         │ (Generates invoice &amp; sends receipt)  │
+         └──────────────────────────────────────┘</code></pre>
+
+  <h4>Step 1 — the custom qualifier and the interceptor binding</h4>
+  <div class="code-head">com/aptech/payment/cdi/Stripe.java and Logged.java</div>
+  <pre><code>package com.aptech.payment.cdi;
+
+import jakarta.inject.Qualifier;
+import jakarta.interceptor.InterceptorBinding;
+import java.lang.annotation.*;
+
+@Qualifier
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER})
+public @interface Stripe {}
+
+@InterceptorBinding
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface Logged {}
+</code></pre>
+  <p><strong>Two annotations, two jobs.</strong> <code>@Stripe</code> is a <em>qualifier</em>: it lets an
+    injection point say "the Stripe gateway, please" when several gateways exist.
+    <code>@Logged</code> is an <em>interceptor binding</em>: it is the marker you put on a method to say
+    "run the logging interceptor around this".</p>
+
+  <h4>Step 2 — the logging and performance interceptor</h4>
+  <div class="code-head">com/aptech/payment/cdi/LoggingInterceptor.java</div>
+  <pre><code>package com.aptech.payment.cdi;
+
+import jakarta.annotation.Priority;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptor;
+import jakarta.interceptor.InvocationContext;
+
+@Logged
+@Interceptor
+@Priority(Interceptor.Priority.APPLICATION)
+public class LoggingInterceptor {
+
+    @AroundInvoke
+    public Object profileMethod(InvocationContext ctx) throws Exception {
+        long start = System.currentTimeMillis();
+        String methodName = ctx.getMethod().getName();
+        System.out.println("[Interceptor] ENTER: " + methodName);
+        try {
+            return ctx.proceed();
+        } finally {
+            long duration = System.currentTimeMillis() - start;
+            System.out.println("[Interceptor] EXIT: " + methodName + " executed in " + duration + "ms");
+        }
+    }
+}
+</code></pre>
+  <p>The <code>@Logged</code> annotation on the class means "this is the interceptor for anything marked
+    <code>@Logged</code>". <code>ctx.proceed()</code> runs the real business method; the
+    <code>finally</code> block measures the time even if the method throws.</p>
+
+  <h4>Step 3 — the gateway, with asynchronous event dispatch</h4>
+  <div class="code-head">com/aptech/payment/service/StripePaymentGateway.java</div>
+  <pre><code>package com.aptech.payment.service;
+
+import com.aptech.payment.cdi.Logged;
+import com.aptech.payment.cdi.Stripe;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.inject.Inject;
+import java.math.BigDecimal;
+
+@Stripe
+@ApplicationScoped
+public class StripePaymentGateway {
+
+    @Inject
+    private Event&lt;PaymentReceiptEvent&gt; receiptEvent;
+
+    @Logged
+    public boolean processPayment(String orderId, BigDecimal amount) {
+        System.out.println("[StripeGateway] Processing charge of $" + amount + " for order " + orderId);
+
+        // Fire asynchronous decoupled receipt event
+        receiptEvent.fireAsync(new PaymentReceiptEvent(orderId, amount, "STRIPE-TX-" + System.currentTimeMillis()));
+        return true;
+    }
+}
+</code></pre>
+  <p>The <code>@Logged</code> on <code>processPayment</code> is what triggers the interceptor from step 2.
+    The <code>fireAsync</code> call announces the payment and returns straight away — the receipt is
+    produced on another thread.</p>
+
+  <h4>Step 4 — the decoupled asynchronous receipt observer</h4>
+  <div class="code-head">com/aptech/payment/service/ReceiptNotificationObserver.java</div>
+  <pre><code>package com.aptech.payment.service;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.ObservesAsync;
+
+@ApplicationScoped
+public class ReceiptNotificationObserver {
+
+    public void onPaymentCompleted(@ObservesAsync PaymentReceiptEvent event) {
+        System.out.println("[AsyncObserver] Dispatched PDF receipt for order: " + event.getOrderId()
+                + " (Transaction ID: " + event.getTransactionRef() + ")");
+    }
+}
+</code></pre>
+  <p>The observer knows nothing about the gateway, and the gateway knows nothing about the observer. That
+    is the decoupling: either can be replaced without touching the other.</p>
+
+  <p><strong>What you should see</strong> when the controller pays for an order: the interceptor's ENTER
+    line, the gateway's charge line, the interceptor's EXIT line with a millisecond count, and then —
+    possibly a moment later, because it runs asynchronously — the observer's receipt line.</p>
+
+  <h3>Lab Project 3 · Secured multi-module enterprise skinny WAR</h3>
+
+  <h4>Step 1 — the Maven project layout</h4>
+  <div class="code-head">pom.xml — the skinny WAR build</div>
+  <pre><code>&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+    &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+    &lt;groupId&gt;com.aptech.enterprise&lt;/groupId&gt;
+    &lt;artifactId&gt;healthcare-portal&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+    &lt;packaging&gt;war&lt;/packaging&gt;
+
+    &lt;dependencies&gt;
+        &lt;dependency&gt;
+            &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+            &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+            &lt;version&gt;10.0.0&lt;/version&gt;
+            &lt;scope&gt;provided&lt;/scope&gt;
+        &lt;/dependency&gt;
+    &lt;/dependencies&gt;
+
+    &lt;build&gt;
+        &lt;finalName&gt;healthcare-portal&lt;/finalName&gt;
+        &lt;plugins&gt;
+            &lt;plugin&gt;
+                &lt;groupId&gt;org.apache.maven.plugins&lt;/groupId&gt;
+                &lt;artifactId&gt;maven-war-plugin&lt;/artifactId&gt;
+                &lt;version&gt;3.4.0&lt;/version&gt;
+                &lt;configuration&gt;
+                    &lt;failOnMissingWebXml&gt;false&lt;/failOnMissingWebXml&gt;
+                &lt;/configuration&gt;
+            &lt;/plugin&gt;
+        &lt;/plugins&gt;
+    &lt;/build&gt;
+&lt;/project&gt;
+</code></pre>
+  <p>The line that makes it skinny is <code>&lt;scope&gt;provided&lt;/scope&gt;</code>: the Jakarta EE API
+    is used to compile but is <em>not</em> copied into the WAR, because WildFly already ships it.</p>
+  <p><strong>What you should see:</strong> nothing yet — the file is only read when you build.</p>
+
+  <h4>Step 2 — the role-secured medical record bean</h4>
+  <div class="code-head">com/aptech/healthcare/security/MedicalRecordServiceBean.java</div>
+  <pre><code>package com.aptech.healthcare.security;
+
+import jakarta.annotation.security.DeclareRoles;
+import jakarta.annotation.security.RolesAllowed;
+import jakarta.ejb.Stateless;
+import jakarta.inject.Inject;
+import jakarta.security.enterprise.SecurityContext;
+
+@Stateless
+@DeclareRoles({"DOCTOR", "ADMIN", "NURSE"})
+public class MedicalRecordServiceBean {
+
+    @Inject
+    private SecurityContext securityContext;
+
+    @RolesAllowed({"DOCTOR", "ADMIN"})
+    public String accessConfidentialDossier(String patientId) {
+        String caller = securityContext.getCallerPrincipal().getName();
+        System.out.println("[SecurityService] Authorized caller '" + caller + "' accessed records for " + patientId);
+        return "DOSSIER-PATIENT-" + patientId + ": Diagnosis: Acute Hypertension.";
+    }
+
+    @RolesAllowed({"NURSE", "DOCTOR", "ADMIN"})
+    public void recordVitals(String patientId, String vitals) {
+        System.out.println("[SecurityService] Vitals recorded for " + patientId + " by " + securityContext.getCallerPrincipal().getName());
+    }
+}
+</code></pre>
+  <p><strong>Reading the security in plain words.</strong> <code>@DeclareRoles</code> lists the roles the
+    application knows about. <code>@RolesAllowed</code> on a method says who may call it. So a nurse can
+    record vitals but cannot open a confidential dossier; a doctor can do both. Attempting the forbidden
+    call returns <strong>HTTP 403</strong> and the method body never runs.
+    <code>SecurityContext</code> is how your own code asks "who is calling?" —
+    <code>getCallerPrincipal().getName()</code>.</p>
+
+  <h4>Step 3 — build, deploy and verify</h4>
+  <ol class="steps">
+    <li>
+      <h4>Build the skinny WAR</h4>
+      <pre><code>mvn clean package</code></pre>
+      <p><strong>What you should see:</strong> <code>BUILD SUCCESS</code>, and a file at
+        <code>target/healthcare-portal.war</code>.</p>
+    </li>
+    <li>
+      <h4>Deploy it</h4>
+      <p>Copy the WAR into WildFly's <code>deployments</code> folder, or deploy it with the management
+        CLI:</p>
+      <pre><code>deploy target/healthcare-portal.war</code></pre>
+      <p><strong>What you should see:</strong> <code>Deployed "healthcare-portal.war"</code> in the
+        server console, and a <code>healthcare-portal.war.deployed</code> marker file.</p>
+    </li>
+    <li>
+      <h4>Prove the roles are enforced</h4>
+      <p>Log in as a user with the <code>NURSE</code> role and call
+        <code>accessConfidentialDossier("PATIENT-771")</code>.</p>
+      <p><strong>What you should see:</strong> <strong>HTTP 403 Forbidden</strong>, and <em>no</em>
+        <code>[SecurityService] Authorized caller …</code> line in the log — the container refused the
+        call before the method body ran. Then log in as a <code>DOCTOR</code> and call it again: you
+        should now see the authorised line and the dossier string.</p>
+    </li>
+    <li>
+      <h4>Confirm JNDI and persistence still work</h4>
+      <p>Call a web endpoint that performs a JNDI lookup and uses an injected entity manager.</p>
+      <p><strong>What you should see:</strong> identical behaviour whether you deployed the skinny WAR or
+        a full EAR — the packaging shape changed, but JNDI lookups, entity-manager injection and web
+        endpoints did not. That is the point of the whole session.</p>
+    </li>
+  </ol>
+
+  <h4>Lab 3 expected WildFly log output</h4>
+  <p>Put together, a run through all three projects produces a log like this. Match your own output
+    against it, line for line:</p>
+  <div class="code-head">WildFly console — expected output across the three labs</div>
+  <pre><code>[AdmissionService] Started UserTransaction for: NHID-4421-WXYZ
+ -> Allocated bed in Ward 3 for Johnathan Vance
+ -> Insurance pre-authorization approved.
+[AdmissionService] Admission committed successfully.
+[Interceptor] ENTER: processPayment
+[StripeGateway] Processing charge of $450.00 for order ORD-9921
+[Interceptor] EXIT: processPayment executed in 12ms
+[AsyncObserver] Dispatched PDF receipt for order: ORD-9921 (Transaction ID: STRIPE-TX-1727958920112)
+[SecurityService] Authorized caller 'dr_smith' accessed records for PATIENT-771</code></pre>
+  <p>Read the order carefully. The admission is validated and committed first. Then the payment goes
+    through the interceptor, which brackets the gateway call. Then the asynchronous observer reports the
+    receipt. Then the security service records that an authorised doctor read a dossier.</p>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <p>Three questions, one per lab. Answer without scrolling back.</p>
+    <ol>
+      <li>Lab 1: the health ID <code>NHID-4421-FAIL</code> passes validation. Why, and what makes it fail
+        anyway?</li>
+      <li>Lab 2: which single line in the gateway causes the receipt observer to run, and why does the
+        gateway not have to wait for it?</li>
+      <li>Lab 3: a nurse calls <code>accessConfidentialDossier</code> and gets 403. Which annotation
+        refused the call, and did the method body run?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>It passes because <code>NHID-4421-FAIL</code> matches the shape
+          <code>NHID-XXXX-YYYY</code> — four digits, then four capital letters. It fails anyway because
+          the insurance rule is a <em>business decision</em>, not a shape check: the ID ends in
+          <code>FAIL</code>, so <code>verifyInsurance</code> throws and the BMT transaction rolls back.
+          Well-shaped data can still be refused.</li>
+        <li><code>receiptEvent.fireAsync(new PaymentReceiptEvent(...))</code>. It returns immediately and
+          runs the <code>@ObservesAsync</code> observer on a separate thread, so the gateway does not
+          block waiting for a PDF to be produced.</li>
+        <li><code>@RolesAllowed({"DOCTOR", "ADMIN"})</code> refused it — <code>NURSE</code> is not in the
+          list. The method body did <strong>not</strong> run: the container rejects the call at the
+          boundary, before any business code executes.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr />
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 9 to 14)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "A field is annotated @NotNull but receives an empty string (\"\"). Does Bean Validation pass, and which annotation would reject it?",
+        "opts": [
+          "It fails; use @Email",
+          "It passes, because an empty string is still present; use @NotBlank to reject it",
+          "It passes, and no annotation can reject an empty string",
+          "It fails; use @Past"
+        ],
+        "a": 1,
+        "why": "@NotNull only checks that a value is present, and \"\" is present. @NotBlank additionally requires at least one non-whitespace character."
+      },
+      {
+        "q": "In a Bean-Managed Transaction bean, which call must a developer make to undo work when an error occurs between begin() and commit()?",
+        "opts": [
+          "utx.commit()",
+          "utx.begin() again",
+          "utx.rollback()",
+          "Nothing; the container rolls back automatically"
+        ],
+        "a": 2,
+        "why": "In BMT the developer is the transaction manager. Without an explicit utx.rollback() in the catch block, the open transaction stays on the thread holding locks until it times out."
+      },
+      {
+        "q": "Which CDI scope gives a bean a lifespan of exactly one HTTP request and response cycle?",
+        "opts": [
+          "@ApplicationScoped",
+          "@SessionScoped",
+          "@RequestScoped",
+          "@ConversationScoped"
+        ],
+        "a": 2,
+        "why": "@RequestScoped beans are created at the start of a request and destroyed when the response completes; @SessionScoped lasts across many requests and @ApplicationScoped lasts for the whole application."
+      },
+      {
+        "q": "What is the effect of calling event.fireAsync(...) instead of event.fire(...)?",
+        "opts": [
+          "It saves the event to disk",
+          "It runs the observers asynchronously on separate threads and returns immediately",
+          "It sends the event to another server over the network",
+          "It runs the observers twice"
+        ],
+        "a": 1,
+        "why": "fireAsync() dispatches the event and returns at once, running @ObservesAsync observers on their own threads. fire() runs observers synchronously on the caller's thread."
+      },
+      {
+        "q": "Which packaging shape places EJBs, JPA entities, CDI beans and web views inside a single .war without an EAR, and leaves out the Jakarta EE API?",
+        "opts": [
+          "A fat WAR that bundles the API",
+          "An Enterprise Archive (EAR)",
+          "A Skinny WAR",
+          "A Resource Adapter Archive (RAR)"
+        ],
+        "a": 2,
+        "why": "A Skinny WAR is the modern recommended shape: everything lives in one WAR, and the Jakarta EE API is marked provided so the server supplies its own copy rather than the WAR shipping a duplicate."
+      }
+    ]
+    </script>
+  </section>
+
+  <hr />
+
+  <!-- =====================================================================
+       REFERENCE — collapsed lookups
+       ===================================================================== -->
+
+  <span class="eyebrow">reference</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the labs. It is here because exam questions and the manual use these
+    exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>🗺️ The Sessions 9 to 14 architecture map</strong></summary>
+    <p>Read it top to bottom: the web container holds the CDI scopes, validated by Bean Validation; it
+      injects type-safe dependencies into decoupled business logic; and underneath sits the transaction
+      and packaging layer that makes it all durable and shippable.</p>
+    <pre><code>       ┌─────────────────────────────────────────────────────────────┐
+       │                   CDI WEB CONTAINER (S11, S12)              │
+       │  @RequestScoped  │  @SessionScoped  │  @ApplicationScoped   │
+       │  ─────────────────────────────────────────────────────────  │
+       │  Bean Validation (@NotNull, @Email, Custom) (S9)            │
+       └──────────────────────────────┬──────────────────────────────┘
+                                      │ @Inject (Type-Safe Injection)
+                                      ▼
+       ┌─────────────────────────────────────────────────────────────┐
+       │                DECOUPLED BUSINESS LOGIC (S13)               │
+       │  @Qualifier (Custom Binding) │ @Produces (Factory Methods)  │
+       │  @AroundInvoke (Interceptors)│ @ObservesAsync (CDI Events)  │
+       │  ─────────────────────────────────────────────────────────  │
+       │  Security: @RolesAllowed, SecurityContext, IdentityStore    │
+       └──────────────────────────────┬──────────────────────────────┘
+                                      │
+                                      ▼
+       ┌─────────────────────────────────────────────────────────────┐
+       │             TRANSACTION &amp; PACKAGING LAYER (S10, S14)        │
+       │  BMT: UserTransaction.begin() / commit() / rollback()       │
+       │  Packaging: Maven Multi-Module -&gt; Skinny WAR / Enterprise EAR│
+       │  persistence.xml (JPA 3.1) + beans.xml (CDI 4.0)            │
+       └─────────────────────────────────────────────────────────────┘</code></pre>
+  </details>
+
+  <details>
+    <summary><strong>🧾 Bean Validation constraints cheat-sheet</strong></summary>
+    <p>Every constraint accepts a <code>message = "…"</code> attribute. That message is what your
+      <code>ConstraintViolationException</code> prints — which is why the lab's error lines read like
+      plain English.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>It means</th><th>Handy detail</th></tr></thead>
+      <tbody>
+        <tr><td><code>@NotNull</code></td><td>Must not be missing</td><td>An empty string still passes — use <code>@NotBlank</code> for text</td></tr>
+        <tr><td><code>@NotEmpty</code></td><td>Must not be null and must have size greater than zero</td><td>Works on text, collections and maps</td></tr>
+        <tr><td><code>@NotBlank</code></td><td>Must contain non-whitespace text</td><td>Text only</td></tr>
+        <tr><td><code>@Size(min, max)</code></td><td>Length or size must be in range, inclusive</td><td>Strings, collections, arrays</td></tr>
+        <tr><td><code>@Min(n)</code> / <code>@Max(n)</code></td><td>Numeric boundary, inclusive</td><td>Use <code>@DecimalMin</code> / <code>@DecimalMax</code> for decimals</td></tr>
+        <tr><td><code>@Email</code></td><td>Must look like a valid email address</td><td>Text only</td></tr>
+        <tr><td><code>@Past</code> / <code>@Future</code></td><td>Must be before / after the current clock</td><td>A date equal to today fails <code>@Past</code></td></tr>
+        <tr><td><code>@Pattern(regexp = …)</code></td><td>Must match a regular expression</td><td>Escape backslashes inside a Java string: <code>"^\\d{10}$"</code></td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔀 CMT vs BMT quick lookup</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Question</th><th>CMT</th><th>BMT</th></tr></thead>
+      <tbody>
+        <tr><td>Who opens the transaction?</td><td>The container, because of <code>@TransactionAttribute</code></td><td>You, with <code>utx.begin()</code></td></tr>
+        <tr><td>Who commits or rolls back?</td><td>The container, when the method exits</td><td>You, with <code>utx.commit()</code> / <code>utx.rollback()</code></td></tr>
+        <tr><td>How it is switched on</td><td>The default, or <code>@TransactionManagement(CONTAINER)</code></td><td><code>@TransactionManagement(TransactionManagementType.BEAN)</code> plus a <code>UserTransaction</code> field</td></tr>
+        <tr><td>Works on <code>@Singleton</code>?</td><td>Yes</td><td>No — BMT is for <code>@Stateless</code>, <code>@Stateful</code>, <code>@MessageDriven</code></td></tr>
+        <tr><td>Best for</td><td>Ordinary business methods</td><td>Batch processing with manual checkpoints</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🧩 CDI building blocks at a glance</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Mechanism</th><th>What it does, in plain words</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Qualifier</strong> (<code>@Qualifier</code>)</td><td>Names which implementation to inject when several exist — for example <code>@Inject @CreditCard PaymentGateway</code>.</td></tr>
+        <tr><td><strong>Producer</strong> (<code>@Produces</code>)</td><td>A method that creates an injectable object, used to bring foreign or computed values into CDI.</td></tr>
+        <tr><td><strong>Interceptor</strong> (<code>@InterceptorBinding</code> + <code>@AroundInvoke</code>)</td><td>Runs code before and after a business method without the business class knowing — logging, timing, auditing.</td></tr>
+        <tr><td><strong>Event</strong> (<code>Event&lt;T&gt;</code>)</td><td>An in-memory announcement. <code>fire()</code> runs observers now; <code>fireAsync()</code> runs <code>@ObservesAsync</code> observers on separate threads.</td></tr>
+        <tr><td><strong>Discovery</strong> (<code>beans.xml</code>)</td><td>Tells the container how to find beans. <code>annotated</code> scans only annotated classes (faster); <code>all</code> scans everything.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr />
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
+  <span class="eyebrow">recap</span>
+  <h2>One-line summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>Bean Validation</strong></td><td>Declarative constraints (<code>@NotNull</code>, <code>@NotBlank</code>, <code>@Size</code>, <code>@Pattern</code>) checked before any work begins.</td></tr>
+    <tr><td><strong>Custom constraints</strong></td><td>Two files: the annotation (<code>@Constraint(validatedBy = …)</code>) and the validator (<code>ConstraintValidator</code>). Inside a class-level rule, two fields can be compared.</td></tr>
+    <tr><td><strong>CMT vs BMT</strong></td><td>CMT: the container opens and commits. BMT: you call <code>begin()</code>, <code>commit()</code> and <code>rollback()</code> — and must never forget the rollback.</td></tr>
+    <tr><td><strong>CDI scopes</strong></td><td><code>@Dependent</code>, <code>@RequestScoped</code>, <code>@SessionScoped</code>, <code>@ApplicationScoped</code>, <code>@ConversationScoped</code> — choose by how long the state must live and who must share it.</td></tr>
+    <tr><td><strong>CDI decoupling</strong></td><td>Qualifiers pick an implementation; producers create injectable objects; interceptors wrap methods; events let beans announce without knowing who listens.</td></tr>
+    <tr><td><strong>Security</strong></td><td><code>@DeclareRoles</code> names the roles; <code>@RolesAllowed</code> and <code>@PermitAll</code> decide who may call what; <code>SecurityContext</code> tells your code who is calling.</td></tr>
+    <tr><td><strong>Packaging</strong></td><td>EJB JAR (logic), WAR (web), EAR (everything, one delivery), Skinny WAR (everything in one <code>.war</code>, API left to the server).</td></tr>
+    <tr><td><strong>Order matters</strong></td><td>Validation runs before the transaction, so a badly shaped request never costs a connection or a lock.</td></tr>
+  </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Using <code>@NotNull</code> where you meant "must have content"</td>
+        <td>An empty string passes <code>@NotNull</code>. Use <code>@NotBlank</code> for text fields that must actually contain something.</td>
+      </tr>
+      <tr>
+        <td>Writing <code>if (value == null) throw …</code> by hand</td>
+        <td>Declare it as a constraint: <code>@NotNull(message = "…")</code>. The engine enforces it and the message comes back for free.</td>
+      </tr>
+      <tr>
+        <td>Trying to compare two fields with a field-level constraint</td>
+        <td>A rule such as "systolic greater than diastolic" needs a <strong>class-level</strong> validator, because it must see both values at once.</td>
+      </tr>
+      <tr>
+        <td>In BMT, catching an error and returning without <code>utx.rollback()</code></td>
+        <td>Always roll back in the <code>catch</code>. An open transaction stays on the thread holding locks and a connection until it times out.</td>
+      </tr>
+      <tr>
+        <td>Leaving a BMT transaction open across method calls in a <code>@Stateless</code> bean</td>
+        <td>The transaction must begin and end within the same method call — stateless beans are reusable, so there is no safe place to park it.</td>
+      </tr>
+      <tr>
+        <td>Forgetting <code>@Any</code> on an <code>Instance&lt;T&gt;</code> field</td>
+        <td>Without <code>@Any</code> the container only considers beans matching the field's own qualifiers, so you will not see every implementation.</td>
+      </tr>
+      <tr>
+        <td>Assuming <code>fireAsync()</code> has finished when it returns</td>
+        <td>It returns immediately and observers run on other threads. If you must wait, use the returned <code>CompletionStage</code>.</td>
+      </tr>
+      <tr>
+        <td>Bundling the Jakarta EE API inside a WAR</td>
+        <td>Mark it <code>&lt;scope&gt;provided&lt;/scope&gt;</code>. The server supplies its own copy; shipping yours causes duplicate-class clashes and "loaded by a different classloader" errors.</td>
+      </tr>
+      <tr>
+        <td>Getting a 403 and blaming your code</td>
+        <td>Check the role strings first. <code>@RolesAllowed</code> is case-sensitive: <code>"admin"</code> and <code>"ADMIN"</code> are different roles.</td>
+      </tr>
+      <tr>
+        <td>Dropping shared JARs into the root of an EAR</td>
+        <td>Put them in the <code>lib/</code> folder named by <code>&lt;library-directory&gt;</code> in <code>application.xml</code>. Root-level JARs are not on the modules' classpaths.</td>
+      </tr>
+      <tr>
+        <td>Deploying a new version before undeploying the old one</td>
+        <td>Undeploy first, or you get <code>DuplicateResourceException</code> on the context root.</td>
+      </tr>
+      <tr>
+        <td>Guessing why a deployment failed</td>
+        <td>Open the <code>.failed</code> marker file — it holds the stack trace. Read the deepest <code>Caused by:</code> line, the last in the chain.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this block is used again in the rest of the course and in the practicum. These are the
+    real pages to go back to when you want the topic taught in full:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this block</th><th>Taught in full at</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Constraints, custom validators, <code>@Valid</code> and class-level rules</td>
+        <td><a href="session-09-bean-validation.html">Session 9 — Bean Validation</a></td>
+      </tr>
+      <tr>
+        <td>CMT and BMT, <code>UserTransaction</code>, rollback rules and the money-transfer lab</td>
+        <td><a href="session-10-tiy.html">Try It Yourself: Sessions 9 &amp; 10</a> and <a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td>
+      </tr>
+      <tr>
+        <td>Qualifiers, producers, interceptors and CDI events</td>
+        <td><a href="session-12-tiy.html">Try It Yourself: Sessions 11 &amp; 12</a> and <a href="session-11-cdi-part1.html">Session 11 — CDI, Part 1</a></td>
+      </tr>
+      <tr>
+        <td>Role-based security, <code>@RolesAllowed</code> and <code>SecurityContext</code></td>
+        <td><a href="session-13-cdi-beans-security.html">Session 13 — CDI Beans, Advanced Features &amp; Security</a></td>
+      </tr>
+      <tr>
+        <td>JAR, WAR, EAR, Skinny WAR and deployment to WildFly</td>
+        <td><a href="session-14-packaging.html">Session 14 — Packaging &amp; Deploying</a></td>
+      </tr>
+      <tr>
+        <td>Putting validation, transactions, CDI and security together in one real application</td>
+        <td><a href="practical-03-secure-ship.html">Practical 3 — Secure &amp; Ship (GlobalBank)</a></td>
+      </tr>
+      <tr>
+        <td>Any term you want in one line</td>
+        <td><a href="glossary.html">Glossary — every term, in plain words</a></td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>Where to next, and the official references</h2>
+    <p>If you have worked every assignment and every lab on this page, you have finished the self-study
+      block. Two things are worth doing next: read the recommended pages above for the full teaching of
+      anything that still feels shaky, and keep the official specifications open while you build — they
+      are the final word when a lab and your own server disagree.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official guides &amp; specifications</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/bean-validation/" target="_blank" rel="noopener">Jakarta Bean Validation Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/transactions/" target="_blank" rel="noopener">Jakarta Transactions (JTA) Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/cdi/" target="_blank" rel="noopener">Jakarta Contexts and Dependency Injection (CDI) Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/security/" target="_blank" rel="noopener">Jakarta Security Specification</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly Documentation &amp; Deployment Reference</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>

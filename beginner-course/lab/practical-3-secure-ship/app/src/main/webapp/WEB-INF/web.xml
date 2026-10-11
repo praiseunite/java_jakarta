@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     web.xml — the deployment descriptor.
+
+     Practical 1 did not need this file at all. Practical 2 needed it for one
+     thing: registering FacesServlet, because Jakarta Faces cannot annotate
+     itself into existence.
+
+     Practical 3 needs it for a second thing, and it is the half of security that
+     cannot be done with annotations: deciding WHICH URLS ARE PROTECTED.
+
+     Read the two halves of this application's security as answering different
+     questions, because mixing them up is the usual source of confusion:
+
+       WHICH URLS need a signed-in user at all?   -> this file, below
+       WHO is signed in, and what may they do?   -> ApplicationConfig
+                                                     (@DatabaseIdentityStoreDefinition)
+                                                     + @RolesAllowed on the beans
+
+     An annotation on a bean cannot protect a URL, because a URL is a property of
+     the web application and not of any class. And a security-constraint in this
+     file cannot tell you whether ada@ is allowed to move money, because that is
+     a property of the bean. Both are needed, and neither can do the other's job.
+     ========================================================================== -->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                             https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0">
+
+  <display-name>GlobalBank</display-name>
+
+  <!-- FacesServlet is the FRONT CONTROLLER from Session 5: one servlet that
+       every page request goes through, which then decides what to do. You never
+       write it, and you never call it. -->
+  <servlet>
+    <servlet-name>Faces Servlet</servlet-name>
+    <servlet-class>jakarta.faces.webapp.FacesServlet</servlet-class>
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+
+  <!-- The mapping is what makes the file extension meaningful. "*.xhtml" means:
+       every request for a .xhtml file is handed to FacesServlet, which reads
+       the Facelet, runs its lifecycle, and writes the HTML back out.
+
+       This is also a safety feature worth knowing. A .xhtml file is a template,
+       not a finished page, so it must be processed before it is sent. Mapping
+       the extension to the servlet guarantees it always is — nobody can fetch
+       the raw template and see #{bank.accounts} instead of a number. -->
+  <servlet-mapping>
+    <servlet-name>Faces Servlet</servlet-name>
+    <url-pattern>*.xhtml</url-pattern>
+  </servlet-mapping>
+
+  <!-- NEW IN PRACTICAL 3 ====================================================
+
+       The list of URLs that require somebody to be signed in.
+
+       Notice what is NOT in the list, because that is the more instructive half:
+
+         /login.xhtml       the form itself must be reachable by a visitor who is
+                            not signed in, or signing in would require being
+                            signed in
+         /login-error.xhtml same, and for the same reason
+         /jakarta.faces.resource/*  the framework's own CSS and JavaScript. Lock
+                            these and the login page renders unstyled — a failure
+                            that looks like a CSS bug and is really a security
+                            configuration bug
+
+       Put "/*" in the url-pattern below and you get a redirect loop: request the
+       login page, be told you must log in, be redirected to the login page. The
+       browser gives up with "too many redirects" and nothing in the server log
+       explains why. Enumerate what needs protecting instead. -->
+  <security-constraint>
+    <web-resource-collection>
+      <web-resource-name>Bank pages</web-resource-name>
+      <url-pattern>/accounts.xhtml</url-pattern>
+      <url-pattern>/account</url-pattern>
+    </web-resource-collection>
+
+    <!-- An auth-constraint listing roles means: signed in AND holding one of
+         these roles. Signed in but holding neither is still refused, which is
+         the behaviour you want — an authenticated stranger is a stranger. -->
+    <auth-constraint>
+      <role-name>CUSTOMER</role-name>
+      <role-name>BANK_MANAGER</role-name>
+    </auth-constraint>
+
+    <!-- Not the default, and worth noticing: it forces the connection to be
+         encrypted. On http://localhost it is what you want for a real system and
+         what you must disable while learning, because this lab runs over plain
+         http and every request would be refused. Left out here on purpose, and
+         named in the comment so you know the line to add when you put this on a
+         real host:
+
+           <user-data-constraint>
+             <transport-guarantee>CONFIDENTIAL</transport-guarantee>
+           </user-data-constraint>
+    -->
+
+  </security-constraint>
+
+  <!-- Declares the role names to the container. The values must match the strings
+       in the identity store's groupsQuery and in every @RolesAllowed, character
+       for character: the container compares them as text.
+
+       With a Jakarta Security identity store these declarations are not strictly
+       required — the roles arrive from the store at login. They are here because
+       they are the file's own documentation of what roles this application has,
+       and because "which roles exist?" is a question you should be able to answer
+       by reading one file. -->
+  <security-role>
+    <role-name>CUSTOMER</role-name>
+  </security-role>
+  <security-role>
+    <role-name>BANK_MANAGER</role-name>
+  </security-role>
+
+  <!-- There is deliberately no <login-config> element here.
+
+       On a plain servlet application that element is where BASIC, DIGEST, FORM
+       or CLIENT-CERT is chosen. This application does not use any of them: its
+       mechanism is declared by @CustomFormAuthenticationMechanismDefinition in
+       ApplicationConfig, which is the Jakarta Security way and takes precedence.
+       Adding <login-config><auth-method>FORM</auth-method></login-config> here
+       would look harmless and would fight the annotation. -->
+
+  <!-- So that http://localhost:8080/globalbank-web/ opens the bank rather than
+       a directory listing. A logged-out visitor lands on accounts.xhtml, the
+       constraint sends them to login.xhtml, and after signing in they arrive
+       back at accounts.xhtml. -->
+  <welcome-file-list>
+    <welcome-file>accounts.xhtml</welcome-file>
+  </welcome-file-list>
+
+</web-app>

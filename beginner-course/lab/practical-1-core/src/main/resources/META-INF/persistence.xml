@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     persistence.xml — tells JPA which database to talk to.
+
+     Where this file lives matters: in a .war it must end up at
+     WEB-INF/classes/META-INF/persistence.xml. Maven puts it there automatically
+     because we keep it in src/main/resources/META-INF/.
+     ========================================================================== -->
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence
+                                 https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd"
+             version="3.0">
+
+  <!-- "transaction-type=JTA" means the CONTAINER manages transactions, not us.
+       We never call begin() or commit() by hand in this project. -->
+  <persistence-unit name="globalbankPU" transaction-type="JTA">
+
+    <!-- THE key line. Everything else here is convenience.
+
+         java:jboss/datasources/ExampleDS is a datasource WildFly has ALREADY
+         set up for you: an in-memory H2 database. No installation, no
+         username, no password, no driver to deploy. Because it lives in
+         memory, the data disappears when the server stops — which is exactly
+         what you want while learning.
+
+         When you are ready for a real database, only this line changes. -->
+    <jta-data-source>java:jboss/datasources/ExampleDS</jta-data-source>
+
+    <!-- List the entity classes explicitly. JPA can scan for them, but naming
+         them here is clearer and removes a whole class of "it found nothing"
+         problems. -->
+    <class>com.globalbank.entity.Account</class>
+
+    <properties>
+      <!-- Drop the tables and re-create them every time the application
+           deploys. Combined with LedgerInitializer, this means every redeploy
+           starts from the same three known accounts, so the numbers in this
+           lab are always reproducible. Turn this OFF for real data. -->
+      <property name="jakarta.persistence.schema-generation.database.action"
+                value="drop-and-create"/>
+
+      <!-- Print the SQL JPA sends to the database. Genuinely useful the first
+           time: it proves JPA is doing the work, not magic. -->
+      <property name="hibernate.show_sql" value="true"/>
+      <property name="hibernate.format_sql" value="false"/>
+    </properties>
+
+  </persistence-unit>
+</persistence>

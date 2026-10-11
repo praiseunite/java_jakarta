@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     web.xml — the deployment descriptor.
+
+     Practical 1 did not need this file at all. Everything it had was either an
+     annotation on a class (@WebServlet, @Stateless) or a file with one
+     recognised name (persistence.xml, beans.xml). So why does Practical 2 need
+     one? Because of the two lines in the middle: FacesServlet.
+
+     Jakarta Faces is not a servlet that annotates itself. It has to be
+     registered with the container and told which URLs it owns, and that job is
+     what a deployment descriptor is for. This is the only thing in the file.
+     ========================================================================== -->
+<web-app xmlns="https://jakarta.ee/xml/ns/jakartaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                             https://jakarta.ee/xml/ns/jakartaee/web-app_6_0.xsd"
+         version="6.0">
+
+  <display-name>GlobalBank</display-name>
+
+  <!-- FacesServlet is the FRONT CONTROLLER from Session 5: one servlet that
+       every page request goes through, which then decides what to do. You never
+       write it, and you never call it. -->
+  <servlet>
+    <servlet-name>Faces Servlet</servlet-name>
+    <servlet-class>jakarta.faces.webapp.FacesServlet</servlet-class>
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+
+  <!-- The mapping is what makes the file extension meaningful. "*.xhtml" means:
+       every request for a .xhtml file is handed to FacesServlet, which reads
+       the Facelet, runs its lifecycle, and writes the HTML back out.
+
+       This is also a safety feature worth knowing. A .xhtml file is a template,
+       not a finished page, so it must be processed before it is sent. Mapping
+       the extension to the servlet guarantees it always is — nobody can fetch
+       the raw template and see #{bank.accounts} instead of a number. -->
+  <servlet-mapping>
+    <servlet-name>Faces Servlet</servlet-name>
+    <url-pattern>*.xhtml</url-pattern>
+  </servlet-mapping>
+
+  <!-- So that http://localhost:8080/globalbank-web/ opens the bank rather than
+       a directory listing. -->
+  <welcome-file-list>
+    <welcome-file>accounts.xhtml</welcome-file>
+  </welcome-file-list>
+
+</web-app>
