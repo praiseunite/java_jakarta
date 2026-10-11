@@ -20,6 +20,23 @@
     </span>
   </section>
 
+  <section class="further-study">
+    <h2>📖 Where the platform is actually defined</h2>
+    <p class="fs-intro">This course explains the ideas in plain English; the specifications are where you check the exact rules. These three links are the authoritative source for everything the course teaches, and they are stable — unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/" target="_blank" rel="noopener">Jakarta EE — the platform home</a></li>
+          <li><a href="https://jakarta.ee/learn/docs/jakartaee-tutorial/current/" target="_blank" rel="noopener">The official Jakarta EE Tutorial</a></li>
+          <li><a href="https://jakarta.ee/specifications/" target="_blank" rel="noopener">Every Jakarta EE specification, indexed</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <span class="eyebrow">how this works</span>
   <h2>Read a little, then do a little</h2>
   <p>Each session follows an interactive rhythm to help you build enterprise intuition:</p>
@@ -39,14 +56,33 @@
   <div class="callout callout--key">
     <span class="callout__i">✓</span>
     <div class="callout__b">
-      <b>Fully Offline &amp; Mobile-Responsive</b>
-      No server installation or internet connection required to study. Your progress (completed sessions, quiz scores, light/dark theme) is saved automatically in your browser's local storage.
+      <b>Works Offline, On Any Device</b>
+      Everything you read, every simulation and every quiz runs from a plain file with no internet
+      connection at all. Two exceptions: the optional videos at the end of <a href="session-01-02-intro-and-beans.html">Sessions 1 &amp; 2</a>
+      need a connection, and the hands-on labs need WildFly and Maven installed — <a href="01-setup.html">Session 1</a>
+      walks you through that. Your progress (completed sessions, quiz scores, light/dark theme) is saved
+      automatically in your browser's local storage.
     </div>
   </div>
 
   <span class="eyebrow">the path</span>
   <h2>Course Schedule &amp; Syllabus</h2>
   <p>Structured into 5 weeks covering all 14 official sessions, 6 hands-on review labs, and prerequisite and bonus modules.</p>
+
+  <div class="callout callout--key">
+    <span class="callout__i">✓</span>
+    <div class="callout__b">
+      <b>What the little numbers mean</b>
+      Every page shows the unit it covers in the <b>Presenter's Manual</b>, so you can always match a page
+      back to the printed course. <code>TL17</code> is manual unit 17 — the sidebar shortens it to
+      <code>17</code>. Two pages cover two units at once and say so: <code>14+16</code> means the page
+      covers unit 14 <em>and</em> unit 16, because the manual splits that material differently from the
+      way this course teaches it. <code>11a</code> and <code>11b</code> are the two halves of unit 11.
+      <code>SS1</code> and <code>SS2</code> are the self-study blocks, <code>P21</code>–<code>P23</code>
+      are the three practicals, and <code>Bonus</code> / <code>Ref</code> are extras that are not part of
+      the assessed syllabus.
+    </div>
+  </div>
 
   <h3>Prerequisites &amp; Setup</h3>
   <div class="cardgrid" id="grid-start"></div>
@@ -65,6 +101,12 @@
 
   <h3>Week 5 — Security &amp; Packaging</h3>
   <div class="cardgrid" id="grid-w5"></div>
+
+  <h3>Self-Study &amp; Revision</h3>
+  <div class="cardgrid" id="grid-selfstudy"></div>
+
+  <h3>Practicum — build it for real</h3>
+  <div class="cardgrid" id="grid-practicum"></div>
 
   <h3>Bonus Modules &amp; Reference</h3>
   <div class="cardgrid" id="grid-bonus"></div>
@@ -87,6 +129,8 @@ document.addEventListener("course:ready", function () {
     "grid-w3":    ["s08", "s08t", "s09", "s10", "s10t"],
     "grid-w4":    ["s11", "s12", "s12t", "s13"],
     "grid-w5":    ["s14", "s14t"],
+    "grid-selfstudy": ["ss1", "ss2"],
+    "grid-practicum": ["p1", "p2", "p3"],
     "grid-bonus": ["13-jpa-persistence", "15-rest-jaxrs", "16-testing", "glossary"]
   };
   Object.keys(groups).forEach(function (gid) {
@@ -111,6 +155,8 @@ document.addEventListener("course:ready", function () {
     "s09", "s10", "s10t",
     "s11", "s12", "s12t",
     "s13", "s14", "s14t",
+    "ss1", "ss2",
+    "p1", "p2", "p3",
     "13-jpa-persistence", "15-rest-jaxrs", "16-testing"
   ];
   var next = order.find(function (s) { return !done[s]; });

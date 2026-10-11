@@ -1,92 +1,324 @@
-<title>Session 10 — Execution of Enterprise Beans Using Transactions</title>
+<title>Session 10 — Transactions, Going Deeper</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 10: Execution of Enterprise Beans Using Transactions, programmatic Bean-Managed Transactions (BMT) with UserTransaction, transaction propagation, rollback semantics, SessionSynchronization lifecycle, and distributed 2PC.">
+<meta name="description" content="Session 10, in plain English: how a transaction flows across enterprise bean calls, driving a transaction by hand with UserTransaction (BMT), when the container commits or rolls back after an exception, and the SessionSynchronization callbacks for stateful beans.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s10";</script>
 
 <main class="page">
 
-  <h1>Session 10 · Execution of Enterprise Beans Using Transactions</h1>
-  <p class="lede">Session 4 introduced basic transaction attributes. Session 10 dives into the engine room of
-    <strong>advanced transaction execution</strong>: how transactions propagate across distributed EJB boundaries,
-    how to take manual programmatic control with <strong>Bean-Managed Transactions (BMT)</strong> using <code>UserTransaction</code>,
-    how to control rollbacks, and how stateful beans synchronize cache with <code>SessionSynchronization</code>.</p>
+  <h1>Session 10 · Transactions, Going Deeper</h1>
+  <p class="lede">Session 4 showed you what a transaction is and how to label a method so the container
+    runs it as all-or-nothing. This page goes one level deeper. You will learn what happens to a
+    transaction when <strong>one bean calls another</strong>, how to <strong>drive a transaction by
+    hand</strong> instead of letting the container do it, how the container <strong>decides whether to
+    commit or roll back</strong> when an exception is thrown, and how a stateful bean can keep its
+    remembered data <strong>in step</strong> with the database. You do not need to have memorised
+    Session 4 — the one thing you must recall is below, with a link back.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Trace transaction propagation across nested and distributed enterprise bean calls</li>
-        <li>Implement programmatic Bean-Managed Transactions (BMT) using the <code>UserTransaction</code> API</li>
-        <li>Differentiate rollback semantics between Application Exceptions and System (Runtime) Exceptions</li>
-        <li>Apply programmatic rollback control via <code>EJBContext.setRollbackOnly()</code></li>
-        <li>Implement the <code>SessionSynchronization</code> interface to manage stateful bean caching across transaction commits</li>
-        <li>Explain the mechanics of distributed Two-Phase Commit (2PC / XA) managed by the server transaction coordinator</li>
+        <li><strong>Nothing from the manual gets dropped.</strong> Every rule, annotation and table from
+          the dense version is still here — just explained first.</li>
+        <li><strong>No new word used before it is explained.</strong> <code>UserTransaction</code>,
+          <code>setRollbackOnly()</code>, <code>SessionSynchronization</code> — each one gets a plain box.</li>
+        <li><strong>Every abstract rule gets an everyday picture.</strong> Phone calls, stick-shift cars,
+          a cheque stamped VOID.</li>
+        <li><strong>You check yourself as you go.</strong> Each Part ends with three questions; the
+          answers are hidden until you ask.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       10.1 Transaction Propagation
-       ===================================================================== -->
-  <span class="eyebrow">session 10.1</span>
-  <h2>Part 1 · Transaction Propagation Across EJB Boundaries</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>Six plain outcomes — one per learning objective from the manual:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Follow a transaction as it flows from one bean into another, and say whether it stays one transaction or splits in two</td><td>Part 1</td></tr>
+      <tr><td>Say what each of the six transaction attributes does to that flow</td><td>Part 1 &amp; Reference</td></tr>
+      <tr><td>Begin, commit and roll back a transaction yourself with <code>UserTransaction</code></td><td>Part 2</td></tr>
+      <tr><td>Tell <em>in advance</em> whether the container will commit or roll back after an exception</td><td>Part 3</td></tr>
+      <tr><td>Force a rollback on purpose — with <code>setRollbackOnly()</code> or <code>@ApplicationException</code></td><td>Part 3</td></tr>
+      <tr><td>Keep a stateful bean's cached data in step using the three <code>SessionSynchronization</code> callbacks</td><td>Part 4</td></tr>
+    </tbody>
+  </table></div>
+  <p>One more objective — the mechanics of a <strong>distributed two-phase commit (2PC / XA)</strong> —
+    is background reading. It lives in the <a href="#reference">Reference</a> at the end.</p>
 
-  <p>In enterprise systems, business workflows rarely fit in a single method. A checkout service invokes
-    an inventory service, which calls a billing service, which updates an audit log. <strong>Transaction Propagation</strong>
-    governs how the active transaction context travels across these method calls:</p>
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small label on the left of each block tells you what it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>💬 In plain words</code> — the same idea retold in one or two ordinary sentences.</li>
+        <li><code>Analogy</code> — an everyday picture of the idea.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch real server output replay.</li>
+        <li><code>✅ Checkpoint</code> — three quick questions. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary, and the look-it-up-later Reference.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — TRANSACTION PROPAGATION
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · How a transaction travels from one bean to the next</h2>
+
+  <div class="plainwords"><b>First, a 30-second recall from Session 4</b>
+    <p>A <strong>transaction</strong> is a group of changes treated as all-or-nothing: either every
+      change sticks (<em>commit</em>) or none of them do (<em>roll back</em>). That is the "A" of ACID.</p>
+    <p>Session 4 also showed you two ways to run one. <strong>Container-Managed Transactions (CMT)</strong>
+      — the container starts and ends the transaction for you, driven by a label. <strong>Bean-Managed
+      Transactions (BMT)</strong> — you do it yourself in code (that is Part 2 here). And it introduced the
+      <strong>six transaction attributes</strong> you put on a method: <code>REQUIRED</code>,
+      <code>REQUIRES_NEW</code>, <code>MANDATORY</code>, <code>SUPPORTS</code>, <code>NOT_SUPPORTED</code>
+      and <code>NEVER</code>. If any of that feels hazy, take five minutes with
+      <a href="session-04-working-with-ejb.html">Session 4 — Working with EJB</a> and come back.</p>
+  </div>
+
+  <h3>1.1 Real work rarely fits in one method</h3>
+  <p>In a real system a single business action spreads across several beans. A checkout bean calls an
+    inventory bean, which calls a billing bean, which writes to an audit-log bean.</p>
+  <p>So here is the question this whole Part answers:</p>
+
+  <div class="callout callout--key"><span class="callout__i">❓</span>
+    <div class="callout__b"><b>When bean A calls bean B, is B inside A's transaction, or in one of its own?</b>
+      That single decision is called <strong>transaction propagation</strong>. It is not something you
+      code — you <em>declare</em> it, with the transaction attribute on bean B's method. The six
+      attributes are simply six different answers to that one question.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>"Propagation" just means <strong>whether the transaction carries over</strong> when one bean calls
+      another. The attribute on the method being <em>called</em> decides it.</p>
+  </div>
+
+  <h3>1.2 The picture that makes it click</h3>
+
+  <div class="callout callout--analogy"><span class="callout__i">📞</span>
+    <div class="callout__b"><b>Analogy — one phone call, or a fresh one</b>
+      Think of a transaction as a <strong>phone call that is already in progress</strong>. Bean A is on
+      the call. When A asks bean B to help, B has a choice declared by its attribute:
+      <ul style="margin:.5rem 0 0">
+        <li><em>Join the call that is already happening</em> — now A and B are on the <strong>same
+          line</strong>. If the call drops, it drops for both of them.</li>
+        <li><em>Step out and make a separate call</em> — B dials its own number, finishes its own
+          conversation, hangs up, and only then does A carry on. A dropping its call later cannot undo
+          B's.</li>
+      </ul>
+      Everything in the table below is a variation on "join the existing call" versus "make your own."</div>
+  </div>
+
+  <h3>1.3 The six attributes, when the caller is already in a transaction</h3>
+  <p>Say bean A is already running inside a transaction — call it <strong>T1</strong>. Here is what each
+    attribute on bean B's method does:</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Caller (Bean A)</th><th>Callee Attribute (Bean B)</th><th>Resulting Transaction Behavior</th></tr></thead>
+    <thead><tr><th>Bean B's method is marked…</th><th>What happens to the transaction</th></tr></thead>
     <tbody>
       <tr>
-        <td>In Transaction $T_1$</td>
-        <td><code>REQUIRED</code></td>
-        <td>Bean B executes inside the <strong>same transaction ($T_1$)</strong>. If B fails, A rolls back too.</td>
+        <td><code>REQUIRED</code><br><span style="color:var(--ink-faint)">(the default)</span></td>
+        <td>B runs <strong>inside the same transaction T1</strong>. One shared line. If B fails, A rolls back too — and the other way round.</td>
       </tr>
       <tr>
-        <td>In Transaction $T_1$</td>
         <td><code>REQUIRES_NEW</code></td>
-        <td>$T_1$ is <strong>suspended</strong>. Container starts a fresh transaction $T_2$ for Bean B. When B finishes, $T_2$ commits and $T_1$ resumes.</td>
+        <td>The container <strong>suspends T1</strong> (puts it on hold), starts a <strong>fresh transaction T2</strong> for B, commits T2 when B finishes, then <strong>resumes T1</strong>. B's result survives even if A rolls back afterwards.</td>
       </tr>
       <tr>
-        <td>In Transaction $T_1$</td>
         <td><code>MANDATORY</code></td>
-        <td>Bean B joins $T_1$. (If Caller had no transaction, B would throw <code>TransactionRequiredException</code>).</td>
+        <td>B <strong>joins T1</strong>. (But if A had <em>no</em> transaction, B would throw <code>TransactionRequiredException</code> — see 1.4.)</td>
       </tr>
       <tr>
-        <td>In Transaction $T_1$</td>
+        <td><code>SUPPORTS</code></td>
+        <td>B <strong>joins the same transaction T1</strong>, just like <code>REQUIRED</code> — but it never starts one of its own. (If A had no transaction, B would simply run without one.)</td>
+      </tr>
+      <tr>
         <td><code>NOT_SUPPORTED</code></td>
-        <td>$T_1$ is suspended. Bean B runs without any transaction context until B returns.</td>
+        <td>The container <strong>suspends T1</strong>, runs B with <strong>no transaction at all</strong>, then resumes T1 when B returns.</td>
       </tr>
       <tr>
-        <td>In Transaction $T_1$</td>
         <td><code>NEVER</code></td>
-        <td>🚨 Container throws <code>EJBException</code> immediately because a transaction is active.</td>
+        <td>🚨 Because a transaction is active, the container <strong>throws <code>EJBException</code> immediately</strong> and B never runs.</td>
       </tr>
     </tbody>
   </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚪</span>
+    <div class="callout__b"><b>Analogy — why <code>REQUIRES_NEW</code> exists</b>
+      Picture an <strong>audit log</strong> that must record "a transfer was attempted" even if the
+      transfer itself later fails and is undone. If the log wrote inside the main transaction, a rollback
+      would erase the log entry too. So the log bean steps out and makes its <em>own</em> call
+      (<code>REQUIRES_NEW</code>): it commits separately, and the main rollback cannot touch it.</div>
+  </div>
+
+  <h3>1.4 The two that can refuse to run</h3>
+  <p>Two of the attributes do not just redirect the transaction — they can <strong>stop the call
+    cold</strong>. This surprises people, so it gets its own box.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>These throw instead of running</b>
+      <ul style="margin:.4rem 0 0">
+        <li><code>MANDATORY</code> says "there <em>must</em> already be a transaction." Call it with none
+          and you get <code>TransactionRequiredException</code>.</li>
+        <li><code>NEVER</code> says the opposite — "there must <em>not</em> be one." Call it while a
+          transaction is active and you get <code>EJBException</code>.</li>
+      </ul>
+      Both failures happen <em>before</em> your business code runs a single line.</div>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🎫</span>
+    <div class="callout__b"><b>Analogy</b>
+      <code>MANDATORY</code> is a club that only admits people who arrive <em>with</em> a group booking —
+      turn up alone and you are turned away. <code>NEVER</code> is the quiet reading room next door — turn
+      up <em>with</em> a noisy group and you are turned away. Each refuses the exact case the other requires.</div>
+  </div>
+
+  <h3>1.5 Across machines, too</h3>
+  <p>The caller and the callee do not have to live in the same server. When beans sit on different
+    machines (a <strong>distributed</strong> call), the transaction can still span both — and a special
+    protocol called <strong>two-phase commit</strong> keeps the two sides agreeing. You do not need its
+    mechanics today; it is written up in the <a href="#reference">Reference</a> at the end.</p>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, then open the answers.</p>
+    <ol>
+      <li>Bean A is in a transaction and calls bean B, which is marked <code>REQUIRES_NEW</code>. B's work
+        commits, then A fails and rolls back. Is B's work undone?</li>
+      <li>A client with <em>no</em> transaction calls a method marked <code>MANDATORY</code>. What happens?</li>
+      <li>You are writing an audit-log bean whose record must survive even when the main transaction rolls
+        back. Which attribute do you give its method?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>No.</strong> <code>REQUIRES_NEW</code> ran B in a separate transaction (T2) that
+          already committed. A's rollback only undoes A's own transaction (T1).</li>
+        <li>The container throws <strong><code>TransactionRequiredException</code></strong>.
+          <code>MANDATORY</code> demands an existing transaction and there is none.</li>
+        <li><strong><code>REQUIRES_NEW</code>.</strong> It commits the log entry independently, so the
+          main rollback cannot erase it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       10.2 Bean-Managed Transactions (BMT)
+       PART 2 — BEAN-MANAGED TRANSACTIONS (BMT)
        ===================================================================== -->
-  <span class="eyebrow">session 10.2</span>
-  <h2>Part 2 · Programmatic Demarcation with <code>UserTransaction</code> (BMT)</h2>
 
-  <p>While Container-Managed Transactions (CMT) cover 95% of use cases, certain batch workflows (e.g., importing 100,000
-    rows where committing every 500 rows is required) mandate manual programmatic control using <strong>Bean-Managed Transactions (BMT)</strong>:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · Taking the wheel yourself — <code>UserTransaction</code> (BMT)</h2>
+
+  <p>Until now the container has started and ended every transaction for you. That is CMT, and it covers
+    about 95% of all code. Part 2 is the other 5%: the times you need to <strong>start, commit and roll
+    back the transaction yourself, in code</strong>. That is a <strong>Bean-Managed Transaction (BMT)</strong>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚗</span>
+    <div class="callout__b"><b>Analogy — automatic vs manual gearbox</b>
+      CMT is an <strong>automatic car</strong>: you press the pedal and the gearbox changes gear for you.
+      BMT is a <strong>manual (stick-shift) car</strong>: you work the clutch and choose each gear
+      yourself. More control, more to get wrong — and only worth it when the automatic cannot do what you
+      need.</div>
+  </div>
+
+  <h3>2.1 When would you ever want the manual gearbox?</h3>
+  <p>The classic case is a <strong>big batch job</strong>. Imagine importing 100,000 rows. If all of them
+    sit in one transaction and row 99,000 fails, you lose everything and start over. Instead you commit
+    every 500 rows, so a failure late on only loses the current chunk.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">💾</span>
+    <div class="callout__b"><b>Analogy — saving a long document chapter by chapter</b>
+      You would not type a 300-page book and save only at the very end. You save after each chapter, so a
+      crash loses one chapter, not the book. Committing every 500 rows is exactly that: frequent save
+      points, so a late failure cannot wipe the lot.</div>
+  </div>
+
+  <h3>2.2 Turning BMT on, and getting the controls</h3>
+  <p>Two steps turn a bean into a manual-gearbox bean:</p>
+  <ul>
+    <li>Put <code>@TransactionManagement(TransactionManagementType.BEAN)</code> on the class. That tells
+      the container "hands off — I will manage the transaction myself."</li>
+    <li>Ask the container for a <strong><code>UserTransaction</code></strong> — the object with the
+      begin/commit/rollback controls — with <code>@Resource</code> (or a JNDI lookup of
+      <code>java:comp/UserTransaction</code>).</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>UserTransaction</code> is the <strong>gearstick</strong>. It only exists for you to hold in a
+      BMT bean. A CMT bean never touches it — the container is holding the stick there.</p>
+  </div>
+
+  <p>Here is everything you can say to that gearstick, and what each move can throw if used wrongly:</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Method on <code>UserTransaction</code></th><th>Function</th><th>Throws</th></tr></thead>
+    <thead><tr><th>Method on <code>UserTransaction</code></th><th>What it does</th><th>Can throw</th></tr></thead>
     <tbody>
-      <tr><td><code>utx.begin()</code></td><td>Starts a new transaction on the current thread</td><td><code>NotSupportedException</code> (if already in tx)</td></tr>
-      <tr><td><code>utx.commit()</code></td><td>Commits all changes made within the transaction</td><td><code>RollbackException</code>, <code>HeuristicMixedException</code></td></tr>
-      <tr><td><code>utx.rollback()</code></td><td>Aborts and reverses all modifications</td><td><code>IllegalStateException</code>, <code>SecurityException</code></td></tr>
-      <tr><td><code>utx.setTransactionTimeout(sec)</code></td><td>Sets maximum seconds before auto-abort</td><td><code>SystemException</code></td></tr>
-      <tr><td><code>utx.getStatus()</code></td><td>Returns current status (e.g., <code>STATUS_ACTIVE</code>)</td><td><code>SystemException</code></td></tr>
+      <tr><td><code>utx.begin()</code></td><td>Starts a new transaction on the current thread</td><td><code>NotSupportedException</code> (if one is already running)</td></tr>
+      <tr><td><code>utx.commit()</code></td><td>Makes every change in the transaction permanent</td><td><code>RollbackException</code>, <code>HeuristicMixedException</code></td></tr>
+      <tr><td><code>utx.rollback()</code></td><td>Aborts and reverses every change</td><td><code>IllegalStateException</code>, <code>SecurityException</code></td></tr>
+      <tr><td><code>utx.setTransactionTimeout(sec)</code></td><td>Sets how many seconds before the transaction auto-aborts</td><td><code>SystemException</code></td></tr>
+      <tr><td><code>utx.getStatus()</code></td><td>Reports the current state (for example <code>STATUS_ACTIVE</code>)</td><td><code>SystemException</code></td></tr>
     </tbody>
   </table></div>
 
-  <div class="code-head">BatchImportService.java — Bean-Managed Transaction Example</div>
+  <div class="callout callout--analogy"><span class="callout__i">✍️</span>
+    <div class="callout__b"><b>Analogy — begin / commit / rollback is signing a contract</b>
+      <code>begin()</code> takes out a blank contract and starts filling it in. <code>commit()</code> is
+      signing it — now it is binding and permanent. <code>rollback()</code> is tearing it up — as if it
+      had never been written. Nothing you wrote on the draft counts until you sign.</div>
+  </div>
+
+  <div class="callout callout--warn"><span class="callout__i">🚦</span>
+    <div class="callout__b"><b>One at a time</b>
+      You cannot <code>begin()</code> a transaction while one is already running on the thread — that is
+      the <code>NotSupportedException</code> in the table. Finish (commit or roll back) the current one
+      before starting the next. In a batch loop that means: begin, do the chunk, commit, <em>then</em>
+      begin the next chunk.</div>
+  </div>
+
+  <h3>2.3 The shape of every BMT method</h3>
+  <p>Before the code, here is the pattern in five plain moves. The numbers match the ①–⑤ markers in the
+    code below.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Declare bean-managed transactions</h4>
+      <p>Put <code>@TransactionManagement(TransactionManagementType.BEAN)</code> on the class so the
+        container stops managing transactions for you. (Marker ①.)</p>
+    </li>
+    <li>
+      <h4>Get the gearstick</h4>
+      <p>Inject <code>UserTransaction</code> with <code>@Resource</code>, or look it up at
+        <code>java:comp/UserTransaction</code>. (Marker ②.)</p>
+    </li>
+    <li>
+      <h4>Open the boundary</h4>
+      <p>Call <code>utx.begin()</code> to start the transaction, optionally with
+        <code>utx.setTransactionTimeout(...)</code> to cap how long it may run. (Markers ③.)</p>
+    </li>
+    <li>
+      <h4>Do the work, then commit</h4>
+      <p>Make your changes, then call <code>utx.commit()</code> to lock the chunk in permanently.
+        (Marker ④.)</p>
+    </li>
+    <li>
+      <h4>If anything throws, roll back</h4>
+      <p>In a <code>catch</code>, call <code>utx.rollback()</code> to undo only this chunk — earlier
+        committed chunks are already safe. (Marker ⑤.)</p>
+    </li>
+  </ol>
+
+  <p>Now the real code — the batch importer that commits every 500 rows:</p>
+
+  <div class="code-head">BatchImportService.java — a Bean-Managed Transaction</div>
   <pre><code>package com.globalbank.batch;
 
 import jakarta.annotation.Resource;
@@ -137,75 +369,17 @@ public class BatchImportService {
     private void insertRecord(String rec) { /* JDBC persistence logic */ }
 }</code></pre>
 
-  <!-- =====================================================================
-       10.3 Rollback Semantics: Application vs System Exceptions
-       ===================================================================== -->
-  <span class="eyebrow">session 10.3</span>
-  <h2>Part 3 · Exception Classification &amp; Rollback Rules</h2>
-
-  <p>In Container-Managed Transactions (CMT), how does the container decide whether to commit or rollback when an exception occurs?</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Exception Type</th><th>Examples</th><th>Container Reaction</th><th>Bean Instance Lifecycle</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong>System Exception</strong><br>(Unchecked)</td>
-        <td><code>RuntimeException</code>, <code>NullPointerException</code>, <code>EJBException</code></td>
-        <td><strong>Automatic Rollback</strong></td>
-        <td>Container discards/destroys the bean instance from the pool because its internal state may be corrupted.</td>
-      </tr>
-      <tr>
-        <td><strong>Application Exception</strong><br>(Checked by default)</td>
-        <td><code>InsufficientFundsException</code>, <code>AccountFrozenException</code></td>
-        <td><strong>COMMITS by default!</strong> (Assumed to be normal business flow)</td>
-        <td>Bean instance is retained safely in the pool.</td>
-      </tr>
-      <tr>
-        <td><strong>Application Exception with Rollback</strong></td>
-        <td><code>@ApplicationException(rollback = true)<br>public class FraudException ...</code></td>
-        <td><strong>ROLLBACK forced</strong></td>
-        <td>Bean instance retained in pool, but transaction is rolled back.</td>
-      </tr>
-    </tbody>
-  </table></div>
-
-  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
-    <div class="callout__b"><b>Programmatic Rollback in CMT: <code>setRollbackOnly()</code></b>
-      If you catch an exception inside a CMT bean but still want the container to abort the transaction, call:
-      <pre style="margin:.4rem 0"><code>ejbContext.setRollbackOnly();</code></pre>
-      This marks the transaction so that no matter what else happens, the container will execute a <strong>ROLLBACK</strong> upon method exit.
-    </div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Each trip round the loop is its <strong>own</strong> transaction: a <code>begin()</code>, a
+      <code>commit()</code>, and a <code>rollback()</code> only for the chunk that failed. That is why
+      chunk 2 blowing up <em>cannot</em> undo chunk 1 — chunk 1 was already signed and sealed. CMT could
+      not do this, because CMT gives the whole method one single transaction.</div>
   </div>
 
-  <!-- =====================================================================
-       10.4 SessionSynchronization Interface
-       ===================================================================== -->
-  <span class="eyebrow">session 10.4</span>
-  <h2>Part 4 · Stateful Bean Caching: <code>SessionSynchronization</code></h2>
-
-  <p>When a <code>@Stateful</code> session bean manages cached data across a transaction, it can implement the
-    <code>SessionSynchronization</code> interface to receive container notifications at critical transaction checkpoints:</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Callback Method</th><th>When Container Invokes It</th><th>Typical Use Case</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><code>afterBegin()</code></td>
-        <td>Immediately after the transaction is started.</td>
-        <td>Pre-load or lock cached data from the database into bean memory.</td>
-      </tr>
-      <tr>
-        <td><code>beforeCompletion()</code></td>
-        <td>Right before the transaction manager issues the <code>COMMIT</code> command.</td>
-        <td>Flush dirty cached changes from bean fields down to the database.</td>
-      </tr>
-      <tr>
-        <td><code>afterCompletion(boolean committed)</code></td>
-        <td>Immediately after the transaction commits (<code>true</code>) or rolls back (<code>false</code>).</td>
-        <td>If <code>committed == true</code>, update UI state. If <code>false</code>, discard modified cache and reload from DB.</td>
-      </tr>
-    </tbody>
-  </table></div>
+  <h3>2.4 Try it — watch the chunks commit and one roll back</h3>
+  <p>Press <strong>Run</strong>. This replays real server log output from the importer above as it
+    processes three chunks, one of which fails.</p>
 
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
@@ -237,85 +411,492 @@ Chunk 3 (1001–1500): utx.begin() -> 500 rows inserted -> utx.commit() -> OK</c
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>What you just proved</b>
+      The log ends with "1,000 rows committed, 500 skipped." The failed chunk 2 was rolled back on its
+      own, while chunks 1 and 3 stayed committed. That isolation is the entire reason to reach for BMT.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>Which annotation switches a bean from container-managed to bean-managed transactions?</li>
+      <li>In the batch importer, chunk 2 fails and rolls back. What happens to chunk 1, which already
+        committed?</li>
+      <li>You call <code>utx.begin()</code> while a transaction is already running on the thread. What do
+        you get?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>@TransactionManagement(TransactionManagementType.BEAN)</code>.</li>
+        <li><strong>Nothing — it stays committed.</strong> Each chunk is its own transaction, so chunk 1
+          is already permanent and untouched by chunk 2's rollback.</li>
+        <li>A <strong><code>NotSupportedException</code></strong>. You can only begin a transaction when
+          none is active on the thread.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       PART 3 — EXCEPTION CLASSIFICATION & ROLLBACK RULES
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Who decides: commit or roll back when something goes wrong</h2>
+
+  <p>Back in container-managed transactions (CMT), when an exception flies out of a bean method, the
+    container has to make a decision: <strong>commit the work so far, or throw it all away?</strong> The
+    answer depends entirely on <em>what kind</em> of exception it is. Get this wrong and you will corrupt
+    data while being certain your code is correct — so read it slowly.</p>
+
+  <h3>3.1 Two kinds of exception, two opposite reactions</h3>
+  <ul>
+    <li>A <strong>system exception</strong> means "something broke that was never supposed to break." These
+      are the <strong>unchecked</strong> ones — <code>RuntimeException</code>, <code>NullPointerException</code>,
+      <code>EJBException</code>. The container reads this as a genuine failure.</li>
+    <li>An <strong>application exception</strong> means "a normal business outcome the code was expected to
+      signal." By default these are the <strong>checked</strong> ones — things like
+      <code>InsufficientFundsException</code> or <code>AccountFrozenException</code>.</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>"Unchecked" means the exception extends <code>RuntimeException</code>, so Java does not force you to
+      declare or catch it. "Checked" means it extends <code>Exception</code>, so the compiler makes you
+      handle it. The container uses that same split to guess your intent: unchecked = a crash, checked =
+      an expected business "no."</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍽️</span>
+    <div class="callout__b"><b>Analogy — the dropped tray vs the cancelled dish</b>
+      A <strong>system exception</strong> is a waiter <em>tripping and smashing the plate</em> — an
+      accident. The kitchen bins that order <em>and</em> throws the ruined plate away. A
+      <strong>application exception</strong> is a customer calmly saying <em>"actually, cancel the
+      dessert"</em> — a normal, expected request. The restaurant just carries on; nobody throws anything
+      out.</div>
+  </div>
+
+  <p>That analogy maps exactly onto what the container does:</p>
+  <ul>
+    <li><strong>System exception → automatic rollback,</strong> and the container <strong>discards the
+      bean instance</strong> from the pool, because its fields may now hold half-finished, corrupt state.
+      (The smashed plate is thrown away.)</li>
+    <li><strong>Application exception → the transaction COMMITS by default,</strong> and the bean instance
+      is <strong>kept</strong> in the pool. (The waiter is fine; carry on.)</li>
+  </ul>
+
+  <h3>3.2 The trap that catches absolutely everyone</h3>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>A checked exception does NOT roll back by default</b>
+      Throw a plain checked <code>InsufficientFundsException</code> after you have already debited an
+      account, and expect the debit to be undone? <strong>It will not be.</strong> The container treats a
+      checked application exception as a normal business signal and <strong>commits</strong> the work done
+      so far. The debit stays. This surprises everyone the first time — and silently corrupts balances in
+      production.</div>
+  </div>
+
+  <h3>3.3 Forcing an application exception to roll back</h3>
+  <p>Sometimes a business "no" really does mean "undo everything" — a fraud check, say. You tell the
+    container that by stamping the exception class with <code>@ApplicationException(rollback = true)</code>.</p>
+
+  <div class="code-head">FraudException.java — an application exception that forces rollback</div>
+  <pre><code>package com.globalbank.exceptions;
+
+import jakarta.ejb.ApplicationException;
+
+@ApplicationException(rollback = true)   // when thrown, the container WILL roll back
+public class FraudException extends Exception {
+
+    public FraudException(String message) {
+        super(message);
+    }
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The rule lives <strong>on the exception class</strong>, not on the method that throws it. Write
+      <code>rollback = true</code> once and every method that throws a <code>FraudException</code> rolls
+      back. (<code>rollback = false</code> does the opposite — it marks an unchecked exception as a normal
+      business one that should <em>commit</em>.)</div>
+  </div>
+
+  <h3>3.4 Rolling back from inside a <code>catch</code></h3>
+  <p>What if you catch the problem yourself, handle it, and <em>return normally</em> — but you still want
+    the transaction thrown away? You cannot rely on an exception travelling out, because you swallowed it.
+    So you tell the container directly: <code>setRollbackOnly()</code>.</p>
+
+  <div class="code-head">TransferService.java — forcing a rollback without throwing</div>
+  <pre><code>package com.globalbank.services;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.SessionContext;
+import jakarta.ejb.Stateless;
+
+@Stateless
+public class TransferService {
+
+    @Resource
+    private SessionContext ejbContext;      // the bean's link back to the container
+
+    public void transfer(Account from, Account to, double amount) {
+        try {
+            debit(from, amount);
+            credit(to, amount);
+        } catch (BusinessRuleViolation e) {
+            ejbContext.setRollbackOnly();   // doom the transaction: it WILL roll back on exit
+            // ... log the problem and return normally
+        }
+    }
+}</code></pre>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚫</span>
+    <div class="callout__b"><b>Analogy — stamping a cheque VOID</b>
+      <code>setRollbackOnly()</code> is like stamping a cheque <strong>VOID</strong> halfway through
+      writing it. You can keep filling in the rest of the boxes, hand it over, do everything else
+      normally — but it will never, ever be cashed. The container checks for that stamp when the method
+      exits and rolls back no matter what.</div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>setRollbackOnly()</code> only <em>marks</em> the transaction — the actual rollback happens when
+      the method returns. There is no way to un-mark it. Once stamped, the transaction is doomed, so only
+      call it when you truly mean to abort.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>You throw a plain <strong>checked</strong> <code>InsufficientFundsException</code> out of a CMT
+        method. Does the container roll back by default?</li>
+      <li>How do you make that exception force a rollback instead?</li>
+      <li>You catch an exception, handle it, and return normally — but still want the transaction aborted.
+        What do you call?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>No.</strong> A checked exception is an application exception, and application
+          exceptions <strong>commit</strong> by default.</li>
+        <li>Annotate the exception class with
+          <strong><code>@ApplicationException(rollback = true)</code></strong>.</li>
+        <li><strong><code>ejbContext.setRollbackOnly()</code></strong> — it marks the transaction so the
+          container rolls back when the method exits.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4 — STATEFUL BEAN CACHING & SESSIONSYNCHRONIZATION
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · Keeping a stateful bean's cache in step — <code>SessionSynchronization</code></h2>
+
+  <p>Recall the <strong>stateful</strong> bean from Session 1 &amp; 2: it is dedicated to one client and
+    remembers its fields across several calls. Those remembered fields are, in effect, a
+    <strong>cache</strong> — a copy held in memory of data that really lives in the database. And a cache
+    has a problem: when a transaction commits or rolls back, the copy in memory and the copy in the
+    database can drift apart.</p>
+  <p>To fix that, a stateful bean can <strong>implement the <code>SessionSynchronization</code>
+    interface</strong>. In exchange, the container calls it back at three key moments in every
+    transaction, so the bean can keep its cache honest.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>SessionSynchronization</code> is a way for a stateful bean to say <strong>"tell me when the
+      transaction starts, when it is about to commit, and when it is finished"</strong> — so the bean can
+      load its data at the start, save it just before the end, and tidy up afterwards.</p>
+  </div>
+
+  <h3>4.1 The three callbacks</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Callback</th><th>When the container calls it</th><th>What you typically do there</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>afterBegin()</code></td>
+        <td>Just after the transaction starts.</td>
+        <td>Load (or lock) the data from the database into the bean's cache in memory.</td>
+      </tr>
+      <tr>
+        <td><code>beforeCompletion()</code></td>
+        <td>Right before the transaction manager issues the <code>COMMIT</code>.</td>
+        <td>Flush the changed ("dirty") cached fields down to the database.</td>
+      </tr>
+      <tr>
+        <td><code>afterCompletion(boolean committed)</code></td>
+        <td>Just after the transaction commits (<code>true</code>) or rolls back (<code>false</code>).</td>
+        <td>If <code>committed</code> is <code>true</code>, update display state. If <code>false</code>,
+          throw the modified cache away and reload from the database.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧾</span>
+    <div class="callout__b"><b>Analogy — a shopkeeper's till across one shift</b>
+      <strong><code>afterBegin()</code></strong> is counting the cash float into the drawer at the
+      <em>start</em> of the shift — bringing the figures out of the safe and onto the counter.
+      <strong><code>beforeCompletion()</code></strong> is writing the day's totals into the ledger
+      <em>just before</em> cashing up — getting the final numbers down on paper.
+      <strong><code>afterCompletion(true)</code></strong> is head office accepting the figures: lock the
+      safe and go home. <strong><code>afterCompletion(false)</code></strong> is head office bouncing them:
+      tear up the sheet and recount from the bank's own record (reload from the database).</div>
+  </div>
+
+  <h3>4.2 What it looks like in code</h3>
+  <p>A stateful bean implements the interface and overrides the three methods:</p>
+
+  <div class="code-head">ShoppingBasketBean.java — a stateful bean that syncs its cache</div>
+  <pre><code>package com.globalbank.web;
+
+import jakarta.ejb.Stateful;
+import jakarta.ejb.SessionSynchronization;
+
+@Stateful
+public class ShoppingBasketBean implements SessionSynchronization {
+
+    private Basket cache;        // data held in memory for this one client
+
+    @Override
+    public void afterBegin() {
+        // transaction just started: load the data into the cache
+        cache = loadFromDatabase();
+    }
+
+    @Override
+    public void beforeCompletion() {
+        // about to commit: push the cached changes down to the database
+        flushToDatabase(cache);
+    }
+
+    @Override
+    public void afterCompletion(boolean committed) {
+        if (!committed) {
+            // rolled back: the cache is now wrong, so discard it and reload next time
+            cache = null;
+        }
+    }
+
+    private Basket loadFromDatabase() { /* read current state */ return new Basket(); }
+    private void flushToDatabase(Basket b) { /* write changes */ }
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      You never <em>call</em> these three methods — the <strong>container</strong> calls them, in order,
+      around your business methods. Your job is only to say what should happen at each moment. The single
+      most important line is <code>afterCompletion(false)</code> throwing the cache away: that is what
+      stops a rolled-back change from lingering in memory and poisoning the next call.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <ol>
+      <li>Which callback fires just before the container commits, and what do you usually do in it?</li>
+      <li><code>afterCompletion</code> receives a boolean. What does <code>false</code> mean, and what
+        should you do about it?</li>
+      <li>Which callback is the place to load or lock data into the bean's cache?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong><code>beforeCompletion()</code></strong> — flush the changed cached fields down to the
+          database before the commit happens.</li>
+        <li><code>false</code> means the transaction <strong>rolled back</strong>. The cached changes are
+          now wrong, so discard them and reload fresh data from the database.</li>
+        <li><strong><code>afterBegin()</code></strong> — it runs right after the transaction starts.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
        ===================================================================== -->
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 10 · Knowledge Check</h3>
+    <h3>Check yourself — Session 10</h3>
     <script type="application/json">
     [
-      {
-        "q": "What interface is used to demarcate transaction boundaries programmatically in Bean-Managed Transactions (BMT)?",
-        "opts": [
-          "jakarta.transaction.UserTransaction",
-          "jakarta.persistence.EntityManager",
-          "javax.sql.DataSource",
-          "jakarta.ejb.SessionContext"
-        ],
-        "a": 0,
-        "why": "UserTransaction provides the begin(), commit(), and rollback() methods for programmatic transaction demarcation."
-      },
-      {
-        "q": "What happens when an EJB method marked with @TransactionAttribute(REQUIRES_NEW) is invoked by a caller that already has an active transaction T1?",
-        "opts": [
-          "The container throws an exception",
-          "T1 is suspended; a new transaction T2 is created and completes; then T1 resumes",
-          "T1 is permanently aborted",
-          "Both transactions run in parallel on the same thread"
-        ],
-        "a": 1,
-        "why": "REQUIRES_NEW suspends the caller's active transaction context and executes in an independent newly created transaction."
-      },
-      {
-        "q": "By default in CMT, what happens when an unchecked RuntimeException is thrown out of an EJB method?",
-        "opts": [
-          "The container commits the transaction",
-          "The container automatically executes a ROLLBACK and discards the bean instance",
-          "The container re-prompts the caller",
-          "The container pauses the server"
-        ],
-        "a": 1,
-        "why": "System exceptions (subclasses of RuntimeException) indicate unhandled application failures and automatically trigger a transaction rollback."
-      },
-      {
-        "q": "How can an EJB method using CMT force a transaction rollback without throwing an exception?",
-        "opts": [
-          "By returning -1",
-          "By calling ejbContext.setRollbackOnly()",
-          "By calling System.exit(0)",
-          "By setting a null balance"
-        ],
-        "a": 1,
-        "why": "setRollbackOnly() marks the current container-managed transaction so that it is guaranteed to roll back upon completion."
-      },
-      {
-        "q": "Which callback of the SessionSynchronization interface is executed immediately before a stateful bean's transaction commits?",
-        "opts": [
-          "afterBegin()",
-          "beforeCompletion()",
-          "afterCompletion()",
-          "postConstruct()"
-        ],
-        "a": 1,
-        "why": "beforeCompletion() is called right before the transaction manager commits, allowing the bean to flush any cached updates to the database."
-      }
+      {"q":"Which API do you use to begin, commit and roll back a transaction by hand in a bean-managed transaction (BMT)?","opts":["jakarta.transaction.UserTransaction","jakarta.persistence.EntityManager","javax.sql.DataSource","jakarta.ejb.SessionContext"],"a":0,"why":"UserTransaction provides begin(), commit() and rollback() for programmatic (bean-managed) transaction control."},
+      {"q":"Bean A is already in transaction T1 and calls a method marked @TransactionAttribute(TransactionAttributeType.REQUIRES_NEW). What happens?","opts":["The container throws an exception","T1 is suspended; a new transaction T2 runs and commits; then T1 resumes","T1 is permanently aborted","Both transactions run in parallel on the same thread"],"a":1,"why":"REQUIRES_NEW suspends the caller's transaction, runs the work in an independent new transaction, then resumes the original. Note the full form of the constant — TransactionAttributeType.REQUIRES_NEW — which is what compiles; REQUIRES_NEW on its own is only ever shorthand in prose."},
+      {"q":"In CMT, an unchecked RuntimeException escapes a bean method. By default the container…","opts":["Commits the transaction","Rolls back the transaction and discards the bean instance","Re-prompts the caller","Pauses the server"],"a":1,"why":"A system (unchecked) exception triggers automatic rollback, and the bean instance is discarded because its state may be corrupt."},
+      {"q":"In CMT, you throw a plain checked application exception such as InsufficientFundsException, with no annotations on it. By default the container…","opts":["Rolls back automatically","Commits the transaction — a checked exception is treated as a normal business outcome","Destroys the bean instance","Suspends the transaction"],"a":1,"why":"Checked application exceptions commit by default. You must add @ApplicationException(rollback=true) or call setRollbackOnly() to abort."},
+      {"q":"How can an EJB using CMT force a rollback without letting an exception travel out of the method?","opts":["By returning -1","By calling ejbContext.setRollbackOnly()","By calling System.exit(0)","By setting a field to null"],"a":1,"why":"setRollbackOnly() marks the current container-managed transaction so it is guaranteed to roll back when the method exits."},
+      {"q":"Which SessionSynchronization callback runs immediately before a stateful bean's transaction commits?","opts":["afterBegin()","beforeCompletion()","afterCompletion()","postConstruct()"],"a":1,"why":"beforeCompletion() runs right before the commit, which is where the bean flushes cached changes down to the database."}
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
+       ===================================================================== -->
+  <span class="eyebrow">concept</span>
+  <h2 id="reference">Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the session. It is here because exams and the manual use these exact
+    terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📋 The full propagation matrix — all six attributes</strong></summary>
+    <p>Part 1 covered what each attribute does when the caller already has a transaction. This is the complete
+      table, including what happens when the caller has <em>no</em> transaction — the column people forget.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Attribute</th><th>Caller HAS a transaction (T1)</th><th>Caller has NO transaction</th></tr></thead>
+      <tbody>
+        <tr><td><code>REQUIRED</code> <span style="color:var(--ink-faint)">(default)</span></td><td>Join T1</td><td>Start a new transaction</td></tr>
+        <tr><td><code>REQUIRES_NEW</code></td><td>Suspend T1, start a new transaction T2, then resume T1</td><td>Start a new transaction</td></tr>
+        <tr><td><code>MANDATORY</code></td><td>Join T1</td><td>🚨 Throw <code>TransactionRequiredException</code></td></tr>
+        <tr><td><code>SUPPORTS</code></td><td>Join T1</td><td>Run with no transaction</td></tr>
+        <tr><td><code>NOT_SUPPORTED</code></td><td>Suspend T1, run with no transaction, then resume T1</td><td>Run with no transaction</td></tr>
+        <tr><td><code>NEVER</code></td><td>🚨 Throw <code>EJBException</code></td><td>Run with no transaction</td></tr>
+      </tbody>
+    </table></div>
+    <p><code>SUPPORTS</code> is the "go with the flow" option: it never starts or refuses a transaction, it
+      simply uses whatever the caller brought (or none).</p>
+  </details>
+
+  <details>
+    <summary><strong>⚠️ Exception classification — the complete table</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Exception type</th><th>Examples</th><th>Container reaction</th><th>Bean instance</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>System exception</strong><br>(unchecked)</td>
+          <td><code>RuntimeException</code>, <code>NullPointerException</code>, <code>EJBException</code></td>
+          <td><strong>Automatic rollback</strong></td>
+          <td>Discarded / destroyed from the pool — its internal state may be corrupt.</td>
+        </tr>
+        <tr>
+          <td><strong>Application exception</strong><br>(checked by default)</td>
+          <td><code>InsufficientFundsException</code>, <code>AccountFrozenException</code></td>
+          <td><strong>Commits by default</strong> (assumed to be normal business flow)</td>
+          <td>Retained safely in the pool.</td>
+        </tr>
+        <tr>
+          <td><strong>Application exception with rollback</strong></td>
+          <td><code>@ApplicationException(rollback = true)</code> on, say, <code>FraudException</code></td>
+          <td><strong>Rollback forced</strong></td>
+          <td>Retained in the pool, but the transaction is rolled back.</td>
+        </tr>
+      </tbody>
+    </table></div>
+    <p>And the escape hatch inside a CMT method: <code>ejbContext.setRollbackOnly()</code> marks the
+      transaction so that, whatever else happens, the container runs a <strong>ROLLBACK</strong> when the
+      method exits.</p>
+  </details>
+
+  <details>
+    <summary><strong>🔄 SessionSynchronization — the exact callback order</strong></summary>
+    <p>For a single transaction on a stateful bean that implements the interface, the container calls the
+      methods in this fixed order:</p>
+    <pre><code>  transaction starts
+        │
+        ▼
+  afterBegin()                 ← load / lock cached data
+        │
+        ▼
+  (your business methods run)  ← the client calls add(), update(), etc.
+        │
+        ▼
+  beforeCompletion()           ← flush dirty cache to the database
+        │
+        ▼
+  COMMIT  (or ROLLBACK)        ← the transaction manager acts
+        │
+        ▼
+  afterCompletion(committed)   ← true = committed, false = rolled back</code></pre>
+    <p>If the transaction rolls back, <code>beforeCompletion()</code> may still have run, but
+      <code>afterCompletion(false)</code> is your signal to discard whatever the cache now holds.</p>
+  </details>
+
+  <details>
+    <summary><strong>🌐 Distributed transactions — Two-Phase Commit (2PC) and XA</strong></summary>
+    <p>A single business transaction sometimes has to touch <strong>more than one resource</strong> at
+      once — for example a relational database <em>and</em> a JMS message broker. Both must commit, or
+      neither must. The server's <strong>transaction coordinator</strong> guarantees that with a protocol
+      called <strong>two-phase commit (2PC)</strong>, over resources that speak the <strong>XA</strong>
+      standard:</p>
+    <ol>
+      <li><strong>Phase 1 — prepare.</strong> The coordinator asks every resource "are you ready and able
+        to commit?" Each one does all the work short of making it permanent and answers yes or no.</li>
+      <li><strong>Phase 2 — commit (or roll back).</strong> If <em>every</em> resource said yes, the
+        coordinator tells them all to commit. If even one said no, it tells them all to roll back.</li>
+    </ol>
+    <div class="callout callout--analogy"><span class="callout__i">💍</span>
+      <div class="callout__b"><b>Analogy</b>
+        A wedding officiant. First they ask each person separately, "do you take this commitment?"
+        (prepare). Only when <em>both</em> have said "I do" does the officiant pronounce them married
+        (commit). A single "no" from either side, and nothing is binding.</div>
+    </div>
+    <p>You rarely write 2PC code yourself — the application server's coordinator (in WildFly, the
+      <strong>Narayana</strong> transaction manager) runs it for you across XA-capable resources.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
        ===================================================================== -->
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>BMT</strong></td><td>Programmatic transactions via <code>@TransactionManagement(BEAN)</code> and <code>UserTransaction</code>.</td></tr>
-    <tr><td><strong>Propagation</strong></td><td>Governs how transaction contexts carry over across nested bean method invocations.</td></tr>
-    <tr><td><strong>System Exceptions</strong></td><td>Trigger automatic rollback and bean destruction by container.</td></tr>
-    <tr><td><strong>Application Exceptions</strong></td><td>Commit by default; use <code>@ApplicationException(rollback=true)</code> or <code>setRollbackOnly()</code> to abort.</td></tr>
-    <tr><td><strong><code>SessionSynchronization</code></strong></td><td><code>afterBegin()</code>, <code>beforeCompletion()</code>, and <code>afterCompletion()</code> hooks for stateful cache coherence.</td></tr>
+    <tr><td>Propagation</td><td>Whether a transaction carries over when one bean calls another. Decided by the attribute on the method being called.</td></tr>
+    <tr><td>The six attributes</td><td><code>REQUIRED</code> (join or start), <code>REQUIRES_NEW</code> (always its own), <code>MANDATORY</code> (must have one), <code>SUPPORTS</code> (go with the flow), <code>NOT_SUPPORTED</code> (run with none), <code>NEVER</code> (refuse if one exists).</td></tr>
+    <tr><td>BMT</td><td>Drive the transaction by hand: <code>@TransactionManagement(BEAN)</code> plus <code>UserTransaction</code>'s <code>begin()</code>, <code>commit()</code>, <code>rollback()</code>.</td></tr>
+    <tr><td>System exceptions</td><td>Unchecked. Automatic rollback, and the container discards the bean instance.</td></tr>
+    <tr><td>Application exceptions</td><td>Checked by default, and they <strong>commit</strong> by default. Use <code>@ApplicationException(rollback=true)</code> to force a rollback.</td></tr>
+    <tr><td><code>setRollbackOnly()</code></td><td>Marks a container-managed transaction so it is guaranteed to roll back when the method exits.</td></tr>
+    <tr><td><code>SessionSynchronization</code></td><td>Three container callbacks for a stateful bean: <code>afterBegin()</code> (load), <code>beforeCompletion()</code> (flush), <code>afterCompletion(boolean)</code> (tidy up or reload).</td></tr>
+    <tr><td>2PC / XA</td><td>The server coordinator's prepare-then-commit protocol that keeps several resources (database, message broker) all-or-nothing together.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Expecting a checked application exception to roll back the transaction</td><td>By default it <strong>commits</strong>. Annotate the class <code>@ApplicationException(rollback=true)</code>, or call <code>setRollbackOnly()</code>.</td></tr>
+      <tr><td>Reaching for <code>REQUIRES_NEW</code> everywhere</td><td>Use <code>REQUIRED</code> (the default) unless the work must commit independently — audit logs are the classic reason.</td></tr>
+      <tr><td>Injecting <code>UserTransaction</code> but forgetting <code>@TransactionManagement(BEAN)</code></td><td><code>UserTransaction</code> only works in a BMT bean. A CMT bean must not call <code>begin()</code>/<code>commit()</code>.</td></tr>
+      <tr><td>Calling <code>utx.begin()</code> while a transaction is already active</td><td>That throws <code>NotSupportedException</code>. Commit or roll back the current one first.</td></tr>
+      <tr><td>Catching an exception in a CMT method and expecting a rollback anyway</td><td>If you swallow it, the transaction will commit. Call <code>ejbContext.setRollbackOnly()</code> to actually abort.</td></tr>
+      <tr><td>Leaving a rolled-back change sitting in a stateful bean's cache</td><td>Discard and reload it in <code>afterCompletion(false)</code>, so the next call starts from clean data.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Transaction basics — ACID, CMT vs BMT, the six attributes</td><td><a href="session-04-working-with-ejb.html">Session 4 — Working with EJB</a></td></tr>
+      <tr><td>Stateful session beans (the kind <code>SessionSynchronization</code> applies to)</td><td><a href="session-01-02-intro-and-beans.html">Sessions 1 &amp; 2 — Enterprise Beans</a></td></tr>
+      <tr><td>Messaging and queues (where a 2PC spans a database and a message broker)</td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a></td></tr>
+      <tr><td>Persistence — what <code>beforeCompletion()</code> flushes changes down to</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+      <tr><td>Security annotations on the same transactional beans</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/transactions/" target="_blank" rel="noopener">Jakarta Transactions Specification</a></li>
+          <li><a href="https://jakarta.ee/learn/docs/jakartaee-tutorial/current/" target="_blank" rel="noopener">Jakarta EE Tutorial</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

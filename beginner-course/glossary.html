@@ -24,187 +24,303 @@
 
   <nav class="alpha" aria-label="Jump to letter">
     <a href="#A">A</a><a href="#B">B</a><a href="#C">C</a><a href="#D">D</a><a href="#E">E</a>
-    <a href="#F">F</a><a href="#H">H</a><a href="#I">I</a><a href="#J">J</a><a href="#L">L</a>
-    <a href="#M">M</a><a href="#N">N</a><a href="#O">O</a><a href="#P">P</a><a href="#Q">Q</a>
-    <a href="#R">R</a><a href="#S">S</a><a href="#T">T</a><a href="#V">V</a><a href="#W">W</a>
+    <a href="#F">F</a><a href="#G">G</a><a href="#H">H</a><a href="#I">I</a><a href="#J">J</a>
+    <a href="#L">L</a><a href="#M">M</a><a href="#N">N</a><a href="#O">O</a><a href="#P">P</a>
+    <a href="#Q">Q</a><a href="#R">R</a><a href="#S">S</a><a href="#T">T</a><a href="#U">U</a>
+    <a href="#V">V</a><a href="#W">W</a><a href="#X">X</a>
   </nav>
 
   <h2 id="A">A</h2>
   <dl class="gloss">
-    <dt>ACID</dt><dd>The four guarantees of a transaction: <b>A</b>tomicity (all steps or none), <b>C</b>onsistency (no rule broken), <b>I</b>solation (concurrent transactions don’t see each other’s half-done work), <b>D</b>urability (a commit survives crashes). Unit 06.</dd>
+    <dt>@AccessTimeout</dt><dd>On a singleton, how long a <a href="#T">thread</a> waits for the lock before giving up instead of blocking forever. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>ACID</dt><dd>The four guarantees of a transaction: <b>A</b>tomicity (all steps or none), <b>C</b>onsistency (no rule broken), <b>I</b>solation (concurrent transactions don’t see each other’s half-done work), <b>D</b>urability (a commit survives crashes). See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
     <dt>Annotation</dt><dd>A label starting with <code>@</code> placed on a class, method or field that a tool or the server reads to change how the code is treated — e.g. <code>@Stateless</code>. Not code that runs.</dd>
     <dt>API (Application Programming Interface)</dt><dd>The set of classes and methods a library or component offers you to call — its control panel.</dd>
+    <dt>@ApplicationException / application exception</dt><dd>An exception your business code throws on purpose to say “this request failed”. By default the container still commits the transaction; mark it <code>rollback = true</code> to undo the work. Opposite of a <a href="#S">system exception</a>. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
     <dt>Application server</dt><dd>A large program (here, <b>WildFly</b>) that contains all the Jakarta EE machinery; you deploy your app into it.</dd>
-    <dt>Asynchronous</dt><dd>“Send it and carry on; the result comes later.” Opposite of synchronous (wait for the answer). Units 04, 11.</dd>
+    <dt>Archetype (Maven)</dt><dd>A ready-made project template — folder layout plus <code>pom.xml</code> — that Maven copies so you do not start from an empty folder. IntelliJ’s “New → Project → Maven Archetype” uses one. See <a href="01-setup.html">Set up your workshop</a>.</dd>
+    <dt>Arquillian</dt><dd>A testing framework that runs an <a href="#I">integration test</a> inside a real Jakarta EE container, so beans, JNDI and persistence are exercised for real. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt>Assertion</dt><dd>In a test, the checking line that is allowed to fail — <code>assertEquals</code>, <code>assertThrows</code>. A test with no assertion proves nothing. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt>Asynchronous</dt><dd>“Send it and carry on; the result comes later.” Opposite of synchronous (wait for the answer). See <a href="session-04-working-with-ejb.html">Session 4</a> and <a href="session-07-messaging.html">Session 7</a>.</dd>
     <dt>Atomicity</dt><dd>See ACID. A transaction runs completely or not at all.</dd>
+    <dt>Authentication / authorisation</dt><dd>Authentication is “who are you?” (logging in); authorisation is “what may you do?” (which roles). Passing the first does not grant the second. See <a href="session-13-cdi-beans-security.html">Session 13</a>.</dd>
   </dl>
 
   <h2 id="B">B</h2>
   <dl class="gloss">
-    <dt>Backing bean</dt><dd>A Java object a Jakarta Faces page binds its components to with <code>#{...}</code>. Unit 09.</dd>
+    <dt>Backing bean</dt><dd>A Java object a Jakarta Faces page binds its components to with <code>#{...}</code>. See <a href="session-05-facelets.html">Session 5</a>.</dd>
     <dt>Bean</dt><dd>Any class the container manages for you. An <i>enterprise bean</i> carries EJB annotations (<code>@Stateless</code>, <code>@Stateful</code>, <code>@Singleton</code>, <code>@MessageDriven</code>). A <i>CDI bean</i> is any class CDI can inject.</dd>
+    <dt>Bean Validation</dt><dd>A Jakarta standard for putting rules on your fields (<code>@NotNull</code>, <code>@Size</code>) that the container checks automatically before your code runs; a broken rule stops the call. See <a href="session-09-bean-validation.html">Session 9</a>.</dd>
+    <dt><code>beans.xml</code></dt><dd>A small marker file in a module’s <code>META-INF</code> (or <code>WEB-INF</code>) that tells the server CDI should be active there. See <a href="session-11-cdi-part1.html">Session 11</a>.</dd>
+    <dt>BOM (Bill of Materials)</dt><dd>A Maven entry that fixes the versions of a whole family of libraries at once, so you list them as dependencies without naming versions yourself. See <a href="session-14-packaging.html">Session 14</a>.</dd>
+    <dt>Broker (message broker)</dt><dd>The server that stores and routes JMS messages between producers and consumers. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>Browser</dt><dd>The program (Chrome, Edge, Firefox…) that asks a server for pages and draws the <a href="#H">HTML</a> it gets back — your user’s window onto the app.</dd>
     <dt>Bytecode</dt><dd>The compact instruction format in a <code>.class</code> file, produced by <code>javac</code> and run by the JVM.</dd>
-    <dt>Broker (message broker)</dt><dd>The server that stores and routes JMS messages between producers and consumers. Unit 11.</dd>
   </dl>
 
   <h2 id="C">C</h2>
   <dl class="gloss">
-    <dt>CDI (Contexts and Dependency Injection)</dt><dd>The wiring layer that resolves <code>@Inject</code> points and manages how long injected objects live (their scope). Unit 14.</dd>
+    <dt>CDI (Contexts and Dependency Injection)</dt><dd>The wiring layer that resolves <code>@Inject</code> points and manages how long injected objects live (their scope). See <a href="session-11-cdi-part1.html">Session 11</a>.</dd>
     <dt>Class</dt><dd>A blueprint that groups data and methods under one name.</dd>
-    <dt>Client</dt><dd>Whatever calls a bean or sends a request — a browser, an app, another bean. <i>Local</i> client = same JVM; <i>remote</i> client = different JVM/machine. Unit 10.</dd>
+    <dt>Classloader</dt><dd>The part of Java that loads <code>.class</code> files into memory when it needs them. Each deployed app gets its own, which is why the same class name can exist twice — the cause of “loaded by a different classloader” errors. See <a href="session-14-packaging.html">Session 14</a>.</dd>
+    <dt>Classpath</dt><dd>The list of places the program looks for the classes it needs — like a row of folders checked in order when you ask for a part. Maven’s <code>provided</code> scope keeps a library on your <i>compile</i> classpath but out of the finished <code>.war</code>. See <a href="session-14-packaging.html">Session 14</a>.</dd>
+    <dt>Client</dt><dd>Whatever calls a bean or sends a request — a browser, an app, another bean. <i>Local</i> client = same JVM; <i>remote</i> client = different JVM/machine. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
+    <dt>Collection</dt><dd>An object that holds many values at once — a <code>List</code>, a <code>Set</code>, a <code>Map</code>. See <a href="00-foundations.html">Foundations</a>.</dd>
     <dt>Compile</dt><dd>Turn <code>.java</code> source text into <code>.class</code> bytecode, with <code>javac</code>.</dd>
-    <dt>Connection pool</dt><dd>A set of already-open database connections lent out and returned, so code never pays the setup cost. <code>close()</code> returns a connection rather than destroying it. Unit 05.</dd>
+    <dt>Component tree</dt><dd>In Jakarta Faces, the server’s live model of a page as nested Java objects — every box, button and table — held inside the <a href="#F">FacesContext</a>. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt>Connection pool</dt><dd>A set of already-open database connections lent out and returned, so code never pays the setup cost. <code>close()</code> returns a connection rather than destroying it. See <a href="session-03-resource-creation.html">Session 3</a>.</dd>
+    <dt>ConnectionFactory</dt><dd>The JMS object that hands out connections to the message <a href="#B">broker</a>; you inject one and use it to send or receive messages. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt><code>ConstraintValidator</code></dt><dd>The class that implements one custom <a href="#B">Bean Validation</a> rule — you write the check once and reuse it through your own annotation. See <a href="session-09-bean-validation.html">Session 9</a>.</dd>
     <dt>Container</dt><dd>The part of the server that creates, pools, injects, wraps (with security/transactions) and destroys your beans. Why you never call <code>new</code> on a bean.</dd>
-    <dt>CMT / BMT</dt><dd>Container-Managed / Bean-Managed Transactions — whether the container or your code marks transaction boundaries. Unit 06.</dd>
-    <dt>Correlation ID</dt><dd><code>JMSCorrelationID</code> — a tag a reply message echoes so the sender can match it to the original request. Unit 11.</dd>
+    <dt>Context root</dt><dd>The URL prefix your application lives under. Deploy <code>GlobalBank.war</code> and it answers at <code>localhost:8080/GlobalBank/…</code> — that first segment is the context root. Two running apps cannot share one. See <a href="session-14-tiy.html">Session 14 lab</a>.</dd>
+    <dt>CMT / BMT</dt><dd>Container-Managed / Bean-Managed Transactions — whether the container or your code marks transaction boundaries. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>Correlation ID</dt><dd><code>JMSCorrelationID</code> — a tag a reply message echoes so the sender can match it to the original request. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>CRM (Customer Relationship Management)</dt><dd>Business software that holds everything a company knows about its customers — a classic external system (an <a href="#E">EIS</a>) your app connects to. See <a href="session-08-connectors.html">Session 8</a>.</dd>
   </dl>
 
   <h2 id="D">D</h2>
   <dl class="gloss">
-    <dt>DAO (Data Access Object)</dt><dd>A class whose job is reading/writing one kind of data — hides the SQL or JPA calls behind plain methods (<code>create</code>, <code>findById</code>…). Unit 12.</dd>
-    <dt>DataSource</dt><dd>The object you ask for a database connection; a connection pool sits behind it. Injected with <code>@Resource(lookup=…)</code>. Unit 05.</dd>
+    <dt>DAO (Data Access Object)</dt><dd>A class whose job is reading/writing one kind of data — hides the SQL or JPA calls behind plain methods (<code>create</code>, <code>findById</code>…). See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>DataSource</dt><dd>The object you ask for a database connection; a connection pool sits behind it. Injected with <code>@Resource(lookup=…)</code>. See <a href="session-03-resource-creation.html">Session 3</a>.</dd>
     <dt>Declarative</dt><dd>Saying <i>what</i> you want with annotations/config and letting the container do it — vs <i>programmatic</i> (writing the steps yourself).</dd>
+    <dt>Decorator</dt><dd>A CDI class that wraps a bean behind the same interface to add behaviour — like an <a href="#I">interceptor</a>, but it may call the real method and change the result. See <a href="session-12-cdi-part2.html">Session 12</a>.</dd>
+    <dt>Dependency injection</dt><dd>Handing a class the objects it needs instead of letting it build them itself; the container does the handing. See <a href="#C">CDI</a>.</dd>
+    <dt>Dependency scope</dt><dd>In Maven, how far a library travels: <code>compile</code> (bundled in your archive), <code>provided</code> (the server supplies it), <code>test</code> (tests only). See <a href="#C">classpath</a>.</dd>
     <dt>Deploy</dt><dd>Hand your built <code>.war</code>/<code>.ear</code> to the server so it starts running it.</dd>
+    <dt>Deployment descriptor</dt><dd>An XML <i>settings file</i> packaged with your application that declares things <em>outside</em> your Java code — resource names, security roles, limits — so you can change them per environment without recompiling. <code>web.xml</code> is the web one; <code>application.xml</code> the EAR one. See <a href="session-03-resource-creation.html">Session 3</a>.</dd>
+    <dt>Deployment marker file</dt><dd>A small file WildFly writes next to your archive in <code>deployments/</code> — <code>.deployed</code> means live, <code>.failed</code> means it broke. The server’s status light. See <a href="session-14-tiy.html">Session 14 lab</a>.</dd>
+    <dt>Deployment scanner</dt><dd>The background part of WildFly that watches the <code>deployments/</code> folder and deploys anything you drop in. See <a href="session-14-packaging.html">Session 14</a>.</dd>
+    <dt>Destination</dt><dd>In JMS, the place a message is sent to and read from — a queue or a topic. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>Dirty read</dt><dd>Reading data another transaction has changed but not yet committed; if that transaction rolls back, what you read never existed. Prevented by a stricter <a href="#I">isolation level</a>.</dd>
+    <dt>DLQ (dead-letter queue)</dt><dd>The queue a broker moves a message to after it has failed too many times, so a <a href="#P">poison message</a> stops jamming the real queue. See <a href="session-08-tiy.html">Session 8 lab</a>.</dd>
     <dt>Durability</dt><dd>See ACID. Once committed, changes survive any crash.</dd>
+    <dt>Durable subscription</dt><dd>A topic subscription the broker remembers, so a subscriber that was offline still receives the messages it missed. Turns a live broadcast into a podcast. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>DTO (Data Transfer Object)</dt><dd>A plain object whose only job is to carry data between layers — for example a <code>TransferRequest</code> holding an amount and two account numbers. Fields, not logic. See <a href="session-10-tiy.html">the Session 10 lab</a>.</dd>
   </dl>
 
   <h2 id="E">E</h2>
   <dl class="gloss">
     <dt>EAR / WAR / JAR</dt><dd>Package formats. JAR = a zip of <code>.class</code> files (a library or EJB module). WAR = a web app. EAR = an enterprise bundle that can contain several WARs/JARs.</dd>
     <dt>EJB (Jakarta Enterprise Beans)</dt><dd>The Jakarta EE API for business-logic components — session beans and message-driven beans.</dd>
-    <dt>EntityManager</dt><dd>The JPA object you call to persist/find/remove entities and run JPQL queries. Injected with <code>@PersistenceContext</code>. Unit 13.</dd>
-    <dt>Entity (entity bean)</dt><dd>A persistent object mapped to a database table: a class with <code>@Entity</code> and <code>@Id</code>. Has identity (a primary key). Units 04, 13.</dd>
+    <dt>EJBContext</dt><dd>The container’s handle on the current bean call: ask it who is calling and what roles they hold, or mark the transaction for rollback. Injected with <code>@Resource</code>. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>EIS (Enterprise Information System)</dt><dd>A big established back-office system a company already depends on — SAP, CICS, a legacy database — that your app must connect to. See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>Endpoint</dt><dd>One addressable operation the server offers — a URL plus a verb. <code>GET /accounts/123</code> is an endpoint; so is <code>POST /transfer</code>. See <a href="15-rest-jaxrs.html">the REST unit</a>.</dd>
+    <dt>EntityManager</dt><dd>The JPA object you call to persist/find/remove entities and run JPQL queries. Injected with <code>@PersistenceContext</code>. See <a href="13-jpa-persistence.html">the JPA unit</a>.</dd>
+    <dt>Entity (entity bean)</dt><dd>A persistent object mapped to a database table: a class with <code>@Entity</code> and <code>@Id</code>. Has identity (a primary key). See <a href="session-04-working-with-ejb.html">Session 4</a> and <a href="13-jpa-persistence.html">JPA</a>.</dd>
+    <dt>Environment variable</dt><dd>A named setting stored by the operating system that programs can read — like <code>JAVA_HOME</code> or <code>PATH</code>. See <a href="01-setup.html">Set up your workshop</a>.</dd>
+    <dt>ERP (Enterprise Resource Planning)</dt><dd>Large business software that runs a company’s core operations (finance, stock, orders) — another classic <a href="#E">EIS</a> your app connects to. See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>Event (and <code>@Observes</code>)</dt><dd>A “something happened” announcement one bean fires, which any method marked <code>@Observes</code> can react to — without the sender knowing the listener exists. See <a href="session-04-working-with-ejb.html">Session 4</a> and <a href="session-11-cdi-part1.html">Session 11</a>.</dd>
     <dt>Exception</dt><dd>An error object Java <i>throws</i> to stop the current work and report a problem; caught with <code>try/catch</code>.</dd>
-    <dt>Expression Language (EL)</dt><dd><code>#{...}</code> in a Facelets page — binds a component to a bean field or method. Unit 09.</dd>
+    <dt>Expression Language (EL)</dt><dd><code>#{...}</code> in a Facelets page — binds a component to a bean field or method. See <a href="session-05-facelets.html">Session 5</a>.</dd>
   </dl>
 
   <h2 id="F">F</h2>
   <dl class="gloss">
-    <dt>Facelets</dt><dd>The XHTML file format for writing Jakarta Faces pages. Unit 09.</dd>
+    <dt>Facelets</dt><dd>The XHTML file format for writing Jakarta Faces pages. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt>FacesContext</dt><dd>The Faces object that represents “this request, right now”; the current <a href="#C">component tree</a> lives inside it. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt>FacesServlet</dt><dd>The one servlet every <code>*.xhtml</code> request goes through; it drives the six-phase Faces lifecycle and is registered as the <a href="#F">front controller</a>. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt>Foreign key</dt><dd>A database column that points at the <a href="#P">primary key</a> of another table, linking one row to another — e.g. an order row naming its customer.</dd>
+    <dt>Front controller</dt><dd>A single entry point every request passes through before it reaches the right code — like a hotel receptionist. In Faces, that is the <a href="#F">FacesServlet</a>. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+  </dl>
+
+  <h2 id="G">G</h2>
+  <dl class="gloss">
+    <dt>Generics</dt><dd>The <code>&lt; &gt;</code> label on a collection that says what it holds — <code>List&lt;String&gt;</code> accepts only Strings, so you never guess the type coming out. See <a href="00-foundations.html">Foundations</a>.</dd>
+    <dt>groupId / artifactId</dt><dd>The two names Maven gives a project in <code>pom.xml</code>: <code>groupId</code> is the organisation, <code>artifactId</code> the project itself. Together they identify a library you depend on. See <a href="#P">pom.xml</a>.</dd>
   </dl>
 
   <h2 id="H">H</h2>
   <dl class="gloss">
+    <dt>H2 / ExampleDS</dt><dd>H2 is a tiny in-memory database that ships with WildFly for practice; ExampleDS is that database’s ready-made DataSource, published at <code>java:jboss/datasources/ExampleDS</code>. See <a href="session-03-resource-creation.html">Session 3</a>.</dd>
+    <dt>HTML (HyperText Markup Language)</dt><dd>The text-with-tags format a <a href="#B">browser</a> understands and renders into a page — headings, links, forms. See <a href="session-05-facelets.html">Session 5</a>.</dd>
     <dt>HTTP</dt><dd>The request/response language of the web. A client sends a request (<code>GET /path</code>); the server sends a response plus a status code (<code>200</code>, <code>404</code>…).</dd>
+    <dt>HTTP method / verb</dt><dd>The word that says what you want to do at a URL: <code>GET</code> read, <code>POST</code> create, <code>PUT</code> update, <code>DELETE</code> remove. See <a href="15-rest-jaxrs.html">the REST unit</a>.</dd>
   </dl>
 
   <h2 id="I">I</h2>
   <dl class="gloss">
-    <dt>Inject</dt><dd>The container fills a field or parameter with a ready object, so you don’t create it. <code>@Inject</code> (CDI) or <code>@EJB</code>. Unit 14.</dd>
+    <dt>IDE (Integrated Development Environment)</dt><dd>One program that lets you write, navigate, run and debug code — here, IntelliJ IDEA. See <a href="01-setup.html">Set up your workshop</a>.</dd>
+    <dt>Identity store</dt><dd>The part of Jakarta Security that looks up a user’s password and roles — often a database table. See <a href="session-13-cdi-beans-security.html">Session 13</a>.</dd>
+    <dt>Immutable</dt><dd>“Cannot be changed once it is made.” A <a href="#R">record</a> or a <code>String</code> is immutable, so it is safe to share.</dd>
+    <dt>Inheritance</dt><dd>A class taking on the fields and methods of a parent class and adding its own on top — <code>class Cat extends Animal</code>. See <a href="00-foundations.html">Foundations</a>.</dd>
+    <dt>Inject</dt><dd>The container fills a field or parameter with a ready object, so you don’t create it. <code>@Inject</code> (CDI) or <code>@EJB</code>. See <a href="session-11-cdi-part1.html">Session 11</a>.</dd>
+    <dt>Injection point</dt><dd>The field, constructor or method parameter where the container is asked to supply an object — the spot you put <code>@Inject</code> on. See <a href="session-11-cdi-part1.html">Session 11</a>.</dd>
     <dt>Instance</dt><dd>Same as an object — one concrete item built from a class.</dd>
+    <dt>Integration test</dt><dd>A test that runs several real parts together — a bean plus a real database. Slower than a <a href="#U">unit test</a>, but closer to reality. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt>Interceptor</dt><dd>A class whose code runs <em>around</em> a target method — before it, after it, or both — so a cross-cutting chore (logging, timing, a security check) lives in one place instead of being copied into every method. Think of an airport security check that every passenger passes through. See <a href="session-12-cdi-part2.html">Session 12</a>.</dd>
     <dt>Interface</dt><dd>A contract listing method signatures with no bodies. A class <code>implements</code> it and supplies the code.</dd>
     <dt>Isolation</dt><dd>See ACID. Concurrent transactions don’t see each other’s uncommitted work.</dd>
+    <dt>Isolation level</dt><dd>How strictly one transaction is walled off from another’s half-done work; a stricter level prevents things like a <a href="#D">dirty read</a>, at the cost of speed.</dd>
   </dl>
 
   <h2 id="J">J</h2>
   <dl class="gloss">
-    <dt>JAX-RS (Jakarta RESTful Web Services)</dt><dd>Annotations that turn Java methods into HTTP/JSON endpoints (<code>@Path</code>, <code>@GET</code>…). Unit 15.</dd>
-    <dt>JCA (Jakarta Connectors)</dt><dd>The standard socket for plugging any external system (mainframe, ERP…) into an app server via a <i>resource adapter</i> (<code>.rar</code>). Unit 12.</dd>
-    <dt>JDBC</dt><dd>The low-level Java API for talking to relational databases: Connection → Statement → execute → ResultSet → close. Unit 12.</dd>
-    <dt>JMS (Jakarta Messaging)</dt><dd>The API for asynchronous messaging via a broker — queues and topics. Unit 11.</dd>
-    <dt>JNDI (Java Naming and Directory Interface)</dt><dd>A name → object directory on the server. Look up <code>"jdbc/GlobalBankDB"</code> and get a real resource. Package is <code>javax.naming</code> (not <code>jakarta.naming</code>). Unit 05.</dd>
-    <dt>JPA (Jakarta Persistence)</dt><dd>An object-relational mapper: translates between Java objects and database rows so you rarely write SQL. Unit 13.</dd>
-    <dt>JPQL</dt><dd>A query language like SQL but written over entities and their fields, not tables and columns. Unit 13.</dd>
-    <dt>JSF (Jakarta Faces)</dt><dd>A server-side, component-based web UI framework; pages are written in Facelets. Unit 09.</dd>
-    <dt>JTA (Jakarta Transaction API)</dt><dd>The API the server uses to manage transactions, including ones spanning several resources (XA / two-phase commit).</dd>
+    <dt>JAVA_HOME</dt><dd>An <a href="#E">environment variable</a> holding the folder where the <a href="#J">JDK</a> is installed — the computer’s note of “where Java lives”. See <a href="01-setup.html">Set up your workshop</a>.</dd>
+    <dt>JAX-RS (Jakarta RESTful Web Services)</dt><dd>Annotations that turn Java methods into HTTP/JSON endpoints (<code>@Path</code>, <code>@GET</code>…). See <a href="15-rest-jaxrs.html">the REST unit</a>.</dd>
+    <dt>JCA (Jakarta Connectors)</dt><dd>The standard socket for plugging any external system (mainframe, ERP…) into an app server via a <i>resource adapter</i> (<code>.rar</code>). See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>JDBC</dt><dd>The low-level Java API for talking to relational databases: Connection → Statement → execute → ResultSet → close. See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>JDBC driver</dt><dd>The small library that lets <a href="#J">JDBC</a> talk to one particular database brand; the database’s vendor supplies it.</dd>
+    <dt>JDK (Java Development Kit)</dt><dd>The toolkit that both compiles and runs Java — the first thing to install. See <a href="01-setup.html">Set up your workshop</a>.</dd>
+    <dt>JMS (Jakarta Messaging)</dt><dd>The API for asynchronous messaging via a broker — queues and topics. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>JMSContext</dt><dd>The modern JMS object you inject to send and receive messages; the container opens and closes the connection for you, so you don’t. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>JNDI (Java Naming and Directory Interface)</dt><dd>A name → object directory on the server. Look up <code>"jdbc/GlobalBankDB"</code> and get a real resource. Package is <code>javax.naming</code> (not <code>jakarta.naming</code>). See <a href="session-03-resource-creation.html">Session 3</a>.</dd>
+    <dt>JSON / JSON-B</dt><dd><i>JavaScript Object Notation</i> — a plain-text format for data, easy for both people and programs to read: <code>{"name":"Ada","balance":42}</code>. <b>JSON-B</b> is the Jakarta library that converts your Java objects to and from JSON automatically, so you rarely build the text by hand. See <a href="15-rest-jaxrs.html">the REST unit</a>.</dd>
+    <dt>JPA (Jakarta Persistence)</dt><dd>An object-relational mapper: translates between Java objects and database rows so you rarely write SQL. See <a href="13-jpa-persistence.html">the JPA unit</a>.</dd>
+    <dt>JPA provider (Hibernate)</dt><dd>The library that does the actual object-relational mapping behind the JPA API — for WildFly, usually Hibernate. See <a href="13-jpa-persistence.html">the JPA unit</a>.</dd>
+    <dt>JPQL</dt><dd>A query language like SQL but written over entities and their fields, not tables and columns. See <a href="13-jpa-persistence.html">the JPA unit</a>.</dd>
+    <dt>JSF (Jakarta Faces)</dt><dd>A server-side, component-based web UI framework; pages are written in Facelets. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt>JTA (Jakarta Transaction API)</dt><dd>The API the server uses to manage transactions, including ones spanning several resources (<a href="#X">XA / two-phase commit</a>).</dd>
+    <dt>JUnit 5</dt><dd>The library that finds your <code>@Test</code> methods, runs them and reports which passed. See <a href="16-testing.html">the testing unit</a>.</dd>
     <dt>JVM (Java Virtual Machine)</dt><dd>The “pretend computer”, launched by the <code>java</code> command, that runs bytecode the same way on any operating system.</dd>
   </dl>
 
   <h2 id="L">L</h2>
   <dl class="gloss">
+    <dt>Lambda</dt><dd>A small function written inline, with no name of its own — e.g. the <code>() -&gt; …</code> handed to <code>assertThrows</code> in a test. See <a href="16-testing.html">the testing unit</a>.</dd>
     <dt>Library</dt><dd>Someone else’s reusable code, shipped as a JAR.</dd>
     <dt>Lifecycle</dt><dd>The stages a bean passes through — created, ready, (passivated), destroyed — with hooks like <code>@PostConstruct</code>, <code>@PreDestroy</code>.</dd>
-    <dt>Local client</dt><dd>A caller in the same JVM as the bean: pass-by-reference, no network. Uses <code>@Local</code> or no interface. Unit 10.</dd>
-    <dt>Lock (<code>@Lock</code>)</dt><dd>In a singleton, controls concurrency: <code>WRITE</code> = one thread at a time; <code>READ</code> = many at once. Unit 07.</dd>
-    <dt>Lost update</dt><dd>Two writers read the same value and overwrite each other; concurrency control (optimistic/pessimistic) prevents it. Unit 07.</dd>
+    <dt>Local client</dt><dd>A caller in the same JVM as the bean: pass-by-reference, no network. Uses <code>@Local</code> or no interface. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
+    <dt>Localhost</dt><dd>The name for “this very computer”. <code>localhost:8080</code> means <a href="#P">port</a> 8080 on your own machine, not someone else’s.</dd>
+    <dt>Lock (<code>@Lock</code>)</dt><dd>In a singleton, controls concurrency: <code>WRITE</code> = one <a href="#T">thread</a> at a time; <code>READ</code> = many at once. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>Lost update</dt><dd>Two writers read the same value and overwrite each other; concurrency control (optimistic/pessimistic) prevents it. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
   </dl>
 
   <h2 id="M">M</h2>
   <dl class="gloss">
     <dt>Maven</dt><dd>The build tool. <code>pom.xml</code> describes the project and its libraries; <code>mvn clean package</code> builds it.</dd>
-    <dt>MDB (message-driven bean)</dt><dd>A bean the container invokes when a message arrives on a queue/topic. Implements <code>MessageListener</code> (<code>onMessage</code>). Units 04, 11.</dd>
+    <dt>MDB (message-driven bean)</dt><dd>A bean the container invokes when a message arrives on a queue/topic. Implements <code>MessageListener</code> (<code>onMessage</code>). See <a href="session-04-working-with-ejb.html">Session 4</a> and <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>Message selector</dt><dd>A filter string on a JMS consumer so it receives only the messages it wants — e.g. matching a <a href="#C">correlation ID</a>. See <a href="session-07-messaging.html">Session 7</a>.</dd>
     <dt>Method</dt><dd>A named, reusable block of steps, often taking input and returning a result.</dd>
-    <dt>Marshalling / serialization</dt><dd>Turning an object into bytes to send over a network (and back). Required for <code>@Remote</code> arguments. Unit 10.</dd>
+    <dt>Mock</dt><dd>A stand-in object that pretends to be a collaborator, so a <a href="#U">unit test</a> can check one class on its own. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt>MOM (Message-Oriented Middleware)</dt><dd>The general name for broker software that moves messages between programs asynchronously — what <a href="#J">JMS</a> talks to. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>Marshalling / serialization</dt><dd>Turning an object into bytes to send over a network (and back). Required for <code>@Remote</code> arguments. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
   </dl>
 
   <h2 id="N">N</h2>
   <dl class="gloss">
-    <dt>Namespace (JNDI)</dt><dd><code>java:global</code> (whole server) ⊃ <code>java:app</code> (one EAR) ⊃ <code>java:module</code> (one JAR/WAR). Unit 05.</dd>
+    <dt><code>@Named</code></dt><dd>A CDI annotation that gives a bean a name a Facelets page can reach with <code>#{...}</code>. See <a href="session-13-cdi-beans-security.html">Session 13</a>.</dd>
+    <dt>Namespace (JNDI)</dt><dd><code>java:global</code> (whole server) ⊃ <code>java:app</code> (one EAR) ⊃ <code>java:module</code> (one JAR/WAR). See <a href="session-03-resource-creation.html">Session 3</a>.</dd>
     <dt><code>new</code></dt><dd>The Java keyword that builds an object from a class. You use it for plain objects, <b>not</b> for beans — the container makes those.</dd>
+    <dt>No-Interface View / <code>@Local</code> / <code>@Remote</code></dt><dd>How a client sees a bean. No interface or <code>@Local</code> means “same JVM, direct call”; <code>@Remote</code> means “call it across the network”. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
   </dl>
 
   <h2 id="O">O</h2>
   <dl class="gloss">
     <dt>Object</dt><dd>A concrete item built from a class blueprint. One class → many objects, each with its own data.</dd>
-    <dt>Optimistic locking</dt><dd>Don’t lock; add a <code>@Version</code> column; fail (and retry) if someone else changed the row since you read it. Unit 07.</dd>
+    <dt>Optimistic locking</dt><dd>Don’t lock; add a <code>@Version</code> column; fail (and retry) if someone else changed the row since you read it. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
     <dt>ORM (object-relational mapping)</dt><dd>Mapping objects to database rows — what JPA does.</dd>
   </dl>
 
   <h2 id="P">P</h2>
   <dl class="gloss">
     <dt>Package</dt><dd>A dotted “folder” for classes, e.g. <code>com.globalbank.accounts</code>. Use one with <code>import</code>.</dd>
-    <dt>Passivation / activation</dt><dd>Parking an idle stateful bean to disk to save memory, then restoring it on the next call. Unit 03.</dd>
-    <dt>Pessimistic locking</dt><dd>Lock the row on read; others wait. For frequent clashes / critical data. Unit 07.</dd>
+    <dt>Pass-by-value / pass-by-reference</dt><dd>Local calls pass a reference, so the bean works on the very same object; remote calls pass a copy (value), so changes the bean makes are <em>not</em> seen by the caller. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
+    <dt>Passivation / activation</dt><dd>Parking an idle stateful bean to disk to save memory, then restoring it on the next call. See <a href="session-01-02-intro-and-beans.html">Sessions 1–2</a>.</dd>
+    <dt>PATH</dt><dd>The list of folders the operating system searches, in order, when you type a command — if Java’s folder is not on it, you get “java is not recognised”. See <a href="01-setup.html">Set up your workshop</a>.</dd>
+    <dt>Persistence context</dt><dd>The <a href="#E">EntityManager</a>’s live set of managed entities and their pending changes; inside it, editing an object is enough to have it saved on commit. See <a href="13-jpa-persistence.html">the JPA unit</a>.</dd>
+    <dt>Persistence unit</dt><dd>A named set of entities plus the connection and provider settings for one database, declared in <code>persistence.xml</code>. See <a href="13-jpa-persistence.html">the JPA unit</a>.</dd>
+    <dt>Pessimistic locking</dt><dd>Lock the row on read; others wait. For frequent clashes / critical data. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>Point-to-Point</dt><dd>The queue model of messaging: each message goes to exactly one consumer. Compare <a href="#P">publish/subscribe</a>. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>Poison message</dt><dd>A message a consumer can never process and keeps failing on; cap the retries so the broker moves it to the <a href="#D">DLQ</a> instead of looping forever. See <a href="session-08-tiy.html">Session 8 lab</a>.</dd>
     <dt>Pool</dt><dd>A stock of ready instances (stateless beans, DB connections) lent out and reused.</dd>
     <dt><code>pom.xml</code></dt><dd>Maven’s project file: <code>groupId</code>, <code>artifactId</code>, <code>version</code>, <code>packaging</code>, and <code>dependency</code> entries.</dd>
-    <dt>PreparedStatement</dt><dd>A JDBC statement with <code>?</code> placeholders — safe from SQL injection, precompiled. Always prefer it. Unit 12.</dd>
+    <dt>Port</dt><dd>A numbered door on a computer that one program listens at; WildFly uses 8080 for apps and 9990 for admin. See <a href="session-14-tiy.html">Session 14 lab</a>.</dd>
+    <dt>Postback</dt><dd>A Faces request in which the user submits a page and returns to the same page, so the server restores the previous <a href="#V">view state</a>. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt>PreparedStatement</dt><dd>A JDBC statement with <code>?</code> placeholders — safe from SQL injection, precompiled. Always prefer it. See <a href="session-08-connectors.html">Session 8</a>.</dd>
     <dt>Primary key</dt><dd>The column/field that uniquely identifies a database row / entity (<code>@Id</code>).</dd>
-    <dt>Producer (CDI <code>@Produces</code>)</dt><dd>A method whose return value becomes injectable — for config values or objects you don’t own. Unit 14.</dd>
+    <dt>Principal</dt><dd>The container’s way of saying “this is the person making the call” — for most apps, the username wrapped in an object. Read it with <code>getCallerPrincipal()</code>. See <a href="session-13-cdi-beans-security.html">Session 13</a>.</dd>
+    <dt>Producer (CDI <code>@Produces</code>)</dt><dd>A method whose return value becomes injectable — for config values or objects you don’t own. See <a href="session-12-cdi-part2.html">Session 12</a>.</dd>
     <dt>Programmatic</dt><dd>Writing the steps in code yourself (vs declarative annotations).</dd>
     <dt>Proxy</dt><dd>A stand-in object the container gives you instead of the real bean, so it can add security/transactions/remoting around each call.</dd>
+    <dt>Publish/Subscribe</dt><dd>The topic model of messaging: each message is broadcast to every subscriber. Compare <a href="#P">point-to-point</a>. See <a href="session-07-messaging.html">Session 7</a>.</dd>
   </dl>
 
   <h2 id="Q">Q</h2>
   <dl class="gloss">
-    <dt>Qualifier</dt><dd>A custom annotation that picks between multiple CDI beans of the same type (<code>@Sms</code> vs <code>@Email</code>). Unit 14.</dd>
-    <dt>Queue</dt><dd>A JMS destination where each message goes to exactly one consumer (point-to-point). Unit 11.</dd>
+    <dt>Qualifier</dt><dd>A custom annotation that picks between multiple CDI beans of the same type (<code>@Sms</code> vs <code>@Email</code>). See <a href="session-12-cdi-part2.html">Session 12</a>.</dd>
+    <dt>Queue</dt><dd>A JMS destination where each message goes to exactly one consumer (point-to-point). See <a href="session-07-messaging.html">Session 7</a>.</dd>
   </dl>
 
   <h2 id="R">R</h2>
   <dl class="gloss">
-    <dt>Remote client</dt><dd>A caller in a different JVM/machine: pass-by-value (serialized), slower, needs a <code>@Remote</code> interface. Unit 10.</dd>
-    <dt>REQUIRED / REQUIRES_NEW</dt><dd>Transaction attributes. <code>REQUIRED</code> (default): join or create a transaction. <code>REQUIRES_NEW</code>: own separate transaction (used for audit logs). Unit 06.</dd>
+    <dt>RBAC / role</dt><dd>Role-Based Access Control: give each user a role (TELLER, MANAGER) and grant access to roles rather than to people. See <a href="#A">authentication / authorisation</a> and <a href="session-13-cdi-beans-security.html">Session 13</a>.</dd>
+    <dt>Record (Java)</dt><dd>A short way to declare an immutable data class: <code>record Point(int x, int y) {}</code> gives you the fields, a constructor and getters. Handy for <a href="#D">DTOs</a> and <a href="#E">events</a>. See <a href="session-12-cdi-part2.html">Session 12</a>.</dd>
+    <dt>Remote client</dt><dd>A caller in a different JVM/machine: pass-by-value (serialized), slower, needs a <code>@Remote</code> interface. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
+    <dt>Request-Reply</dt><dd>A messaging pattern for getting an answer without blocking: the sender names a reply queue in the message and matches the reply by <a href="#C">correlation ID</a>. See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>REQUIRED / REQUIRES_NEW</dt><dd>Transaction attributes. <code>REQUIRED</code> (default): join or create a transaction. <code>REQUIRES_NEW</code>: own separate transaction (used for audit logs). See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
     <dt>Resource</dt><dd>An external thing a bean uses — a database, a queue, a mail session — usually reached via JNDI.</dd>
-    <dt>Resource adapter (<code>.rar</code>)</dt><dd>A pluggable JCA driver connecting an app server to one external system. Unit 12.</dd>
-    <dt>REST</dt><dd>Modelling a system as resources at URLs, acted on with HTTP verbs (GET/POST/PUT/DELETE). Unit 15.</dd>
-    <dt>ResultSet</dt><dd>A JDBC cursor over query rows; advance with <code>rs.next()</code>. Unit 12.</dd>
-    <dt>Rollback</dt><dd>Undo every change in a transaction. In CMT, throwing an exception triggers it. Unit 06.</dd>
+    <dt>Resource adapter (<code>.rar</code>)</dt><dd>A pluggable JCA driver connecting an app server to one external system. See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>REST</dt><dd>Modelling a system as resources at URLs, acted on with HTTP verbs (GET/POST/PUT/DELETE). See <a href="15-rest-jaxrs.html">the REST unit</a>.</dd>
+    <dt>ResultSet</dt><dd>A JDBC cursor over query rows; advance with <code>rs.next()</code>. See <a href="session-08-connectors.html">Session 8</a>.</dd>
+    <dt>RMI / HTTP-remoting</dt><dd>One Java program invoking a method on an object in another JVM; the <a href="#S">stub</a> hides the network, sending the arguments across and bringing the answer back. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
+    <dt><code>@RolesAllowed</code></dt><dd>An annotation saying only the listed roles may call a method; the container enforces it on every call. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>Rollback</dt><dd>Undo every change in a transaction. In CMT, throwing an exception triggers it. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>Root cause</dt><dd>The deepest “Caused by:” line in a <a href="#S">stack trace</a> — the original problem that everything else was a symptom of. See <a href="16-testing.html">the testing unit</a>.</dd>
   </dl>
 
   <h2 id="S">S</h2>
   <dl class="gloss">
-    <dt>Scope (CDI)</dt><dd>How long an injected bean lives: request / session / application / dependent / conversation. Unit 14.</dd>
+    <dt>Scope (CDI)</dt><dd>How long an injected bean lives: request / session / application / dependent / conversation. See <a href="session-11-cdi-part1.html">Session 11</a>.</dd>
+    <dt><code>SecurityContext</code></dt><dd>The Jakarta Security object you inject to ask, in your own code, who is calling and whether they hold a role. See <a href="session-13-cdi-beans-security.html">Session 13</a>.</dd>
     <dt>Serializable</dt><dd>A marker interface meaning “this object can be turned into bytes”. Required for remote arguments and session-scoped beans.</dd>
     <dt>Server</dt><dd>An always-running program that waits for requests.</dd>
+    <dt>Server-side rendering</dt><dd>The server builds the finished HTML page and sends it; the <a href="#B">browser</a> just draws it. What Faces does. See <a href="session-05-facelets.html">Session 5</a>.</dd>
     <dt>Servlet</dt><dd>A Java class that handles HTTP requests directly (<code>doGet</code>/<code>doPost</code>) — the low-level web component beneath JSF/JAX-RS.</dd>
-    <dt>Session bean</dt><dd>A container-managed class holding business logic. Three kinds: stateless, stateful, singleton. Unit 03.</dd>
-    <dt>Singleton bean</dt><dd>Exactly one instance for the whole app, shared by all clients; guard state with <code>@Lock</code>. Unit 03.</dd>
+    <dt>Session bean</dt><dd>A container-managed class holding business logic. Three kinds: stateless, stateful, singleton. See <a href="session-01-02-intro-and-beans.html">Sessions 1–2</a>.</dd>
+    <dt><code>SessionSynchronization</code></dt><dd>A stateful bean can implement it to be told when the surrounding transaction commits or rolls back, so it can keep cached data in step. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
+    <dt><code>setRollbackOnly()</code></dt><dd>Marking the current transaction so it is guaranteed to roll back even if the method returns normally. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
+    <dt>Singleton bean</dt><dd>Exactly one instance for the whole app, shared by all clients; guard state with <code>@Lock</code>. See <a href="session-01-02-intro-and-beans.html">Sessions 1–2</a>.</dd>
     <dt>SQL</dt><dd>The language for reading/writing a relational database (<code>SELECT</code>, <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>).</dd>
-    <dt>Stack trace</dt><dd>The chain of method calls printed when an exception is thrown. Read: type/message → first frame in your package → deepest “Caused by:”. Unit 16.</dd>
-    <dt>Stateful bean</dt><dd>One instance per client that remembers its fields across calls for a conversation; ended with <code>@Remove</code>. Unit 03.</dd>
-    <dt>Stateless bean</dt><dd>No memory between calls; served from a pool; the default choice. Unit 03.</dd>
+    <dt>Stack trace</dt><dd>The chain of method calls printed when an exception is thrown. Read: type/message → first frame in your package → deepest “Caused by:”. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt><code>@Startup</code></dt><dd>On a singleton bean, tells the container to create it when the application starts rather than on first use. See <a href="session-01-02-intro-and-beans.html">Sessions 1–2</a>.</dd>
+    <dt>Stateful bean</dt><dd>One instance per client that remembers its fields across calls for a conversation; ended with <code>@Remove</code>. See <a href="session-01-02-intro-and-beans.html">Sessions 1–2</a>.</dd>
+    <dt>Stateless bean</dt><dd>No memory between calls; served from a pool; the default choice. See <a href="session-01-02-intro-and-beans.html">Sessions 1–2</a>.</dd>
+    <dt>Status code</dt><dd>The three-digit number a server sends back with a response: <code>200</code> OK, <code>404</code> not found, <code>403</code> forbidden, <code>500</code> server error. See <a href="#H">HTTP</a>.</dd>
+    <dt>Stub</dt><dd>The small local stand-in the container gives a remote client in place of the real bean; you call it and it ships the call across the network. See <a href="session-06-local-remote.html">Session 6</a>.</dd>
     <dt>Synchronous</dt><dd>The caller waits for the result before continuing. Opposite of asynchronous.</dd>
+    <dt>System exception</dt><dd>An unexpected runtime failure; by default the container rolls the transaction back. Opposite of an <a href="#A">application exception</a>. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
   </dl>
 
   <h2 id="T">T</h2>
   <dl class="gloss">
-    <dt>Topic</dt><dd>A JMS destination that broadcasts a copy of each message to every subscriber (publish/subscribe). Unit 11.</dd>
-    <dt>Transaction</dt><dd>A group of steps that commit together or roll back together. Unit 06.</dd>
-    <dt><code>@TransactionAttribute</code></dt><dd>Declares how a method relates to the caller’s transaction: REQUIRED, REQUIRES_NEW, MANDATORY, SUPPORTS, NOT_SUPPORTED, NEVER. Unit 06.</dd>
+    <dt><code>target/</code></dt><dd>Maven’s output folder; <code>mvn clean package</code> writes your built <code>.jar</code>/<code>.war</code>/<code>.ear</code> there. See <a href="#M">Maven</a>.</dd>
+    <dt>Testcontainers</dt><dd>A testing tool that starts a real database in a temporary container for an <a href="#I">integration test</a>. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt>Thread</dt><dd>A worker inside the running program, doing one job at a time. A server keeps many running at once — that is how it serves many users together. The catch: two threads touching the same data can corrupt it, so code that behaves correctly under this is called <i>thread-safe</i>. Concurrency control (<code>@Lock</code>, transactions) exists to make that safe. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>TLS (Transport Layer Security)</dt><dd>The encryption behind HTTPS; it scrambles the traffic between a browser and a server so nobody in between can read it. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt>Topic</dt><dd>A JMS destination that broadcasts a copy of each message to every subscriber (publish/subscribe). See <a href="session-07-messaging.html">Session 7</a>.</dd>
+    <dt>Transaction</dt><dd>A group of steps that commit together or roll back together. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
+    <dt><code>@TransactionAttribute</code></dt><dd>Declares how a method relates to the caller’s transaction: REQUIRED, REQUIRES_NEW, MANDATORY, SUPPORTS, NOT_SUPPORTED, NEVER. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
+    <dt>Transaction propagation</dt><dd>Whether an existing transaction carries over when one bean calls another, or the call starts (or refuses) one of its own — decided by <a href="#T"><code>@TransactionAttribute</code></a>. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
     <dt><code>try</code>-with-resources</dt><dd><code>try (Connection c = …) { }</code> — automatically closes the resource (returns a pooled connection) in the right order.</dd>
     <dt>Type</dt><dd>What kind of value a variable may hold: <code>int</code>, <code>double</code>, <code>boolean</code>, <code>String</code>, a class…</dd>
+  </dl>
+
+  <h2 id="U">U</h2>
+  <dl class="gloss">
+    <dt>Unit test</dt><dd>A test of one class on its own, with its collaborators replaced by <a href="#M">mocks</a> — fast enough to run on every save. Compare <a href="#I">integration test</a>. See <a href="16-testing.html">the testing unit</a>.</dd>
+    <dt>URL / URI</dt><dd>A URL is a web address — scheme, host, port and path, like <code>http://localhost:8080/globalbank/</code>. URI is the more general name for “the address of a thing”. See <a href="#E">endpoint</a>.</dd>
+    <dt><code>UserTransaction</code></dt><dd>The JTA object a bean uses to drive its own transaction by hand (BMT): <code>begin()</code>, <code>commit()</code>, <code>rollback()</code>. See <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
   </dl>
 
   <h2 id="V">V</h2>
   <dl class="gloss">
     <dt>Variable</dt><dd>A named box holding one value.</dd>
-    <dt><code>@Version</code></dt><dd>A field JPA uses as an optimistic-lock counter; it bumps on each update and is checked in the <code>WHERE</code> clause. Unit 07.</dd>
+    <dt>View state</dt><dd>The snapshot of a Faces page’s <a href="#C">component tree</a> that the server saves and restores on the next <a href="#P">postback</a>. See <a href="session-05-facelets.html">Session 5</a>.</dd>
+    <dt><code>@Version</code></dt><dd>A field JPA uses as an optimistic-lock counter; it bumps on each update and is checked in the <code>WHERE</code> clause. See <a href="session-04-working-with-ejb.html">Session 4</a>.</dd>
   </dl>
 
   <h2 id="W">W</h2>
   <dl class="gloss">
-    <dt>WildFly</dt><dd>The free, open-source Jakarta EE application server used in this course (formerly “JBoss AS”). Runs on ports 8080 (apps) and 9990 (admin).</dd>
+    <dt><code>$WILDFLY_HOME</code> / WildFly home</dt><dd>The folder you unzipped WildFly into; <code>$WILDFLY_HOME/bin</code> holds its start scripts and the admin CLI. See <a href="session-14-packaging.html">Session 14</a>.</dd>
     <dt>Web container</dt><dd>The part of the server that runs servlets and JSF pages and calls your enterprise beans.</dd>
+    <dt>WildFly</dt><dd>The free, open-source Jakarta EE application server used in this course (formerly “JBoss AS”). Runs on ports 8080 (apps) and 9990 (admin).</dd>
+    <dt>Wrapper class vs primitive</dt><dd>A primitive (<code>int</code>, <code>boolean</code>) is a raw value and not an object; its wrapper class (<code>Integer</code>, <code>Boolean</code>) is the object form, needed inside <a href="#G">generics</a> and collections. See <a href="00-foundations.html">Foundations</a>.</dd>
+  </dl>
+
+  <h2 id="X">X</h2>
+  <dl class="gloss">
+    <dt>XA / two-phase commit</dt><dd>How one transaction spans <em>two or more</em> resources — say a database and a message queue. A coordinator first asks every resource to <i>prepare</i>; only if they all say yes does it tell them all to <i>commit</i>. Any refusal rolls the whole thing back. That buys all-or-nothing across systems, at the cost of being slower than a single-resource transaction. See <a href="session-08-connectors.html">Session 8</a> and <a href="session-10-ejb-transactions.html">Session 10</a>.</dd>
+    <dt>XHTML</dt><dd>The XML-flavoured HTML that <a href="#F">Facelets</a> pages are written in; unlike ordinary HTML it must be well-formed, with every tag closed. See <a href="session-05-facelets.html">Session 5</a>.</dd>
   </dl>
 
 </main>

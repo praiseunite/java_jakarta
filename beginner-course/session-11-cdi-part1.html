@@ -1,49 +1,170 @@
-<title>Session 11 — Jakarta CDI (Part I)</title>
+<title>Session 11 — Jakarta CDI, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 11: Jakarta Contexts and Dependency Injection (CDI) Part I: architecture, beans.xml configuration, core scopes (@RequestScoped, @SessionScoped, @ApplicationScoped, @ConversationScoped), and type-safe @Inject.">
+<meta name="description" content="Session 11, written for people who have never heard of dependency injection. What CDI is, why you stop writing new, how long each kind of bean lives (the five scopes), the three ways to use @Inject, and when to reach for @Inject, @EJB or @Resource.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s11";</script>
 
 <main class="page">
 
-  <h1>Session 11 · Jakarta CDI (Part I)</h1>
-  <p class="lede">Throughout this course, you have seen annotations like <code>@Inject</code> and <code>@Named</code>.
-    <strong>Jakarta Contexts and Dependency Injection (CDI)</strong> is the foundational wiring backbone of modern Jakarta EE.
-    It manages the creation, lifecycle, and type-safe injection of application components across all tiers.</p>
+  <h1>Session 11 · Jakarta CDI, Explained Slowly</h1>
+  <p class="lede">You have already seen labels like <code>@Inject</code> dotted through this course
+    without anyone stopping to explain them. This page fixes that. <strong>CDI</strong> — Contexts and
+    Dependency Injection — is the part of Jakarta EE that <strong>builds your objects for you and hands
+    them to each other</strong>, so you never write <code>new</code> again. You do not need to know what
+    "dependency injection" means yet. Every hard word is explained the moment it appears, and at the end
+    a simulation shows the whole thing happening live.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Define Contexts and Dependency Injection (CDI) and explain its core architecture</li>
-        <li>Configure CDI bean archives using <code>beans.xml</code> and understand discovery modes</li>
-        <li>Master all 5 core CDI scopes: <code>@Dependent</code>, <code>@RequestScoped</code>, <code>@SessionScoped</code>, <code>@ApplicationScoped</code>, and <code>@ConversationScoped</code></li>
-        <li>Apply type-safe dependency injection using <code>@Inject</code> on fields, constructors, and initializer methods</li>
-        <li>Contrast <code>@Inject</code> (CDI) with <code>@EJB</code> and <code>@Resource</code></li>
+        <li><strong>No jargon without a translation.</strong> Each new word gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> If a line of code matters, it gets explained.</li>
+        <li><strong>Every idea gets a picture first.</strong> You meet an everyday analogy before any code.</li>
+        <li><strong>You will watch it happen.</strong> A runnable simulation shows beans being born and destroyed.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       11.1 What is CDI?
-       ===================================================================== -->
-  <span class="eyebrow">session 11.1</span>
-  <h2>Part 1 · The CDI Architecture: Loose Coupling &amp; Strong Typing</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>These are the five things the manual asks for, written in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what CDI is in one sentence, and why you stop writing <code>new</code></td><td>Part 1</td></tr>
+      <tr><td>Say what <code>beans.xml</code> really does — and why it is optional since CDI 1.1 — and choose a discovery mode</td><td>Part 1 &amp; Reference</td></tr>
+      <tr><td>Pick a scope so a bean lives exactly as long as it should — no longer, no shorter</td><td>Part 2</td></tr>
+      <tr><td>Inject a dependency three different ways, and know which one is best</td><td>Part 3</td></tr>
+      <tr><td>Choose correctly between <code>@Inject</code>, <code>@EJB</code> and <code>@Resource</code></td><td>Part 4</td></tr>
+      <tr><td>Answer the exam-style questions on this topic</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
 
-  <div class="callout callout--analogy"><span class="callout__i">🔌</span>
-    <div class="callout__b"><b>The Power Outlet Analogy</b>
-      In tight coupling, a lamp's cord is hard-soldered into the power generator inside the power station. You cannot move the lamp, replace it, or test it separately.<br>
-      In <strong>CDI</strong>, the wall has a standardized socket (the injection point). Any device with a matching plug (type-safe bean) can be plugged in without rewiring the building. The electrical grid (the CDI container) decides when current flows (lifecycle scopes).
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press the button and watch the scopes come alive.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
     </div>
   </div>
 
-  <p>In traditional Java, creating objects via <code>new ServiceImpl()</code> ties your code to one concrete implementation.
-    With CDI, the container supplies the instance at runtime, managing its exact lifecycle according to its contextual scope.</p>
+  <hr>
 
-  <h3>Enabling CDI: The <code>beans.xml</code> Marker File</h3>
-  <p>For a JAR or WAR module to be recognized as a CDI bean archive, it must contain a <code>beans.xml</code> file
-    in <code>META-INF/</code> (for JARs) or <code>WEB-INF/</code> (for WARs):</p>
+  <!-- =====================================================================
+       PART 1 — WHAT CDI IS, AND WHY YOU STOP WRITING new
+       ===================================================================== -->
 
-  <div class="code-head">WEB-INF/beans.xml — CDI Bean Archive Configuration</div>
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · What CDI is, and why you stop writing <code>new</code></h2>
+
+  <h3>1.1 The small word that causes big problems: <code>new</code></h3>
+  <p>In ordinary Java, when one object needs another, it builds it:</p>
+
+  <div class="code-head">The old way — one class builds its own helper</div>
+  <pre><code>public class AccountController {
+
+    // the controller reaches out and builds its own service
+    private AccountService service = new AccountServiceImpl();
+}</code></pre>
+
+  <p>That one line, <code>new AccountServiceImpl()</code>, looks harmless. It is not. It welds your
+    controller to <em>one exact class</em>. From now on your controller can only ever use
+    <code>AccountServiceImpl</code> — not a faster version, not a fake version for testing, not a
+    different one for another customer. To change the helper you must open the controller and edit it.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Writing <code>new</code> is like <strong>gluing two parts together</strong>. They now come as a
+      pair. You cannot pull one out and put a different one in without breaking the glue.</p>
+    <p>Programmers call that gluing <strong>tight coupling</strong>: two pieces of code stuck so firmly
+      that you cannot change one without disturbing the other.</p>
+  </div>
+
+  <h3>1.2 The fix: let something else hand you what you need</h3>
+  <p>Here is the whole idea of CDI, and it is genuinely this simple:</p>
+  <ol>
+    <li>Your object <strong>says what it needs</strong> — "I need an <code>AccountService</code>" — and
+      stops there.</li>
+    <li>It <strong>does not build it</strong>. No <code>new</code>.</li>
+    <li>Before your code runs, the <strong>container</strong> finds a suitable object and
+      <strong>places it into your object</strong> for you.</li>
+  </ol>
+  <p>That act — the container putting the needed object into yours — is called
+    <strong>dependency injection</strong>. A "dependency" is just a thing your object depends on to do
+    its job. "Injection" means the container pushes it in from the outside.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🎭</span>
+    <div class="callout__b"><b>Analogy — the props master</b>
+      On a film set, actors do not bring their own swords, cups and letters. A <em>props master</em>
+      works out what each scene needs and places the right item into each actor's hand just before the
+      take. The actor simply acts.<br>
+      CDI is the props master. It works out what your object needs and hands it over, so your object
+      never has to go shopping for its own parts.</div>
+  </div>
+
+  <h3>1.3 So what does "CDI" actually stand for?</h3>
+  <p><strong>CDI</strong> = <strong>Contexts and Dependency Injection</strong>. Two words, two jobs:</p>
+  <ul>
+    <li><strong>Dependency Injection</strong> — the handing-over you just met: the container supplies the
+      objects, you never call <code>new</code>.</li>
+    <li><strong>Contexts</strong> — the container also decides <em>how long each object lives</em> and
+      <em>how many copies exist</em>. That part is called a <strong>scope</strong>, and it is the whole
+      of Part 2.</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>CDI is the <strong>wiring backbone</strong> of modern Jakarta EE: it creates your objects, plugs
+      them into each other, and controls how long each one stays alive. The container supplies the
+      instance at runtime — you just declare what you want.</p>
+  </div>
+
+  <h3>1.4 "Program to a type, not to a class"</h3>
+  <p>Because the container does the building, your code can ask for a <em>type</em> (an interface or a
+    general class) and let the container pick the exact implementation. That is what people mean by
+    <strong>loose coupling</strong> — the opposite of the glue in 1.1.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🔌</span>
+    <div class="callout__b"><b>Analogy — the wall socket</b>
+      Your phone charger does not care which power station it is wired to. It just needs a plug that
+      fits the socket. You depend on the <em>shape of the socket</em> (the type), not on one particular
+      generator (one concrete class). Anything with a matching plug can be swapped in without rewiring
+      the house.<br>
+      In CDI the injection point is the socket; any bean of the matching type is a plug that fits.</div>
+  </div>
+
+  <h3>1.5 The <code>beans.xml</code> file — and what it really does</h3>
+  <p>There is a file you will see in nearly every Jakarta EE project, and you should know both what it is
+    <em>called</em> and what it <em>actually does today</em>. It is called <strong>beans.xml</strong>, and
+    if you use it, it goes in a fixed place. A "module" here means one packaged piece of your app — a
+    <code>.jar</code> or a <code>.war</code>:</p>
+  <ul>
+    <li>In a <strong>JAR</strong> → put <code>beans.xml</code> in <code>META-INF/</code></li>
+    <li>In a <strong>WAR</strong> → put <code>beans.xml</code> in <code>WEB-INF/</code></li>
+  </ul>
+
+  <div class="callout callout--key"><span class="callout__i">📌</span>
+    <div class="callout__b"><b>The single most important thing on this page</b>
+      <p>Almost every tutorial you will read says “CDI does not scan your application unless you add
+        <code>beans.xml</code>.” That was true in CDI 1.0. <strong>It has not been true since CDI 1.1.</strong></p>
+      <p>Today, an archive that contains classes carrying <strong>bean-defining annotations</strong> is an
+        <strong>implicit bean archive</strong>. The container discovers it with no <code>beans.xml</code> at
+        all. The file becomes genuinely <em>required</em> only when you want to <strong>change</strong>
+        something: to set a discovery mode (Section 1.6), or to declare alternatives, interceptors or
+        decorators (Session 12).</p>
+      <p>So if your beans are missing, <code>beans.xml</code> is rarely the culprit. Check the annotation
+        first — a class with no scope annotation is not a bean in <code>annotated</code> mode, file or no
+        file.</p>
+    </div>
+  </div>
+
+  <p>Here is the whole file, for when you <em>do</em> need it:</p>
+
+  <div class="code-head">WEB-INF/beans.xml — the file that configures CDI discovery</div>
   <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -53,60 +174,174 @@
        bean-discovery-mode="annotated"&gt;
 &lt;/beans&gt;</code></pre>
 
-  <div class="tablewrap"><table>
-    <thead><tr><th>Bean Discovery Mode</th><th>Which Classes Become CDI Beans?</th></tr></thead>
-    <tbody>
-      <tr><td><code>annotated</code> (Default &amp; Recommended)</td><td>Only classes with an explicit scope annotation (e.g., <code>@RequestScoped</code>, <code>@ApplicationScoped</code>). Keeps startup fast.</td></tr>
-      <tr><td><code>all</code></td><td>Every Java class in the archive is treated as a CDI bean (can slow down deployment).</td></tr>
-      <tr><td><code>none</code></td><td>CDI is completely disabled for this archive.</td></tr>
-    </tbody>
-  </table></div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The whole file is empty between the tags. The only setting that matters today is
+      <code>bean-discovery-mode="annotated"</code> — it tells CDI <em>which classes</em> in this archive
+      to treat as beans. That is the next section. Everything else you will ever put in this file is one
+      of the four declarations above: alternatives, interceptors, decorators, or the discovery mode.</div>
+  </div>
+
+  <h3>1.6 Which classes become beans? The discovery mode</h3>
+  <p>The <strong>discovery mode</strong> is a single word in <code>beans.xml</code> that decides which of
+    your classes CDI manages. There are three choices, but you will use the first one almost always:</p>
+  <ul>
+    <li><code>annotated</code> — <strong>the default and the recommended one.</strong> Only classes that
+      carry an explicit scope annotation (such as <code>@RequestScoped</code> or
+      <code>@ApplicationScoped</code>) become beans. This keeps startup fast, because the container does
+      not have to inspect every class.</li>
+    <li><code>all</code> — <em>every</em> class in the archive is treated as a bean. This can slow
+      deployment right down.</li>
+    <li><code>none</code> — CDI is switched off completely for this archive.</li>
+  </ul>
+
+  <div class="callout callout--analogy"><span class="callout__i">🪪</span>
+    <div class="callout__b"><b>Analogy — the staff lanyard</b>
+      In <code>annotated</code> mode, the container treats someone as staff only if they are wearing a
+      lanyard — the scope annotation. In <code>all</code> mode, everyone standing in the building counts
+      as staff. In <code>none</code> mode, the staff room is locked and nobody gets in.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The trap that catches everyone first</b>
+      Under the default <code>annotated</code> mode, a class with <strong>no scope annotation at all</strong>
+      is simply <em>not discovered</em> — CDI never manages it, and <code>@Inject</code> for it fails to
+      find anything. If a bean "isn't being injected," the first thing to check is whether it has a scope
+      annotation on it.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>In one sentence, what does CDI do for you?</li>
+      <li>Why is <code>new AccountServiceImpl()</code> a problem the moment you want to swap in a
+        different or a fake implementation?</li>
+      <li>Under the default <code>annotated</code> discovery mode, what makes a class count as a CDI bean?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>It <strong>creates your objects, injects them into each other, and controls how long each
+          one lives</strong> — so you program to a type and never call <code>new</code>.</li>
+        <li>Because <code>new</code> names <strong>one exact class</strong>; your code is now glued to
+          it. You cannot substitute a different or fake version without editing and recompiling. CDI
+          lets the container decide which instance to supply.</li>
+        <li>It carries an <strong>explicit scope annotation</strong> (such as <code>@RequestScoped</code>
+          or <code>@ApplicationScoped</code>). Without one, under <code>annotated</code> mode, it is not
+          picked up.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       11.2 The Five Core CDI Scopes
+       PART 2 — HOW LONG A BEAN LIVES: THE FIVE SCOPES
        ===================================================================== -->
-  <span class="eyebrow">session 11.2</span>
-  <h2>Part 2 · The Five Core CDI Scopes</h2>
 
-  <p>A <strong>Scope</strong> defines two things: <em>how many instances exist</em> and <em>how long they live in memory</em>:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · How long a bean lives — the five scopes</h2>
 
-  <div class="tablewrap"><table>
-    <thead><tr><th>Scope Annotation</th><th>Package</th><th>Lifecycle Duration</th><th>Typical Use Case</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><code>@Dependent</code><br>(Default pseudo-scope)</td>
-        <td><code>jakarta.enterprise.context</code></td>
-        <td>Lives and dies with the bean that injected it. No shared state.</td>
-        <td>Stateless utility helpers, loggers, mathematical converters.</td>
-      </tr>
-      <tr>
-        <td><code>@RequestScoped</code></td>
-        <td><code>jakarta.enterprise.context</code></td>
-        <td>One single HTTP request/response cycle. Destroyed when response returns.</td>
-        <td>JSF form backing beans, REST endpoint controllers.</td>
-      </tr>
-      <tr>
-        <td><code>@SessionScoped</code></td>
-        <td><code>jakarta.enterprise.context</code></td>
-        <td>One browser session (persists across multiple page clicks). <strong>Must implement <code>Serializable</code></strong>.</td>
-        <td>Logged-in user credentials, shopping cart, user theme preferences.</td>
-      </tr>
-      <tr>
-        <td><code>@ApplicationScoped</code></td>
-        <td><code>jakarta.enterprise.context</code></td>
-        <td>Single shared instance for the entire lifetime of the application.</td>
-        <td>Global application configuration, in-memory caches, hit counters.</td>
-      </tr>
-      <tr>
-        <td><code>@ConversationScoped</code></td>
-        <td><code>jakarta.enterprise.context</code></td>
-        <td>Spans multiple requests controlled programmatically via <code>Conversation.begin()</code> and <code>end()</code>.</td>
-        <td>Multi-step wizards (e.g., Book Flight $\to$ Select Seat $\to$ Payment).</td>
-      </tr>
-    </tbody>
-  </table></div>
+  <h3>2.1 What a "scope" is</h3>
+  <p>A <strong>scope</strong> answers two questions about a bean:</p>
+  <ul>
+    <li><strong>How many copies exist?</strong> One shared by everyone, one per user, or a fresh one each time?</li>
+    <li><strong>How long does each copy live?</strong> One web request, one visit, forever, or until you say stop?</li>
+  </ul>
+  <p>You choose a scope by putting one annotation on the class. CDI then creates and destroys the bean
+    on exactly that schedule, with no lifecycle code from you.</p>
 
-  <div class="code-head">Multi-Step Booking Wizard with @ConversationScoped</div>
+  <div class="plainwords"><b>In plain words</b>
+    <p>A scope is a <strong>lifespan sticker</strong> you put on a class. The container reads the sticker
+      and knows when to make the object and when to throw it away.</p>
+  </div>
+
+  <h3>2.2 The five scopes as one picture</h3>
+  <p>There are five scopes. Before the formal detail, here is all five in a single everyday scene.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🎡</span>
+    <div class="callout__b"><b>Analogy — a day at a theme park</b>
+      Each scope is a different kind of pass:
+      <ul style="margin:.5rem 0 0">
+        <li><code>@RequestScoped</code> → a <strong>single-ride ticket</strong>: torn in half as you
+          board, gone the moment the ride ends.</li>
+        <li><code>@SessionScoped</code> → a <strong>day wristband</strong>: one per visitor, worn across
+          every ride all day, cut off only when you leave.</li>
+        <li><code>@ApplicationScoped</code> → <strong>the park itself</strong>: there is only one, every
+          visitor shares it, and it lives as long as the gates are open.</li>
+        <li><code>@ConversationScoped</code> → a <strong>booked guided tour</strong>: you say when it
+          begins and when it ends, and it spans several stops in between.</li>
+        <li><code>@Dependent</code> → the <strong>free map handed out with another ticket</strong>: it
+          has no life of its own; it belongs to whatever it came with.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>2.3 <code>@Dependent</code> — the default, and the surprise</h3>
+  <p><code>@Dependent</code> is a <strong>pseudo-scope</strong> — "pseudo" because the bean has no
+    independent lifespan. It <strong>lives and dies with whatever object it was injected into</strong>,
+    and it is never shared. Each injection point gets its own fresh copy.</p>
+  <p>Use it for small, stateless helpers: loggers, converters, little calculation utilities — things with
+    no memory worth sharing.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The default surprises people</b>
+      If you forget to put a scope on a bean, you do <strong>not</strong> get a shared instance — you get
+      <code>@Dependent</code>, which means a <em>brand-new private copy for every place it is injected</em>.
+      People who expected one shared object are caught out: their "shared" counter never adds up, because
+      everyone secretly has their own.</div>
+  </div>
+
+  <h3>2.4 <code>@RequestScoped</code> — one web request, then gone</h3>
+  <p>A <code>@RequestScoped</code> bean lives for <strong>a single HTTP request-and-response cycle</strong>.
+    A request arrives, the container makes the bean, your code uses it, the response goes back, and the
+    bean is destroyed. The next request gets a brand-new one.</p>
+  <p>Perfect for things that only matter for one click: a form's backing bean, a REST endpoint controller.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Do not store lasting state here</b>
+      Anything you put in a <code>@RequestScoped</code> bean <strong>vanishes when the response is sent</strong>.
+      Put a shopping cart or a logged-in user in one and it is empty again on the very next click. That
+      kind of state belongs in <code>@SessionScoped</code> (next section).</div>
+  </div>
+
+  <h3>2.5 <code>@SessionScoped</code> — one per visitor, for the whole visit</h3>
+  <p>A <code>@SessionScoped</code> bean lives for <strong>one user's browser session</strong>: it is
+    created on that user's first request and survives across every page click until the session ends.
+    Each user gets their own private copy — your cart is never mixed up with mine.</p>
+  <p>Good for a shopping cart, the logged-in user's details, or a theme preference.</p>
+
+  <div class="callout callout--warn"><span class="callout__i">📌</span>
+    <div class="callout__b"><b>One hard rule: it must be <code>Serializable</code></b>
+      A <code>@SessionScoped</code> bean class <strong>must implement <code>java.io.Serializable</code></strong>.
+      "Serializable" means the object can be turned into bytes and back. The server needs this because it
+      may <em>passivate</em> the session (write it to disk to save memory) or replicate it across a
+      cluster of servers. Forget it and deployment fails.</div>
+  </div>
+
+  <h3>2.6 <code>@ApplicationScoped</code> — exactly one, shared by everyone</h3>
+  <p>An <code>@ApplicationScoped</code> bean is a <strong>single shared instance for the entire lifetime
+    of the application</strong>. Every user, every request touches the same object. It is created once
+    (lazily, on first use) and lives until the app shuts down.</p>
+  <p>Ideal for global configuration, an in-memory cache, or a site-wide hit counter.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>@SessionScoped</code> gives <strong>each user their own copy</strong>.
+      <code>@ApplicationScoped</code> gives <strong>everyone the same one copy</strong>. That difference
+      is the whole reason both scopes exist.</p>
+  </div>
+
+  <h3>2.7 <code>@ConversationScoped</code> — you start it and you stop it</h3>
+  <p>The first four scopes begin and end on the container's schedule. <code>@ConversationScoped</code> is
+    different: <strong>you</strong> decide when it starts and when it ends, in your own code. It can span
+    several requests — more than a single request, but usually less than a whole session — which makes it
+    the natural fit for a multi-step wizard.</p>
+  <p>You control it through an injected <strong><code>Conversation</code></strong> object. A conversation
+    starts out <em>transient</em> (short-lived, like a request). Calling <code>begin()</code> promotes it
+    to <em>long-running</em> so it survives the next few requests; <code>end()</code> closes it and frees
+    the memory.</p>
+
+  <div class="code-head">LoanApplicationWizard.java — a multi-step wizard with @ConversationScoped</div>
   <pre><code>package com.globalbank.web;
 
 import jakarta.enterprise.context.Conversation;
@@ -115,7 +350,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Named;
 import java.io.Serializable;
 
-@Named("loanWizard")
+@Named("loanWizard")          // Gives the bean a name a web page can use
 @ConversationScoped // Survives across multi-page wizard
 public class LoanApplicationWizard implements Serializable {
 
@@ -139,68 +374,19 @@ public class LoanApplicationWizard implements Serializable {
     }
 }</code></pre>
 
-  <!-- =====================================================================
-       11.3 Injection Strategies
-       ===================================================================== -->
-  <span class="eyebrow">session 11.3</span>
-  <h2>Part 3 · The Three Ways to Apply <code>@Inject</code></h2>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      You never write <code>new Conversation()</code> — it is injected (there is <code>@Inject</code>
+      again). Your only job is the pair <code>begin()</code> … <code>end()</code>. Everything between
+      those two calls is remembered; everything after <code>end()</code> is forgotten. Note also that
+      this bean implements <code>Serializable</code>, just like a session bean, because it too outlives a
+      single request.</div>
+  </div>
 
-  <p>CDI supports three injection points. Constructor injection is widely recognized as the most testable:</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Injection Pattern</th><th>Code Example</th><th>Architectural Trade-Off</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong>Field Injection</strong></td>
-        <td><code>@Inject private AccountService service;</code></td>
-        <td>Convenient and short, but cannot make fields <code>final</code>; harder to test with plain JUnit mocks.</td>
-      </tr>
-      <tr>
-        <td><strong>Constructor Injection</strong><br><em>(Best Practice)</em></td>
-        <td><pre style="margin:0"><code>@Inject
-public Controller(AccountService s) {
-    this.service = s;
-}</code></pre></td>
-        <td>Allows <code>final</code> immutable fields; cleanly testable with <code>new Controller(mockService)</code> in unit tests.</td>
-      </tr>
-      <tr>
-        <td><strong>Initializer Method</strong></td>
-        <td><pre style="margin:0"><code>@Inject
-public void init(AccountService s) { ... }</code></pre></td>
-        <td>Invoked by container after constructor; useful for multi-dependency configuration setups.</td>
-      </tr>
-    </tbody>
-  </table></div>
-
-  <!-- =====================================================================
-       11.4 @Inject vs @EJB vs @Resource
-       ===================================================================== -->
-  <span class="eyebrow">session 11.4</span>
-  <h2>Part 4 · Disambiguating <code>@Inject</code> vs. <code>@EJB</code> vs. <code>@Resource</code></h2>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Annotation</th><th>Specification</th><th>What It Injects</th><th>Understands CDI Scopes?</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong><code>@Inject</code></strong></td>
-        <td>Jakarta CDI</td>
-        <td>Any CDI bean, EJB, or produced object.</td>
-        <td><strong>Yes</strong> (Full scope, qualifier, and decorator awareness)</td>
-      </tr>
-      <tr>
-        <td><strong><code>@EJB</code></strong></td>
-        <td>Jakarta Enterprise Beans</td>
-        <td>Enterprise Beans (Stateless, Stateful, Singleton) only.</td>
-        <td><strong>No</strong> (Legacy EJB container lookup)</td>
-      </tr>
-      <tr>
-        <td><strong><code>@Resource</code></strong></td>
-        <td>Jakarta Common Annotations</td>
-        <td>Server-managed environment resources (DataSources, JMS queues, <code>UserTransaction</code>).</td>
-        <td><strong>No</strong> (Direct JNDI registry injection)</td>
-      </tr>
-    </tbody>
-  </table></div>
+  <h3>2.8 Watch it happen</h3>
+  <p>Reading about scopes is one thing; seeing instances created and destroyed is another. Press the
+    button. Two clients hit the same page at the same moment — follow which beans are shared and which
+    are not.</p>
 
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
@@ -231,85 +417,400 @@ Both clients share the exact same @ApplicationScoped GlobalConfig instance.</cod
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The two <code>@SessionScoped</code> carts have <em>different</em> instance numbers (#901 vs #902) —
+      one per client. The <code>@ApplicationScoped</code> config has the <em>same</em> number both times
+      (#001) — one copy, reused. And the <code>@RequestScoped</code> controller was destroyed the instant
+      its request finished. That is the whole of Part 2 in eight log lines.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>A scope answers which two questions about a bean?</li>
+      <li>Which scope should hold a shopping cart that must survive several page clicks — and what
+        interface must that bean implement?</li>
+      <li>You forget to annotate a bean's scope. What do you get, and why is that often a surprise?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>How many copies exist, and how long each copy lives.</strong></li>
+        <li><strong>@SessionScoped.</strong> It must implement <code>java.io.Serializable</code> so the
+          server can passivate it to disk or replicate it across a cluster.</li>
+        <li><strong>@Dependent</strong> — a brand-new private copy for every place it is injected, with no
+          shared state. People expect one shared instance and do not get it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       PART 3 — THREE PLACES TO PUT @Inject
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Three places to put <code>@Inject</code></h2>
+
+  <p>You know the container hands your dependencies in. But <em>where</em> does it put them? CDI gives you
+    three injection points. They all end with your object fully equipped; they differ in <em>when</em> and
+    <em>how clearly</em> it happens.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧰</span>
+    <div class="callout__b"><b>Analogy — your first day at a new job</b>
+      <strong>Constructor injection</strong> is being handed your laptop, pass and keys at reception
+      <em>before</em> you reach your desk — you cannot start without them, and they are yours for good.<br>
+      <strong>Field injection</strong> is finding those things already sitting on your desk, with no clue
+      who put them there.<br>
+      <strong>Initializer injection</strong> is being called into a side room just after you arrive to be
+      handed one more thing.</div>
+  </div>
+
+  <h3>3.1 Field injection — the short one</h3>
+  <p>You write <code>@Inject</code> straight onto a field and leave it empty. The container fills it in
+    before your code runs.</p>
+
+  <div class="code-head">Field injection</div>
+  <pre><code>@Inject
+private AccountService service;</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      It is the shortest to type — and that is its only real advantage. The field cannot be
+      <code>final</code>, and because nothing sets it from outside, it is <em>harder to test</em> with
+      plain JUnit: you cannot just construct the object and pass a fake in.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Why field injection hurts in tests</b>
+      In a unit test you build the object yourself with <code>new</code>. With field injection there is no
+      container, so the field stays <code>null</code> and you are forced into a reflection-based mocking
+      framework just to poke a value in. Constructor injection (next) sidesteps this entirely.</div>
+  </div>
+
+  <h3>3.2 Constructor injection — the best one</h3>
+  <p>You put <code>@Inject</code> on the constructor. The container calls it and passes the dependencies
+    as arguments when it builds your object.</p>
+
+  <div class="code-head">Constructor injection — the recommended pattern</div>
+  <pre><code>private final AccountService service;
+
+@Inject
+public Controller(AccountService s) {
+    this.service = s;
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Because the value arrives as the object is built, the field can be <code>final</code> — set once and
+      never changed again (that is what "immutable" means). And testing is trivial: a plain
+      <code>new Controller(mockService)</code> works, with no container and no reflection framework. This
+      is why experienced developers reach for it first.</div>
+  </div>
+
+  <h3>3.3 Initializer method injection — the follow-up</h3>
+  <p>You put <code>@Inject</code> on an ordinary method (sometimes called setter-style injection). The
+    container calls that method <strong>after the constructor has run</strong> and passes the
+    dependencies in. It is handy when a bean needs several dependencies configured together after it
+    exists.</p>
+
+  <div class="code-head">Initializer method injection</div>
+  <pre><code>@Inject
+public void init(AccountService s) { ... }</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The method runs <em>after</em> the constructor — so by the time <code>init()</code> fires, the
+      object already exists. That ordering is the point: use it for multi-dependency setup that has to
+      happen once the bean is constructed.</div>
+  </div>
+
+  <h3>3.4 Which should you use?</h3>
+  <p>Same three facts, side by side:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Where <code>@Inject</code> goes</th><th>Can the field be <code>final</code>?</th><th>Easy to unit-test?</th><th>Reach for it when…</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Field</strong></td><td>No</td><td>Harder (needs a mocking framework)</td><td>a quick throwaway or demo where testing does not matter</td></tr>
+      <tr><td><strong>Constructor</strong> <em>(best)</em></td><td>Yes</td><td>Yes — <code>new Controller(mock)</code></td><td>almost always; it is the default good choice</td></tr>
+      <tr><td><strong>Initializer method</strong></td><td>No</td><td>Possible</td><td>you must configure several dependencies after construction</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>Name the three places you can put <code>@Inject</code>.</li>
+      <li>Which one lets a field be <code>final</code>, and why does that matter?</li>
+      <li>Why is constructor injection the easiest to unit-test?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>On a <strong>field</strong>, on the <strong>constructor</strong>, and on an
+          <strong>initializer method</strong>.</li>
+        <li><strong>Constructor injection.</strong> The value is supplied as the object is built, so the
+          field can be <code>final</code> — set once, never changed — which makes the object immutable
+          and safer.</li>
+        <li>Because a test can just call <code>new Controller(mockService)</code> and pass fakes directly
+          — no CDI container and no reflection framework needed.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4 — @Inject, @EJB OR @Resource: WHICH ONE WHEN?
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · <code>@Inject</code>, <code>@EJB</code> or <code>@Resource</code> — which one when?</h2>
+
+  <p>Three different annotations all "inject something." Beginners mix them up constantly. The good news:
+    each has a clear job, and once you see the job, the choice is obvious.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏢</span>
+    <div class="callout__b"><b>Analogy — three desks in the lobby</b>
+      <strong><code>@Inject</code></strong> is the main concierge of the modern building: ask for almost
+      anything and they fetch it, and they know the rules about how long each thing is yours to keep
+      (your scope).<br>
+      <strong><code>@EJB</code></strong> is an older specialist desk that only deals with enterprise
+      beans.<br>
+      <strong><code>@Resource</code></strong> is the facilities desk that hands out the building's
+      fixtures — power, water, phone lines — which here means DataSources, message queues and
+      transactions.</div>
+  </div>
+
+  <h3>4.1 <code>@Inject</code> — your default</h3>
+  <p>From Jakarta CDI. It injects <strong>any CDI bean, any EJB, or any object produced by CDI</strong>.
+    Crucially, it is <strong>scope-aware</strong>: it understands the five scopes from Part 2, plus
+    advanced CDI features (a <em>qualifier</em> picks between several beans of the same type; a
+    <em>decorator</em> wraps a bean to add behaviour) you will meet in Session 12. If in doubt, this is
+    the one to reach for.</p>
+
+  <h3>4.2 <code>@EJB</code> — the legacy, enterprise-beans-only one</h3>
+  <p>From Jakarta Enterprise Beans. It injects <strong>only enterprise beans</strong> — the
+    <code>@Stateless</code>, <code>@Stateful</code> and <code>@Singleton</code> beans from Session 1. It
+    is an older EJB-container lookup and is <strong>not</strong> scope-aware. In modern code
+    <code>@Inject</code> can usually do the same job and more.</p>
+
+  <h3>4.3 <code>@Resource</code> — for server-managed resources</h3>
+  <p>From Jakarta Common Annotations. It injects things the <strong>server</strong> owns and registers,
+    not things you wrote: a <strong>DataSource</strong> (a database connection pool), a <strong>JMS
+    queue</strong>, a <strong>UserTransaction</strong>. It reaches straight into the server's JNDI
+    registry — a name-to-object directory — and is <strong>not</strong> scope-aware either.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Ask yourself <strong>what you are injecting</strong>:</p>
+    <p>Your own bean, or anything scoped → <code>@Inject</code>. An old-style enterprise bean specifically
+      → <code>@EJB</code> (or just <code>@Inject</code>). A piece of server plumbing like a database pool
+      or a transaction → <code>@Resource</code>.</p>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Two mix-ups to avoid</b>
+      Reaching for <code>@EJB</code> to grab a <code>@RequestScoped</code> CDI bean does not work —
+      <code>@EJB</code> only sees enterprise beans and ignores CDI scopes; use <code>@Inject</code>.
+      And trying to <code>@Inject</code> a raw <code>DataSource</code> or <code>UserTransaction</code>
+      straight from the server fails too — those are server resources, so use <code>@Resource</code>.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <ol>
+      <li>You need a plain CDI bean injected and you care about its scope. Which annotation?</li>
+      <li>You need a <code>DataSource</code> or a <code>UserTransaction</code> from the server. Which
+        annotation?</li>
+      <li>True or false: <code>@EJB</code> understands CDI scopes.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>@Inject</strong> — the modern, scope-aware choice; it injects CDI beans (and EJBs, and
+          produced objects).</li>
+        <li><strong>@Resource</strong> — it pulls server-managed resources straight from the JNDI
+          registry.</li>
+        <li><strong>False.</strong> <code>@EJB</code> is a legacy EJB-only lookup and ignores CDI scopes.
+          Use <code>@Inject</code> when you want scope awareness.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 11 · Knowledge Check</h3>
+    <h3>Check yourself — Session 11</h3>
     <script type="application/json">
     [
-      {
-        "q": "What is the default pseudo-scope of a CDI bean if no scope annotation is specified?",
-        "opts": [
-          "@ApplicationScoped",
-          "@Dependent",
-          "@RequestScoped",
-          "@SessionScoped"
-        ],
-        "a": 1,
-        "why": "@Dependent is the default pseudo-scope: instances live and die with the object into which they are injected."
-      },
-      {
-        "q": "Which CDI scope requires the bean class to implement java.io.Serializable?",
-        "opts": [
-          "@RequestScoped",
-          "@SessionScoped",
-          "@ApplicationScoped",
-          "@Dependent"
-        ],
-        "a": 1,
-        "why": "@SessionScoped beans are bound to HTTP sessions, which application servers can passivate to disk or replicate across clusters."
-      },
-      {
-        "q": "What file must be placed in WEB-INF or META-INF to enable CDI in a deployment archive?",
-        "opts": [
-          "web.xml",
-          "beans.xml",
-          "ejb-jar.xml",
-          "context.xml"
-        ],
-        "a": 1,
-        "why": "beans.xml is the official deployment descriptor that configures CDI bean archives and discovery modes."
-      },
-      {
-        "q": "Which scope allows a developer to programmatically span state across a multi-step user wizard with begin() and end()?",
-        "opts": [
-          "@WizardScoped",
-          "@ConversationScoped",
-          "@StepScoped",
-          "@SessionScoped"
-        ],
-        "a": 1,
-        "why": "@ConversationScoped provides developer-controlled lifecycles via the injected Conversation API."
-      },
-      {
-        "q": "Why is Constructor Injection preferred over Field Injection in modern software design?",
-        "opts": [
-          "It allows fields to be marked final (immutable) and makes unit testing possible without special reflection frameworks",
-          "It requires 50% less RAM",
-          "Field injection is deprecated in Java 17",
-          "Constructor injection bypasses the JVM"
-        ],
-        "a": 0,
-        "why": "Constructor injection supports immutability (final fields) and allows straightforward testing via new Controller(mockService)."
-      }
+      {"q":"You forget to put any scope annotation on a CDI bean. Which scope does it get?","opts":["@ApplicationScoped — one copy shared by everyone","@Dependent — it lives and dies with whatever injected it","@RequestScoped — one per web request","@SessionScoped — one per user"],"a":1,"why":"@Dependent is the default pseudo-scope. The instance has no independent life — it is born and destroyed with its host, and is never shared. People who expected a shared instance are caught out."},
+      {"q":"Which scope's bean class must implement java.io.Serializable?","opts":["@RequestScoped","@SessionScoped","@ApplicationScoped","@Dependent"],"a":1,"why":"A @SessionScoped bean is tied to a user's HTTP session, which the server may write to disk (passivate) or replicate across a cluster — so it must be Serializable."},
+      {"q":"Since CDI 1.1, when do you actually need a beans.xml file?","opts":["Always — no file, no CDI","Only when you want to change something: set the discovery mode, or declare alternatives, interceptors or decorators","Only in a WAR","Only when using @Inject"],"a":1,"why":"An archive containing classes with bean-defining annotations is an implicit bean archive and is discovered without any file. beans.xml is for configuration — the discovery mode, alternatives, interceptors and decorators — not for switching CDI on. The 'no file, no CDI' rule dates from CDI 1.0."},
+      {"q":"Which scope lets you start and stop the lifetime yourself with begin() and end()?","opts":["@SessionScoped","@ConversationScoped","@RequestScoped","@ApplicationScoped"],"a":1,"why":"@ConversationScoped gives you an injected Conversation object whose begin() and end() mark exactly when the state starts and stops — ideal for a multi-step wizard."},
+      {"q":"Why do experienced developers prefer constructor injection to field injection?","opts":["It lets the injected fields be final, and you can test the class with a plain new Controller(mockService)","It uses far less memory","Field injection was removed in Java 17","It skips the container entirely"],"a":0,"why":"Constructor injection fills every dependency as the object is built, so the fields can be final (immutable) and a unit test can just pass a mock to the constructor — no container or reflection framework needed."}
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the session. It is here because the exam and the textbook use
+    these exact terms and tables, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📋 The five CDI scopes — the full table</strong></summary>
+    <p>Every scope lives in the package <code>jakarta.enterprise.context</code>.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Scope Annotation</th><th>Package</th><th>Lifecycle Duration</th><th>Typical Use Case</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>@Dependent</code><br>(Default pseudo-scope)</td>
+          <td><code>jakarta.enterprise.context</code></td>
+          <td>Lives and dies with the bean that injected it. No shared state.</td>
+          <td>Stateless utility helpers, loggers, mathematical converters.</td>
+        </tr>
+        <tr>
+          <td><code>@RequestScoped</code></td>
+          <td><code>jakarta.enterprise.context</code></td>
+          <td>One single HTTP request/response cycle. Destroyed when response returns.</td>
+          <td>JSF form backing beans, REST endpoint controllers.</td>
+        </tr>
+        <tr>
+          <td><code>@SessionScoped</code></td>
+          <td><code>jakarta.enterprise.context</code></td>
+          <td>One browser session (persists across multiple page clicks). <strong>Must implement <code>Serializable</code></strong>.</td>
+          <td>Logged-in user credentials, shopping cart, user theme preferences.</td>
+        </tr>
+        <tr>
+          <td><code>@ApplicationScoped</code></td>
+          <td><code>jakarta.enterprise.context</code></td>
+          <td>Single shared instance for the entire lifetime of the application.</td>
+          <td>Global application configuration, in-memory caches, hit counters.</td>
+        </tr>
+        <tr>
+          <td><code>@ConversationScoped</code></td>
+          <td><code>jakarta.enterprise.context</code></td>
+          <td>Spans multiple requests controlled programmatically via <code>Conversation.begin()</code> and <code>end()</code>.</td>
+          <td>Multi-step wizards (e.g., Book Flight → Select Seat → Payment).</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>⚙️ Bean discovery modes in <code>beans.xml</code></strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Bean Discovery Mode</th><th>Which Classes Become CDI Beans?</th></tr></thead>
+      <tbody>
+        <tr><td><code>annotated</code> (Default &amp; Recommended)</td><td>Only classes with an explicit scope annotation (e.g., <code>@RequestScoped</code>, <code>@ApplicationScoped</code>). Keeps startup fast.</td></tr>
+        <tr><td><code>all</code></td><td>Every Java class in the archive is treated as a CDI bean (can slow down deployment).</td></tr>
+        <tr><td><code>none</code></td><td>CDI is completely disabled for this archive.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔀 <code>@Inject</code> vs <code>@EJB</code> vs <code>@Resource</code> — the full comparison</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>Specification</th><th>What It Injects</th><th>Understands CDI Scopes?</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong><code>@Inject</code></strong></td>
+          <td>Jakarta CDI</td>
+          <td>Any CDI bean, EJB, or produced object.</td>
+          <td><strong>Yes</strong> (Full scope, qualifier, and decorator awareness)</td>
+        </tr>
+        <tr>
+          <td><strong><code>@EJB</code></strong></td>
+          <td>Jakarta Enterprise Beans</td>
+          <td>Enterprise Beans (Stateless, Stateful, Singleton) only.</td>
+          <td><strong>No</strong> (Legacy EJB container lookup)</td>
+        </tr>
+        <tr>
+          <td><strong><code>@Resource</code></strong></td>
+          <td>Jakarta Common Annotations</td>
+          <td>Server-managed environment resources (DataSources, JMS queues, <code>UserTransaction</code>).</td>
+          <td><strong>No</strong> (Direct JNDI registry injection)</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>CDI Core</strong></td><td>Contextual dependency injection managing instance creation, wiring, and lifecycle.</td></tr>
-    <tr><td><strong><code>beans.xml</code></strong></td><td>Required marker file setting <code>bean-discovery-mode="annotated"</code>.</td></tr>
-    <tr><td><strong>Five Scopes</strong></td><td><code>@Dependent</code> (default), <code>@RequestScoped</code>, <code>@SessionScoped</code> (serializable), <code>@ApplicationScoped</code>, <code>@ConversationScoped</code>.</td></tr>
-    <tr><td><strong>Constructor Injection</strong></td><td>Preferred pattern allowing <code>final</code> fields and simple unit testing.</td></tr>
-    <tr><td><strong><code>@Inject</code> vs <code>@EJB</code></strong></td><td><code>@Inject</code> is modern, universal, and scope-aware; <code>@EJB</code> is legacy EJB-only.</td></tr>
+    <tr><td>CDI</td><td>The part of Jakarta EE that creates your objects, wires them together and controls how long each one lives — so you never write <code>new</code>.</td></tr>
+    <tr><td><code>beans.xml</code></td><td>Optional since CDI 1.1 — bean-defining annotations alone make an archive discoverable. Needed when you set a discovery mode (<code>WEB-INF/</code> for a WAR, <code>META-INF/</code> for a JAR), or declare alternatives, interceptors or decorators.</td></tr>
+    <tr><td><code>@Dependent</code></td><td>The default. A fresh private copy per injection, no shared state. Lives and dies with its host.</td></tr>
+    <tr><td><code>@RequestScoped</code></td><td>One HTTP request, then destroyed. For form beans and REST controllers.</td></tr>
+    <tr><td><code>@SessionScoped</code></td><td>One per user, for the whole visit. <strong>Must be <code>Serializable</code>.</strong></td></tr>
+    <tr><td><code>@ApplicationScoped</code></td><td>Exactly one shared copy for the whole app. For config, caches, counters.</td></tr>
+    <tr><td><code>@ConversationScoped</code></td><td>You start it with <code>begin()</code> and end it with <code>end()</code>. For multi-step wizards.</td></tr>
+    <tr><td><code>@Inject</code> three ways</td><td>On a field (short), a constructor (best — allows <code>final</code>, easy to test) or an initializer method (after the constructor).</td></tr>
+    <tr><td><code>@Inject</code> vs <code>@EJB</code> vs <code>@Resource</code></td><td><code>@Inject</code> for CDI beans and most things (scope-aware); <code>@EJB</code> for enterprise beans only; <code>@Resource</code> for server resources like DataSources, JMS queues and <code>UserTransaction</code>.</td></tr>
+    <tr><td>The golden rule</td><td><strong>Never</strong> <code>new</code> a managed object. Declare what you need with <code>@Inject</code> and let the container hand it to you.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Expecting a class with no scope annotation to be injected (under <code>annotated</code> mode)</td><td>Give it an explicit scope such as <code>@ApplicationScoped</code> so CDI discovers it.</td></tr>
+      <tr><td>Expecting an un-annotated bean to be <em>shared</em></td><td>The default is <code>@Dependent</code> — a fresh copy per injection. Add <code>@ApplicationScoped</code> for one shared instance.</td></tr>
+      <tr><td>Storing a user's cart in a <code>@RequestScoped</code> bean</td><td>It vanishes when the response is sent. Use <code>@SessionScoped</code> for anything that must survive across clicks.</td></tr>
+      <tr><td>A <code>@SessionScoped</code> bean that does not implement <code>Serializable</code></td><td>Implement <code>java.io.Serializable</code> so the server can passivate or cluster it.</td></tr>
+      <tr><td>Starting a <code>@ConversationScoped</code> flow but never calling <code>end()</code></td><td>Conversations pile up and waste memory. Call <code>conversation.end()</code> when the wizard finishes.</td></tr>
+      <tr><td>Field injection in a class you want to unit-test</td><td>Prefer constructor injection so you can pass a mock with <code>new Controller(mockService)</code>.</td></tr>
+      <tr><td>Using <code>@EJB</code> to grab a <code>@RequestScoped</code> CDI bean</td><td><code>@EJB</code> only sees enterprise beans and ignores CDI scopes. Use <code>@Inject</code>.</td></tr>
+      <tr><td>Using <code>@Inject</code> to grab a raw <code>DataSource</code> or <code>UserTransaction</code></td><td>Those are server resources. Use <code>@Resource</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>CDI is the backbone of the rest of the course — everything here comes back:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Inject</code>, qualifiers, producers and events</td><td><a href="session-12-cdi-part2.html">Session 12 — CDI (Part II)</a></td></tr>
+      <tr><td><code>@Named</code> beans and scopes behind web pages</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+      <tr><td><code>@Resource UserTransaction</code> and transactions</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td><code>@EJB</code>, <code>@Stateless</code>, <code>@Stateful</code>, <code>@Singleton</code></td><td><a href="session-01-02-intro-and-beans.html">Sessions 1 &amp; 2 — Enterprise Beans</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/cdi/" target="_blank" rel="noopener">Jakarta CDI Specification</a></li>
+          <li><a href="https://jakarta.ee/learn/docs/jakartaee-tutorial/current/" target="_blank" rel="noopener">Jakarta EE Tutorial</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

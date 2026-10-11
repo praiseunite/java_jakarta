@@ -1,53 +1,133 @@
-<title>Session 12 — Jakarta CDI (Part II)</title>
+<title>Session 12 — CDI Part 2, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 12: Advanced Jakarta CDI Part II: Qualifiers (@Qualifier), Producers (@Produces) & Disposers (@Disposes), Interceptors (@InterceptorBinding, @AroundInvoke), Decorators (@Decorator), and CDI Events (@Observes).">
+<meta name="description" content="Session 12, written for people who finished Session 11 but have never seen a qualifier, a producer, an interceptor or a CDI event. What each one is, why it exists, and the plain-English version of every annotation — @Qualifier, @Produces, @Disposes, @InterceptorBinding, @AroundInvoke, @Decorator, @Delegate, @Observes.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s12";</script>
 
 <main class="page">
 
-  <h1>Session 12 · Jakarta CDI (Part II)</h1>
-  <p class="lede">Session 11 covered foundational dependency injection and scopes. Session 12 unlocks the advanced
-    powers of CDI: disambiguating multiple implementations with <strong>Qualifiers</strong>, manufacturing custom objects
-    with <strong>Producers &amp; Disposers</strong>, applying cross-cutting logic with <strong>Interceptors &amp; Decorators</strong>,
-    and event-driven decoupling with <strong>CDI Events</strong>.</p>
+  <h1>Session 12 · CDI Part 2 — The Four Advanced Powers, Explained Slowly</h1>
+  <p class="lede">In Session 11 you learned how CDI quietly hands your objects to one another with
+    <code>@Inject</code>. This page goes four steps further. You will learn how to tell CDI
+    <em>which</em> object you meant when two would fit, how to teach it to build things it could not
+    build on its own, how to wrap a method in extra behaviour without touching the method, and how to
+    let one part of your app announce news that other parts quietly react to. You need nothing beyond
+    Session 11, and every new word is explained the moment it appears.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Resolve ambiguous dependencies using custom type-safe <strong>Qualifiers</strong> (<code>@Qualifier</code>)</li>
-        <li>Dynamically instantiate external classes and configurations using <strong>Producers</strong> (<code>@Produces</code>) and <strong>Disposers</strong> (<code>@Disposes</code>)</li>
-        <li>Implement Aspect-Oriented cross-cutting concerns using CDI <strong>Interceptors</strong> (<code>@InterceptorBinding</code>, <code>@AroundInvoke</code>)</li>
-        <li>Enhance and customize business logic transparently with <strong>Decorators</strong> (<code>@Decorator</code>, <code>@Delegate</code>)</li>
-        <li>Implement decoupled event-driven communication using synchronous and asynchronous <strong>CDI Events</strong> (<code>Event&lt;T&gt;</code>, <code>@Observes</code>)</li>
+        <li><strong>No jargon without a translation.</strong> Qualifier, producer, interceptor, observer — each gets a plain-English box the first time it appears.</li>
+        <li><strong>One idea per Part.</strong> Each of the four Parts teaches exactly one new power, then stops.</li>
+        <li><strong>A picture for every idea.</strong> Coffee pots, a factory and a bin, airport security, a town crier — if an idea is abstract, there is an everyday version of it here.</li>
+        <li><strong>Code only after the idea.</strong> You will never meet an annotation before you know what problem it solves.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       12.1 Qualifiers: Type-Safe Disambiguation
-       ===================================================================== -->
-  <span class="eyebrow">session 12.1</span>
-  <h2>Part 1 · Qualifiers: Resolving Ambiguous Dependencies</h2>
+  <div class="plainwords"><b>In plain words — a one-line reminder from Session 11</b>
+    <p><strong>Injection</strong> means you declare a field and leave it empty, and CDI fills it in with
+      a ready-made object before your code runs — you never call <code>new</code>. If that still feels
+      new, re-read <a href="session-11-cdi-part1.html">Session 11 — CDI Part 1</a> before going on.
+      Everything below assumes you are comfortable with <code>@Inject</code> and scopes.</p>
+  </div>
 
-  <div class="callout callout--analogy"><span class="callout__i">🏷️</span>
-    <div class="callout__b"><b>The Medical Specialist Analogy</b>
-      If you enter a hospital asking for "a Doctor", the receptionist doesn't know who to call — there is a Surgeon,
-      a Cardiologist, and a Pediatrician. CDI hits the exact same wall if two beans implement <code>PaymentService</code>.<br>
-      Instead of using fragile string names (like <code>@Named("creditCard")</code>), CDI uses **Qualifiers** — custom annotations that provide compiler-checked, type-safe differentiation.
+  <h2>What you will be able to do by the end</h2>
+  <p>Six things, in plain words — not a pile of annotations to memorise:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Tell CDI which of two matching beans you want, without fragile string names</td><td>Part 1</td></tr>
+      <tr><td>Teach the container to inject an object it did not create — a connection, a config value</td><td>Part 2</td></tr>
+      <tr><td>Make sure that object is cleaned up automatically when it is finished with</td><td>Part 2</td></tr>
+      <tr><td>Wrap any method in logging, timing or auditing without editing the method</td><td>Part 3</td></tr>
+      <tr><td>Let one component announce an event that others react to, without them knowing each other</td><td>Part 4</td></tr>
+      <tr><td>Answer the exam-style questions on this topic</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press <strong>Run</strong> and watch a real server trace replay.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. Each Part builds on the one before it.
     </div>
   </div>
 
-  <h3>Defining and Using a Custom Qualifier</h3>
+  <hr>
 
-  <div class="code-head">1. Define the Qualifier Annotations</div>
-  <pre><code>package com.globalbank.qualifiers;
+  <!-- =====================================================================
+       PART 1 — QUALIFIERS
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · Telling two identical beans apart</h2>
+
+  <h3>1.1 The problem: two beans fit one empty field</h3>
+  <p>In Session 11 this worked perfectly:</p>
+  <pre><code>@Inject
+private PaymentProcessor processor;   // CDI finds the one PaymentProcessor and injects it</code></pre>
+  <p>It worked because <strong>exactly one</strong> class implemented <code>PaymentProcessor</code>.
+    CDI looked around, found one match, and filled the field.</p>
+  <p>Now your shop grows. You add a second way to pay. Suddenly <em>two</em> classes implement the same
+    interface:</p>
+  <ul>
+    <li><code>CreditCardProcessor</code> — charges a card</li>
+    <li><code>PayPalProcessor</code> — charges a PayPal account</li>
+  </ul>
+  <p>You write <code>@Inject PaymentProcessor processor;</code> and the application
+    <strong>refuses to start</strong>. CDI cannot read your mind. Two beans fit the empty field, nothing
+    says which one you meant, and CDI will not guess. The deployment fails with an
+    <strong>ambiguous dependency</strong> error.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>"Ambiguous" just means <em>"could mean more than one thing."</em> When two beans match one
+      injection point, CDI stops and asks you to be more specific. It would rather fail at start-up than
+      silently pick the wrong payment method.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">☕</span>
+    <div class="callout__b"><b>Analogy — "a coffee, please"</b>
+      You walk up to the counter and ask for "a coffee." But there are two pots: regular and decaf. The
+      barista cannot pour until you say <em>which</em>. "A coffee" is ambiguous; "a <strong>decaf</strong>
+      coffee" is not. A <strong>qualifier</strong> is you saying "decaf."</div>
+  </div>
+
+  <h3>1.2 What a qualifier is</h3>
+  <p>A <strong>qualifier</strong> is a tiny annotation that <em>you invent</em>. Its only job is to be a
+    label CDI can match on. You put the label on a bean, and you put the same label at the injection
+    point. CDI matches them like a key to a lock.</p>
+  <p>You turn an ordinary annotation into a qualifier with one line: <code>@Qualifier</code>.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The tempting shortcut that goes wrong</b>
+      You <em>can</em> tell beans apart with string names — <code>@Named("creditCard")</code>. Don't.
+      A string is not checked by anyone. Misspell it as <code>"creditCrad"</code> and the code compiles
+      happily, then fails at runtime in production. A qualifier is a real type, so a typo is a
+      <strong>compiler error you see immediately</strong>. That safety is the whole point.</div>
+  </div>
+
+  <h3>1.3 Wiring a qualifier — three steps</h3>
+  <ol class="steps">
+
+    <li>
+      <h4>Define the qualifier annotations</h4>
+      <p>Two new annotations, each marked <code>@Qualifier</code>. The three lines underneath are
+        boilerplate: keep the label at runtime, and allow it on a type, a field or a parameter.</p>
+      <div class="code-head">Qualifier annotations</div>
+      <pre><code>package com.globalbank.qualifiers;
 
 import jakarta.inject.Qualifier;
 import java.lang.annotation.*;
 
-@Qualifier // ① Marks this annotation as a CDI Qualifier
-@Retention(RetentionPolicy.RUNTIME)
+@Qualifier                                     // ① this one line makes it a CDI qualifier
+@Retention(RetentionPolicy.RUNTIME)            // keep the label around while the app runs
 @Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER})
 public @interface CreditCard {}
 
@@ -55,39 +135,120 @@ public @interface CreditCard {}
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER})
 public @interface PayPal {}</code></pre>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          <code>@Qualifier</code> is the single line that matters. Without it, <code>@CreditCard</code>
+          would be just a decoration CDI ignores. With it, CDI treats it as a label to match on.</div>
+      </div>
+    </li>
 
-  <div class="code-head">2. Tag the Concrete Implementations</div>
-  <pre><code>@CreditCard
+    <li>
+      <h4>Tag each implementation</h4>
+      <p>Put the label on the class it describes. Now the credit-card bean <em>is</em> the
+        <code>@CreditCard</code> one, and the PayPal bean <em>is</em> the <code>@PayPal</code> one.</p>
+      <div class="code-head">The two implementations</div>
+      <pre><code>@CreditCard                                    // this bean IS the credit-card one
 public class CreditCardProcessor implements PaymentProcessor {
     public void pay(double amt) { System.out.println("Paid via Credit Card: $" + amt); }
 }
 
-@PayPal
+@PayPal                                        // this bean IS the PayPal one
 public class PayPalProcessor implements PaymentProcessor {
     public void pay(double amt) { System.out.println("Paid via PayPal: $" + amt); }
 }</code></pre>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          Both classes still <code>implements PaymentProcessor</code>. The qualifier does not change
+          what they <em>are</em> — it only gives each one a name CDI can ask for.</div>
+      </div>
+    </li>
 
-  <div class="code-head">3. Inject with Type Safety</div>
-  <pre><code>public class CheckoutService {
+    <li>
+      <h4>Ask for the one you want</h4>
+      <p>At the injection point, put the label next to <code>@Inject</code>. Read it aloud:
+        "inject the credit-card <code>PaymentProcessor</code>."</p>
+      <div class="code-head">Injecting with type safety</div>
+      <pre><code>public class CheckoutService {
 
-    // CDI knows EXACTLY which implementation to supply based on the qualifier tag!
-    @Inject @CreditCard
+    @Inject @CreditCard                        // "inject the credit-card PaymentProcessor"
     private PaymentProcessor cardService;
 
-    @Inject @PayPal
+    @Inject @PayPal                            // "inject the PayPal one"
     private PaymentProcessor payPalService;
 }</code></pre>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          Both fields are the same type, <code>PaymentProcessor</code>, yet they receive different
+          beans. The qualifier beside <code>@Inject</code> is the only thing that tells them apart —
+          and the compiler checks it for you.</div>
+      </div>
+    </li>
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer in your own words, then open the answers.</p>
+    <ol>
+      <li>Two classes implement <code>NotificationSender</code> and you write <code>@Inject NotificationSender s;</code>. Why won't the app start, and what fixes it?</li>
+      <li>What single annotation turns your own <code>@interface</code> into a qualifier?</li>
+      <li>Why is a qualifier safer than <code>@Named("sms")</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Two beans fit one injection point, so the dependency is <strong>ambiguous</strong> and CDI refuses to deploy. Add a qualifier to each bean and to the injection point to say which one you mean.</li>
+        <li><code>@Qualifier</code>.</li>
+        <li>A qualifier is a real type, so a misspelling is caught by the <strong>compiler</strong>. A <code>@Named</code> string is unchecked and a typo only fails at runtime.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       12.2 Producers and Disposers
+       PART 2 — PRODUCERS & DISPOSERS
        ===================================================================== -->
-  <span class="eyebrow">session 12.2</span>
-  <h2>Part 2 · Producers (<code>@Produces</code>) and Disposers (<code>@Disposes</code>)</h2>
 
-  <p>What if you want to inject an object from a third-party library that doesn't have a no-argument constructor,
-    or dynamically configure a connection based on runtime environment variables? You use a <strong>Producer Method</strong>:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · Teaching the container to build (and bin) things</h2>
 
-  <div class="code-head">ConnectionFactoryProducer.java — Factory &amp; Cleanup Lifecycle</div>
+  <h3>2.1 The problem: CDI cannot build everything</h3>
+  <p>CDI makes a bean by calling its constructor. That is fine for your own classes. But some things
+    cannot be made that way:</p>
+  <ul>
+    <li>a <code>java.sql.Connection</code> — it has no plain constructor; you obtain it by asking a driver, and you must give it a URL;</li>
+    <li>an object from a third-party library with no no-argument constructor;</li>
+    <li>a value that is only known while the program is running — a setting read from the environment.</li>
+  </ul>
+  <p>If you write <code>@Inject Connection conn;</code>, CDI shrugs: it has no idea how to construct one.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>CDI knows how to build the beans <em>you</em> wrote. It does not know how to build things that
+      come from somewhere else or need a recipe. For those, you hand CDI the recipe.</p>
+  </div>
+
+  <h3>2.2 The fix: a producer method</h3>
+  <p>A <strong>producer method</strong> is a method you write, marked <code>@Produces</code>, that
+    returns the object. From then on, whenever anything <code>@Inject</code>s that type, CDI calls your
+    producer method instead of trying to construct the object itself.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏭</span>
+    <div class="callout__b"><b>Analogy — the factory and the bin</b>
+      A <strong>producer</strong> is a little factory on call: when someone needs a widget, it makes one
+      to order and hands it over. A <strong>disposer</strong> is the bin beside it: when the widget is
+      finished with, it goes in the bin, which disposes of it properly — unscrewing it, draining it,
+      whatever "properly" means for that item. You never do either job by hand.</div>
+  </div>
+
+  <h3>2.3 Cleaning up: the disposer</h3>
+  <p>Some objects must be closed, or they leak — a database connection is the classic case. A
+    <strong>disposer method</strong> has one parameter marked <code>@Disposes</code> of the produced
+    type. CDI calls it automatically when the produced object's <em>scope</em> ends.</p>
+  <p>Two scopes from Session 11 appear here. <code>@ApplicationScoped</code> means one instance for the
+    whole application — a single factory. <code>@RequestScoped</code> means a fresh instance per web
+    request. So below, there is one producer, but each request gets its own connection, closed again as
+    soon as that request finishes.</p>
+
+  <div class="code-head">DatabaseConnectionProducer.java — factory &amp; cleanup lifecycle</div>
   <pre><code>package com.globalbank.producers;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -123,28 +284,113 @@ public class DatabaseConnectionProducer {
     }
 }</code></pre>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Nobody ever calls <code>closeConnection()</code>. The <code>@Disposes</code> parameter is a
+      signal to CDI: "this is the cleanup method for a <code>Connection</code> — run it yourself when
+      the connection's scope is over." You wrote the recipe for building <em>and</em> for binning;
+      the container runs both at the right moments.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The leak everyone creates once</b>
+      A producer that opens something but has no matching <code>@Disposes</code> method
+      <strong>leaks</strong>. Every request opens a new connection that is never closed, until the
+      database runs out. If your producer opens, acquires or locks anything, write the disposer in the
+      same breath.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>You need to <code>@Inject</code> a <code>java.sql.Connection</code>, but CDI cannot construct one. What do you write?</li>
+      <li>The produced <code>Connection</code> is marked <code>@RequestScoped</code>. When does the <code>@Disposes</code> method run?</li>
+      <li>Who calls <code>closeConnection()</code> in your code?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A <code>@Produces</code> method that builds and returns the connection — a factory CDI calls on your behalf.</li>
+        <li>Automatically, when the request ends and the request scope closes.</li>
+        <li>Nobody. The <code>@Disposes</code> parameter tells CDI to call it for you.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       12.3 Interceptors: Aspect-Oriented Programming
+       PART 3 — INTERCEPTORS (+ DECORATORS)
        ===================================================================== -->
-  <span class="eyebrow">session 12.3</span>
-  <h2>Part 3 · Interceptors: Aspect-Oriented Logging &amp; Auditing</h2>
 
-  <p>Don't clutter your business methods with timing code, security checks, and audit logging.
-    <strong>Interceptors</strong> execute transparently around method invocations:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Wrapping a method without touching it</h2>
 
-  <div class="code-head">1. The Interceptor Binding Annotation</div>
-  <pre><code>package com.globalbank.interceptors;
+  <h3>3.1 The problem: the same chore in every method</h3>
+  <p>You want to measure how long each important method takes, and write a line to an audit log every
+    time one runs. The naive way is to paste the timing and logging code into every method:</p>
+  <pre><code>public void approveLoan(int customerId, double amount) {
+    long start = System.currentTimeMillis();        // chore
+    // ... the actual loan rule ...
+    log("approveLoan took " + (System.currentTimeMillis() - start));   // chore
+}</code></pre>
+  <p>Now imagine that in a hundred methods. The real rule is buried in plumbing, and the day you change
+    how logging works you must edit all hundred. This kind of job — the same across many methods, and
+    nothing to do with the business rule — is called a <strong>cross-cutting concern</strong>.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A "cross-cutting concern" is a chore that cuts <em>across</em> lots of methods: logging, timing,
+      auditing, security checks. It is not what the method is <em>about</em>, but it has to happen
+      anyway. Pasting it everywhere is exactly the mess we want to avoid.</p>
+  </div>
+
+  <h3>3.2 The fix: an interceptor</h3>
+  <p>An <strong>interceptor</strong> is a separate class whose code runs <em>around</em> a target
+    method — before it, after it, or both. The target method stays clean; the chore lives in one place.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🛫</span>
+    <div class="callout__b"><b>Analogy — airport security</b>
+      Every passenger, whatever their destination, passes through the same security check before
+      boarding. The check does not know or care where you are flying — it wraps everyone identically,
+      does its one job, and then lets you proceed to your gate. An interceptor is that checkpoint,
+      wrapped around your methods.</div>
+  </div>
+
+  <h3>3.3 Wiring an interceptor — three steps</h3>
+  <ol class="steps">
+
+    <li>
+      <h4>Invent a binding annotation</h4>
+      <p>A <strong>binding</strong> is a marker you create — here <code>@PerformanceLogged</code> — that
+        will later link the interceptor to the methods it should wrap. On its own it does nothing; it is
+        just a name both sides agree on. <code>@InterceptorBinding</code> is the line that makes it a
+        binding.</p>
+      <div class="code-head">The interceptor binding annotation</div>
+      <pre><code>package com.globalbank.interceptors;
 
 import jakarta.interceptor.InterceptorBinding;
 import java.lang.annotation.*;
 
-@InterceptorBinding // Declares an interceptor contract
+@InterceptorBinding                            // declares an interceptor "contract"
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface PerformanceLogged {}</code></pre>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          This looks just like the qualifier from Part 1 — a hand-made annotation — but the magic word
+          is different: <code>@InterceptorBinding</code>, not <code>@Qualifier</code>. The word decides
+          what CDI does with it.</div>
+      </div>
+    </li>
 
-  <div class="code-head">2. The Interceptor Implementation</div>
-  <pre><code>package com.globalbank.interceptors;
+    <li>
+      <h4>Write the interceptor</h4>
+      <p>The interceptor class carries <code>@Interceptor</code> and the binding
+        <code>@PerformanceLogged</code>, and <code>@Priority</code> switches it on. Inside, one method
+        marked <code>@AroundInvoke</code> does the wrapping. It receives an
+        <code>InvocationContext</code> — a handle to the call that is about to happen — and the key line
+        is <code>context.proceed()</code>, which runs the real method.</p>
+      <div class="code-head">The interceptor implementation</div>
+      <pre><code>package com.globalbank.interceptors;
 
 import jakarta.annotation.Priority;
 import jakarta.interceptor.AroundInvoke;
@@ -152,8 +398,8 @@ import jakarta.interceptor.Interceptor;
 import jakarta.interceptor.InvocationContext;
 
 @Interceptor
-@PerformanceLogged // Links to binding
-@Priority(Interceptor.Priority.APPLICATION)
+@PerformanceLogged                             // links this interceptor to the @PerformanceLogged mark
+@Priority(Interceptor.Priority.APPLICATION)    // turns the interceptor on, application-wide
 public class PerformanceInterceptor {
 
     @AroundInvoke
@@ -170,31 +416,228 @@ public class PerformanceInterceptor {
         }
     }
 }</code></pre>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          <code>context.proceed()</code> is the exact point where the real method runs. Everything
+          <em>above</em> it is the "before" part; everything in the <code>finally</code> block is the
+          "after" part. Forget to call <code>proceed()</code> and the real method never runs at all.</div>
+      </div>
+    </li>
 
-  <div class="code-head">3. Applying the Interceptor to any Bean or Method</div>
-  <pre><code>@Stateless
+    <li>
+      <h4>Tag any method you want wrapped</h4>
+      <p>Put the binding on a bean or a single method. That is all. The method's body stays pure
+        business logic — not one line of timing code.</p>
+      <div class="code-head">Applying the interceptor</div>
+      <pre><code>@Stateless
 public class LoanService {
 
-    @PerformanceLogged // Transparently profiled!
+    @PerformanceLogged                         // transparently profiled — no logging code in here
     public void approveLoan(int customerId, double amount) {
         // Pure business logic — zero logging boilerplate here!
     }
 }</code></pre>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          <code>approveLoan</code> has no idea it is being timed. Add the same
+          <code>@PerformanceLogged</code> tag to twenty more methods and every one is profiled, with the
+          logic written exactly once. That is the win.</div>
+      </div>
+    </li>
+  </ol>
+
+  <h3>3.4 The close cousin: decorators</h3>
+  <p>A <strong>decorator</strong> also wraps a bean, but it is <em>business-aware</em>. Where an
+    interceptor is generic and knows nothing about your domain, a decorator
+    <strong>implements the same business interface</strong> as the bean it wraps, and enhances that
+    specific logic. It gets a reference to the real bean through a field marked
+    <code>@Delegate</code>, passes calls through, and adds its own behaviour on the way.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📱</span>
+    <div class="callout__b"><b>Analogy — a phone case</b>
+      A phone case is a decorator. It is moulded to the shape of <em>your exact phone</em> (it
+      "implements the same interface"), every button press passes straight through to the real phone
+      underneath, and it adds grip and protection on the way. It cannot wrap just any object — it is
+      built for that specific phone. Airport security, by contrast, wraps every traveller the same way
+      and knows nothing about them.</div>
+  </div>
+
+  <div class="code-head">AuditedPaymentProcessor.java — a decorator</div>
+  <pre><code>@Decorator                                     // marks this class as a decorator
+public class AuditedPaymentProcessor implements PaymentProcessor {
+
+    @Inject
+    @Delegate                                  // CDI injects the REAL PaymentProcessor here
+    private PaymentProcessor delegate;
+
+    @Override
+    public void pay(double amt) {
+        delegate.pay(amt);                     // 1) let the real bean do the work
+        System.out.println("Audit: recorded a payment of $" + amt);   // 2) add our own behaviour
+    }
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>@Delegate</code> is the heart of a decorator: it is the real bean, handed to you so you can
+      call it and then add to it. Like an interceptor, a decorator only runs once it is
+      <em>enabled</em> — with <code>@Priority</code>, or a <code>&lt;decorators&gt;</code> entry in
+      <code>beans.xml</code>. Section 3.5 shows both, and this is the step people forget.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Use an <strong>interceptor</strong> for technical chores that look the same everywhere — logging,
+      timing, security. Use a <strong>decorator</strong> when you want to add to the actual business
+      behaviour of one specific interface. Interceptor = generic guard; decorator = business-aware
+      wrapper.</p>
+  </div>
+
+  <h3>3.5 Two ways to switch either one on</h3>
+  <p>This catches nearly everybody, so it is worth its own section. An interceptor or a decorator that you
+    have written correctly <strong>still does nothing</strong> until it is <em>enabled</em>. Writing the
+    class is step one; switching it on is step two, and there are exactly two ways to do it.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>How you enable it</th><th>What you get</th><th>When to choose it</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>@Priority(...)</code> on the class</td>
+        <td>Enabled for the <strong>whole application</strong>. No XML file involved at all.</td>
+        <td>The normal choice. Nothing to forget, and the annotation and the switch cannot drift apart.</td>
+      </tr>
+      <tr>
+        <td>A <code>beans.xml</code> entry</td>
+        <td>Enabled for <strong>that one bean archive</strong> only.</td>
+        <td>When you want to be able to switch it off per deployment without recompiling.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p>Here is the XML form, so you recognise it when you meet it in somebody else's project. It goes in
+    <code>beans.xml</code> — the file from Session 11, which is <em>required</em> for this particular job,
+    because this is exactly the kind of thing Session 11 said it was for:</p>
+
+  <div class="code-head">WEB-INF/beans.xml — enabling an interceptor and a decorator without @Priority</div>
+  <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;beans xmlns="https://jakarta.ee/xml/ns/jakartaee"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="https://jakarta.ee/xml/ns/jakartaee
+                           https://jakarta.ee/xml/ns/jakartaee/beans_4_0.xsd"
+       version="4.0"
+       bean-discovery-mode="annotated"&gt;
+
+    &lt;interceptors&gt;
+        &lt;class&gt;com.globalbank.interceptors.PerformanceInterceptor&lt;/class&gt;
+    &lt;/interceptors&gt;
+
+    &lt;decorators&gt;
+        &lt;class&gt;com.globalbank.payment.AuditedPaymentProcessor&lt;/class&gt;
+    &lt;/decorators&gt;
+
+&lt;/beans&gt;</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Which one wins if you do both?</b>
+      <code>@Priority</code> is the stronger of the two. An interceptor or decorator that carries it is
+      enabled at <strong>application scope</strong>, and the <code>beans.xml</code> entry has nothing left
+      to add. So there is no harm in leaving the XML out — which is why the projects in this course use
+      <code>@Priority</code> throughout and never touch this file.
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The classic silent failure</b>
+      You write a perfect interceptor, put <code>@InterceptorBinding</code> on five methods, deploy — and
+      nothing is logged. Nothing is broken and there is no error message; the interceptor simply was never
+      enabled. If an interceptor or decorator seems to be ignored, check for <code>@Priority</code> first,
+      then check <code>beans.xml</code>. One of the two must be there.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>What is a "cross-cutting concern"? Give one example.</li>
+      <li>In the interceptor, which single line runs the real business method?</li>
+      <li>How is a decorator different from an interceptor?</li>
+      <li>You add an interceptor and nothing happens at all — no error, no log line. What are the two
+        things you check, and in what order?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A chore that repeats across many methods and is not the business rule itself — e.g. logging, timing, auditing or security checks.</li>
+        <li><code>context.proceed()</code>.</li>
+        <li>A decorator implements the business interface and enhances that specific logic, injecting the real bean with <code>@Delegate</code>. An interceptor is generic cross-cutting code that knows nothing about the business.</li>
+        <li>First <code>@Priority</code> on the interceptor class, then a <code>&lt;interceptors&gt;</code> entry in <code>beans.xml</code>. A correctly written interceptor is silently ignored until one of the two enables it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       12.4 CDI Events & Observers
+       PART 4 — CDI EVENTS & OBSERVERS
        ===================================================================== -->
-  <span class="eyebrow">session 12.4</span>
-  <h2>Part 4 · Decoupled Event Architecture: Synchronous &amp; Asynchronous</h2>
 
-  <p>CDI provides a built-in publish-subscribe notification model that decouples components in-process without requiring
-    heavyweight JMS message brokers:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · Announcing news other parts can react to</h2>
 
-  <div class="code-head">Firing and Observing Events</div>
-  <pre><code>// 1. Event Payload POJO
+  <h3>4.1 The problem: everyone has to know everyone</h3>
+  <p>When a customer registers, several things should happen: send a welcome email, write an audit
+    record, bump a "new customers today" counter. The obvious way is to call each one directly:</p>
+  <pre><code>public void register(String email) {
+    // ... create the customer ...
+    welcomeEmailNotifier.send(email);     // register() must know about this...
+    auditService.record(email);           // ...and this...
+    statsCounter.increment();             // ...and this.
+}</code></pre>
+  <p>Now <code>register()</code> depends on three other classes, and every time the business wants a new
+    reaction you must open <code>register()</code> and edit it. The parts are
+    <strong>tightly coupled</strong> — bolted together so they cannot move independently.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>"Coupled" means two parts know about each other and cannot change without disturbing the other.
+      We want the opposite: a registration step that just says <em>"a customer was created"</em> and
+      does not care who, if anyone, is listening.</p>
+  </div>
+
+  <h3>4.2 The fix: fire an event</h3>
+  <p>CDI has a built-in <strong>publish-subscribe</strong> mechanism — one part <em>publishes</em> news,
+    other parts <em>subscribe</em> to it — that works entirely inside one running program, with no
+    heavyweight message broker (that is Session 7's JMS, for when the parts live on different machines).
+    The registration code announces the news; any number of <strong>observer</strong> methods react.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📣</span>
+    <div class="callout__b"><b>Analogy — the town crier</b>
+      A town crier stands in the square and shouts the news. He does not know who is listening, and he
+      does not care. The baker might down tools; the children might ignore it; a newcomer might not even
+      understand. Whoever cares reacts in their own way. The crier's job ends the moment he has
+      announced it. Firing a CDI event is shouting in the square.</div>
+  </div>
+
+  <h3>4.3 The three pieces</h3>
+  <ul>
+    <li><strong>The payload</strong> — a plain object carrying the facts, e.g. a <code>record</code> holding the new customer's id and email.</li>
+    <li><strong>The publisher</strong> — injects <code>Event&lt;T&gt;</code> and calls <code>.fire(...)</code> to announce.</li>
+    <li><strong>The observer</strong> — any method with a parameter marked <code>@Observes</code> of that payload type. CDI runs it whenever the event fires.</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>Event&lt;CustomerCreatedEvent&gt;</code> is "the loudspeaker for customer-created news."
+      <code>@Observes CustomerCreatedEvent</code> is a person in the square saying "I care about that
+      kind of news — tap me when it happens."</p>
+  </div>
+
+  <div class="code-head">Firing and observing an event</div>
+  <pre><code>import jakarta.ejb.Stateless;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Event;
+import jakarta.enterprise.event.Observes;
+import jakarta.inject.Inject;
+
+// 1. The event payload — a plain record carrying the facts
 public record CustomerCreatedEvent(int customerId, String email) {}
 
-// 2. Event Producer
+// 2. The publisher fires the event
 @Stateless
 public class CustomerRegistrationService {
 
@@ -203,21 +646,84 @@ public class CustomerRegistrationService {
 
     public void register(String email) {
         int id = generateId();
-        // Fire event synchronously (or fireAsync() for background threads)
+        // Fire synchronously now (or fireAsync() to hand it to a background thread)
         eventPublisher.fire(new CustomerCreatedEvent(id, email));
         System.out.println("Registration complete.");
     }
+
+    /**
+     * A stand-in for a real id source. Note it holds no state of its own —
+     * a @Stateless bean must not keep data in a field between calls (Session 1).
+     * In a real application this would be the id your database assigned.
+     */
+    private int generateId() {
+        return Math.abs(java.util.UUID.randomUUID().hashCode());
+    }
 }
 
-// 3. Independent Observer
+// 3. An independent observer reacts — the publisher never names it
 @ApplicationScoped
 public class WelcomeEmailNotifier {
 
-    // Runs automatically whenever CustomerCreatedEvent is fired!
+    // Runs automatically whenever a CustomerCreatedEvent is fired
     public void onNewCustomer(@Observes CustomerCreatedEvent event) {
         System.out.println("Sending welcome package email to: " + event.email());
     }
 }</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>CustomerRegistrationService</code> never mentions <code>WelcomeEmailNotifier</code>. Add a
+      tenth observer tomorrow — an audit log, a stats counter — and <code>register()</code> does not
+      change by a single character. That is what "decoupled" buys you.</div>
+  </div>
+
+  <h3>4.4 Synchronous or asynchronous?</h3>
+  <p><code>fire()</code> runs the observers <strong>right now</strong>, on the same thread, before
+    <code>register()</code> continues. If an observer is slow, the caller waits; if an observer throws,
+    the caller sees the error. <code>fireAsync()</code> instead hands the event to a
+    <strong>background thread</strong>; the caller returns immediately, and observers that want to run
+    in the background opt in with <code>@ObservesAsync</code>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📣</span>
+    <div class="callout__b"><b>Analogy — the crier, two ways</b>
+      <strong>Synchronous (<code>fire</code>):</strong> the crier shouts, then waits in the square until
+      everyone has finished reacting before he moves on. <strong>Asynchronous
+      (<code>fireAsync</code>):</strong> the crier shouts and walks straight to the next street, leaving
+      people to react in their own time.</div>
+  </div>
+
+  <div class="code-head">Firing on a background thread</div>
+  <pre><code>// Hand the event to a background thread instead — register() returns at once:
+eventPublisher.fireAsync(new CustomerCreatedEvent(id, email));
+
+// An observer that should run on that background thread opts in with @ObservesAsync:
+public void onNewCustomer(@ObservesAsync CustomerCreatedEvent event) {
+    sendSlowWelcomeEmail(event.email());
+}</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>fire()</code> pairs with <code>@Observes</code>; <code>fireAsync()</code> pairs with
+      <code>@ObservesAsync</code>. Reach for the async pair when the reaction is slow and the user
+      should not have to wait for it — like sending an email.</div>
+  </div>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Question</th><th><code>fire()</code> — synchronous</th><th><code>fireAsync()</code> — asynchronous</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Which thread?</strong></td><td>The caller's own thread</td><td>A background thread</td></tr>
+      <tr><td><strong>Does the caller wait?</strong></td><td>Yes — until every observer finishes</td><td>No — it returns at once</td></tr>
+      <tr><td><strong>Observer annotation</strong></td><td><code>@Observes</code></td><td><code>@ObservesAsync</code></td></tr>
+      <tr><td><strong>Use it for</strong></td><td>Quick, must-happen-now reactions</td><td>Slow work the user need not wait for</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>4.5 See all four powers run at once</h3>
+  <p>Press <strong>Run</strong>. The trace shows one checkout request flowing through everything you
+    have learned: CDI picks the <code>@CreditCard</code> bean by its qualifier (Part 1), an interceptor
+    wraps the method and times it (Part 3), and when the work is done an event fires to an observer
+    (Part 4).</p>
 
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
@@ -244,85 +750,180 @@ public class WelcomeEmailNotifier {
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>What you just watched</b>
+      One method call set off three separate powers — a qualifier picking the right bean, an interceptor
+      wrapping the call, and an event reaching an observer — and the business method knew about
+      <em>none</em> of them. Every one was declared with an annotation, not wired in by hand.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <ol>
+      <li>In the event example, does <code>CustomerRegistrationService</code> know about <code>WelcomeEmailNotifier</code>?</li>
+      <li>You add a second reaction — an audit log. What must you change in <code>register()</code>?</li>
+      <li>What is the difference between <code>fire()</code> and <code>fireAsync()</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>No. It only fires the event; it never names any observer.</li>
+        <li>Nothing. Add a new class with an <code>@Observes CustomerCreatedEvent</code> method; <code>register()</code> stays exactly as it is.</li>
+        <li><code>fire()</code> runs observers on the caller's thread and makes it wait; <code>fireAsync()</code> returns immediately and runs <code>@ObservesAsync</code> observers on a background thread.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       QUIZ
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 12 · Knowledge Check</h3>
+    <h3>Check yourself — Session 12</h3>
     <script type="application/json">
     [
-      {
-        "q": "What is the primary role of a CDI Qualifier (@Qualifier)?",
-        "opts": [
-          "To format dates into strings",
-          "To provide type-safe disambiguation when multiple beans implement the exact same interface",
-          "To encrypt database passwords",
-          "To disable injection"
-        ],
-        "a": 1,
-        "why": "Qualifiers are user-defined annotations marked with @Qualifier that tell CDI which specific implementation to supply at an injection point."
-      },
-      {
-        "q": "What is the purpose of a @Disposes method in CDI?",
-        "opts": [
-          "To delete the project from the hard drive",
-          "To automatically execute cleanup logic (closing connections, releasing locks) when the produced bean's scope ends",
-          "To throw a NullPointerException",
-          "To log the user out"
-        ],
-        "a": 1,
-        "why": "@Disposes methods are automatically executed by CDI when the contextual lifecycle of a @Produces instance concludes."
-      },
-      {
-        "q": "Which annotation designates the interceptor method that executes around the target business method invocation?",
-        "opts": [
-          "@BeforeInvoke",
-          "@AroundInvoke",
-          "@Intercept",
-          "@WrapMethod"
-        ],
-        "a": 1,
-        "why": "@AroundInvoke marks the method in an @Interceptor class that takes InvocationContext and calls context.proceed()."
-      },
-      {
-        "q": "How does a CDI observer method declare its interest in listening for a specific event?",
-        "opts": [
-          "By implementing the JMS MessageListener interface",
-          "By annotating an event parameter with @Observes",
-          "By registering in web.xml",
-          "By polling the server every 5 seconds"
-        ],
-        "a": 1,
-        "why": "@Observes on a method parameter designates the method as an event observer for that specific payload type."
-      },
-      {
-        "q": "What is the main difference between an Interceptor and a Decorator in CDI?",
-        "opts": [
-          "Interceptors handle cross-cutting technical concerns (logging, timing); Decorators implement the business interface and enhance domain logic directly",
-          "There is no difference",
-          "Decorators only work with HTML",
-          "Interceptors run in the database"
-        ],
-        "a": 0,
-        "why": "Decorators know about and implement the target business interface; Interceptors are generic cross-cutting interceptors unaware of business specifics."
-      }
+      {"q":"You write @Inject PaymentProcessor p; but two classes implement PaymentProcessor. What does CDI do?","opts":["Picks one at random","Refuses to start — it is an ambiguous dependency, and you must add a qualifier to say which one","Injects both into a list","Uses the first one alphabetically"],"a":1,"why":"When more than one bean fits an injection point and nothing distinguishes them, deployment fails. A qualifier resolves the ambiguity."},
+      {"q":"What turns an ordinary annotation of yours into a CDI qualifier?","opts":["@Named","Marking it with @Qualifier","Putting it in a package called qualifiers","@Produces"],"a":1,"why":"@Qualifier on your @interface is the single line that makes CDI match on it. @Named uses fragile strings instead."},
+      {"q":"Why prefer a custom qualifier over a @Named string label?","opts":["It is shorter to type","It is type-safe — a mistyped qualifier fails to compile, while a mistyped string only breaks at runtime","@Named does not exist","Strings cannot be injected"],"a":1,"why":"Qualifiers are checked by the compiler. A typo in a @Named string compiles happily and fails later."},
+      {"q":"What problem does a @Produces method solve?","opts":["It makes beans run faster","It lets CDI inject an object it could not build itself — one with no suitable constructor, or one that needs runtime configuration","It deletes unused beans","It renames a bean"],"a":1,"why":"A producer method is a factory CDI calls to obtain the object, so types like a JDBC Connection can be injected."},
+      {"q":"When does a @Disposes method run?","opts":["When the application shuts down, and only then","Automatically when the scope of the produced object ends — e.g. a @RequestScoped connection closes when the request finishes","Never, unless you call it yourself","Before the producer runs"],"a":1,"why":"The @Disposes parameter marks the cleanup method; CDI calls it when the produced instance's contextual scope concludes."},
+      {"q":"Inside an @AroundInvoke interceptor method, what does context.proceed() do?","opts":["Skips the real method","Runs the actual target business method and returns its result","Only logs the method name","Starts a new transaction"],"a":1,"why":"proceed() is the exact point where the wrapped method executes. Code before it runs first; code in the finally block runs after."},
+      {"q":"What is the difference between an interceptor and a decorator?","opts":["There is no difference","An interceptor is generic cross-cutting code (logging, timing) unaware of the business; a decorator implements the business interface and enhances that logic, injecting the real bean with @Delegate","Decorators only work on web pages","Interceptors run inside the database"],"a":1,"why":"Interceptors handle technical concerns across many methods; decorators know the business interface and augment it via @Delegate."},
+      {"q":"You have written a correct interceptor and it is never called, with no error message. What is the most likely reason?","opts":["The interceptor class needs to be public and final","It was never enabled — there is no @Priority on the class and no &lt;interceptors> entry in beans.xml","Interceptors cannot be used with @Stateless beans","The @AroundInvoke method must be static"],"a":1,"why":"Writing the class is only step one. An interceptor or decorator must be enabled: @Priority on the class turns it on application-wide with no XML, and a &lt;interceptors> or &lt;decorators> entry in beans.xml enables it for that archive. Forgetting this fails silently."},
+      {"q":"How does a method declare that it wants to hear about a CustomerCreatedEvent?","opts":["It implements MessageListener","It annotates a parameter with @Observes CustomerCreatedEvent","It registers in web.xml","It polls a queue every few seconds"],"a":1,"why":"@Observes on a method parameter makes that method an observer for that event type. The publisher never names it."},
+      {"q":"What is the effect of firing an event with fireAsync() instead of fire()?","opts":["The event is lost","The caller continues immediately while matching @ObservesAsync observers run on a background thread","It sends the event to another server","It makes the event synchronous"],"a":1,"why":"fire() runs observers on the caller's thread and makes it wait; fireAsync() returns at once and runs @ObservesAsync observers in the background."}
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the session. It is here because exam questions and the
+    reference guides use these exact terms, and you will want somewhere to check them. Open only what
+    you need.</p>
+
+  <details>
+    <summary><strong>🧩 The full interceptor wiring, in order</strong></summary>
+    <p>Three pieces, each with its own annotation. Miss one and the interceptor silently never runs.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Piece</th><th>Annotation</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Binding</strong></td><td><code>@InterceptorBinding</code></td><td>The marker you invent (e.g. <code>@PerformanceLogged</code>) that links interceptor to target.</td></tr>
+        <tr><td><strong>Interceptor class</strong></td><td><code>@Interceptor</code> + the binding</td><td>Holds the wrapping logic. One method is marked <code>@AroundInvoke</code>.</td></tr>
+        <tr><td><strong>The around method</strong></td><td><code>@AroundInvoke</code></td><td>Takes an <code>InvocationContext</code>, returns <code>Object</code>, and calls <code>context.proceed()</code> to run the real method.</td></tr>
+        <tr><td><strong>Enabling</strong></td><td><code>@Priority</code> (or <code>beans.xml</code>)</td><td><code>@Priority(Interceptor.Priority.APPLICATION)</code> turns it on everywhere. Without enabling, nothing happens.</td></tr>
+        <tr><td><strong>Applying</strong></td><td>the binding, on a bean or method</td><td>Tagging a method with the binding is what gets it wrapped.</td></tr>
+      </tbody>
+    </table></div>
+    <p><code>InvocationContext</code> also lets the interceptor read and change the call: <code>getMethod()</code>,
+      <code>getParameters()</code>, <code>setParameters(...)</code> and <code>getTarget()</code>.</p>
+  </details>
+
+  <details>
+    <summary><strong>🏭 Producer method rules — what you can and cannot produce</strong></summary>
+    <ul>
+      <li>A producer can be a <strong>method</strong> (<code>@Produces</code> on a method) or a <strong>field</strong> (<code>@Produces</code> on a field).</li>
+      <li>The produced object gets its own <strong>scope</strong> (e.g. <code>@RequestScoped</code>) and its own <strong>qualifiers</strong> — put a qualifier on the producer and inject it with the same qualifier.</li>
+      <li>A producer method may take <strong>injected parameters</strong>; CDI supplies them before calling it.</li>
+      <li>A <strong>disposer</strong> matches a producer when its <code>@Disposes</code> parameter has the <strong>same type and qualifiers</strong> as the producer's return. One disposer per producer.</li>
+      <li>Only <strong>produced</strong> objects can be disposed — a disposer never fires for a bean CDI constructed normally.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>📡 Event fine print — qualifiers, async and transaction phases</strong></summary>
+    <ul>
+      <li><strong>Qualified events.</strong> Observers can be narrowed with a qualifier: <code>@Observes @CreditCard PaymentCompletedEvent</code> only reacts to card payments. Add the qualifier when firing with <code>eventPublisher.select(...).fire(...)</code>.</li>
+      <li><strong>Async.</strong> <code>fireAsync()</code> runs <code>@ObservesAsync</code> observers on a background thread; <code>fire()</code> runs <code>@Observes</code> observers on the caller's thread.</li>
+      <li><strong>Transaction-phase observers.</strong> <code>@Observes(during = TransactionPhase.AFTER_SUCCESS)</code> delays the reaction until the surrounding transaction commits — handy so you only email the customer if the registration actually saved.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>🏷️ The qualifiers you already have: @Default, @Any, @Named</strong></summary>
+    <p>Qualifiers are not new to Part 1 — CDI has been using them invisibly all along.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Qualifier</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><code>@Default</code></td><td>Every bean with no explicit qualifier silently has this one. It is why a <em>single</em> unqualified bean injects fine — and why <em>two</em> unqualified beans clash: both are <code>@Default</code>.</td></tr>
+        <tr><td><code>@Any</code></td><td>A wildcard every bean also carries. Injecting <code>@Any Instance&lt;PaymentProcessor&gt;</code> gives you <em>all</em> implementations to loop over.</td></tr>
+        <tr><td><code>@Named</code></td><td>A built-in, string-based qualifier used mainly to reach beans from Jakarta Faces (EL) pages. Avoid it for type-safe code — use your own qualifier instead.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>Qualifiers</strong></td><td>Type-safe annotations (<code>@Qualifier</code>) resolving ambiguous bean implementations at compile time.</td></tr>
-    <tr><td><strong>Producers</strong></td><td><code>@Produces</code> factories manufacturing dynamic objects; cleaned up by <code>@Disposes</code>.</td></tr>
-    <tr><td><strong>Interceptors</strong></td><td>AOP cross-cutting wrappers (<code>@InterceptorBinding</code>, <code>@AroundInvoke</code>) for timing, logging, and security.</td></tr>
-    <tr><td><strong>Decorators</strong></td><td>Implements the business interface with <code>@Delegate</code> to augment domain logic.</td></tr>
-    <tr><td><strong>CDI Events</strong></td><td>In-process decoupled messaging via <code>Event&lt;T&gt;.fire()</code> and <code>@Observes</code> methods.</td></tr>
+    <tr><td><strong>Qualifier</strong></td><td>A label annotation you invent (marked <code>@Qualifier</code>) so CDI can tell two matching beans apart. Safer than a <code>@Named</code> string because the compiler checks it.</td></tr>
+    <tr><td><code>@Produces</code> / <code>@Disposes</code></td><td>A factory method that builds something CDI could not construct, and a cleanup method CDI runs automatically when that object's scope ends.</td></tr>
+    <tr><td><strong>Interceptor</strong></td><td><code>@InterceptorBinding</code> + an <code>@AroundInvoke</code> method wrap a target with generic cross-cutting code; <code>context.proceed()</code> runs the real method.</td></tr>
+    <tr><td><strong>Decorator</strong></td><td>Implements the business interface and enhances it, calling the real bean through an <code>@Delegate</code> field. Business-aware, where an interceptor is generic.</td></tr>
+    <tr><td><strong>CDI Event</strong></td><td>Inject <code>Event&lt;T&gt;</code> and <code>fire()</code> (or <code>fireAsync()</code>); any <code>@Observes</code> (or <code>@ObservesAsync</code>) method reacts, with no link between publisher and observer.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Two beans implement one interface and you <code>@Inject</code> it bare</td><td>Add a qualifier to the beans and the same qualifier at the injection point.</td></tr>
+      <tr><td>Telling beans apart with <code>@Named("x")</code> strings</td><td>Use a type-safe <code>@Qualifier</code> annotation, checked by the compiler.</td></tr>
+      <tr><td>Trying to <code>@Inject</code> a type CDI cannot construct (a <code>Connection</code>)</td><td>Write a <code>@Produces</code> method that builds and returns it.</td></tr>
+      <tr><td>A producer opens a resource but there is no disposer</td><td>Add a <code>@Disposes</code> method so CDI closes it when the scope ends.</td></tr>
+      <tr><td>Pasting timing or logging code into every business method</td><td>Move it into one <code>@AroundInvoke</code> interceptor and tag methods with your binding.</td></tr>
+      <tr><td>Writing an interceptor or decorator but never enabling it</td><td>Give it <code>@Priority</code> (or list it in <code>beans.xml</code>) or it never runs.</td></tr>
+      <tr><td>Forgetting <code>context.proceed()</code> in an interceptor</td><td>Call it — otherwise the real method never executes.</td></tr>
+      <tr><td>A publisher calling each reaction directly</td><td>Fire a CDI event; let <code>@Observes</code> methods react, so new reactions need no change to the publisher.</td></tr>
+      <tr><td>Expecting <code>fire()</code> not to block the caller</td><td><code>fire()</code> runs observers on your thread; use <code>fireAsync()</code> + <code>@ObservesAsync</code> for slow background work.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>These four powers turn up throughout the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Inject</code> and scopes — the foundations under all of this</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI Part 1</a></td></tr>
+      <tr><td>Qualifiers and producers feeding security beans</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+      <tr><td>Interceptors — how the container applies transactions</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>CDI events vs real message queues (JMS, across machines)</td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a></td></tr>
+      <tr><td>Producing and injecting external resources</td><td><a href="session-08-connectors.html">Session 8 — Jakarta Connectors</a></td></tr>
+      <tr><td>Practising all of this hands-on</td><td><a href="session-12-tiy.html">Session 12 — Try It Yourself</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/cdi/" target="_blank" rel="noopener">Jakarta CDI Specification — events, interceptors, decorators</a></li>
+          <li><a href="https://jakarta.ee/specifications/interceptors/" target="_blank" rel="noopener">Jakarta Interceptors Specification</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

@@ -1,55 +1,120 @@
 <title>Try It Yourself — Review &amp; Consolidation (Sessions 11 &amp; 12)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Try It Yourself Review for Sessions 11 & 12: Contexts and Dependency Injection (CDI) integration, type-safe qualifiers, producer factories, interceptor pipelines, and event decoupling.">
+<meta name="description" content="Try It Yourself Review for Sessions 11 &amp; 12: a step-by-step CDI lab that builds a qualifier-driven payment dispatcher with a producer, an interceptor and an event observer, then diagnoses the three CDI errors beginners actually hit.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s12t";</script>
 
 <main class="page">
 
   <h1>Try It Yourself · Review &amp; Consolidation (Sessions 11 &amp; 12)</h1>
-  <p class="lede">Sessions 11 and 12 explored the complete architecture of <strong>Contexts and Dependency Injection (CDI)</strong>:
-    from contextual bean scopes and type-safe injection to advanced qualifiers, custom producer factories,
-    aspect-oriented interceptors, and asynchronous event streams. This review synthesizes these patterns into a unified lab.</p>
+  <p class="lede">Sessions 11 and 12 each taught you one part of <strong>Contexts and Dependency
+    Injection (CDI)</strong>: scopes and <code>@Inject</code>, then qualifiers, producer factories,
+    interceptors and events. Read one at a time, each of those is easy. The part that actually makes you
+    useful is putting all five into one working application — and knowing what to do when the server
+    refuses to start. So this page is not a summary. You are going to build one small CDI payment
+    pipeline, watch it run here in your browser, then break it on purpose in three different ways and fix
+    each break. By the end, the three CDI errors that scare beginners will be errors you have produced
+    yourself, on purpose, and cured.</p>
 
-  <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL15)</b>
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Build a pluggable payment routing engine utilizing CDI Qualifiers (<code>@Domestic</code> vs. <code>@International</code>)</li>
-        <li>Implement a custom <code>@Produces</code> factory with deterministic <code>@Disposes</code> lifecycle cleanup</li>
-        <li>Wrap business methods transparently using a custom <code>@Audited</code> Interceptor pipeline</li>
-        <li>Diagnose and fix the top 3 CDI deployment faults (<code>AmbiguousResolutionException</code>, <code>UnsatisfiedResolutionException</code>, and <code>ContextNotActiveException</code>)</li>
+        <li><strong>No jargon without a translation.</strong> Qualifier, producer, interceptor, observer
+          and scope each get a plain-English box the moment they appear.</li>
+        <li><strong>Every step is executable.</strong> Each one gives you the exact file, the exact code,
+          and the exact command to type — nothing is left as “and then do the usual thing”.</li>
+        <li><strong>Every step is checkable.</strong> After each step you are told what you should see if
+          it worked, so a silent screen is never a mystery.</li>
+        <li><strong>By the end you will have fixed all three CDI errors on purpose</strong>, so they stop
+          being frightening and become routine.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       Part 1: The Integrated Architecture
-       ===================================================================== -->
-  <span class="eyebrow">consolidation</span>
-  <h2>Part 1 · The Integrated CDI Component Pipeline</h2>
-
+  <h2>What you will be able to do by the end</h2>
+  <p>Not eight objectives copied from a manual — six things, in plain words:</p>
   <div class="tablewrap"><table>
-    <thead><tr><th>CDI Feature</th><th>Role in Integrated Architecture</th><th>Benefit</th></tr></thead>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what job each CDI feature does in one running application</td><td>Part 1</td></tr>
+      <tr><td>Predict which bean CDI injects when a qualifier picks it out of two</td><td>Part 1</td></tr>
+      <tr><td>Write a qualifier, a producer, an interceptor and an event observer that all work together</td><td>Part 2</td></tr>
+      <tr><td>Read a CDI deployment error by its exact class name and message</td><td>Part 3</td></tr>
+      <tr><td>Reproduce and fix <code>AmbiguousResolutionException</code>, <code>UnsatisfiedResolutionException</code> and <code>ContextNotActiveException</code></td><td>Part 3</td></tr>
+      <tr><td>Answer the exam-style questions on Sessions 11 and 12</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// lab</code> — a numbered step with code to type and something to check.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch the pipeline execute.</li>
+        <li><code>// developer toolkit</code> — the debugging equipment, with commands used on real servers.</li>
+        <li><code>// checkpoint</code> — a self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. Every part ends with a checkpoint, and each checkpoint
+      assumes you did the step before it — so do not skip ahead.
+    </div>
+  </div>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What this review consolidates (Presenter's Manual TL15)</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li>Build a <strong>pluggable payment routing engine</strong> using CDI qualifiers
+          (<code>@Domestic</code> versus <code>@International</code>) instead of fragile string
+          lookups.</li>
+        <li>Implement a custom <code>@Produces</code> factory with a matching <code>@Disposes</code>
+          lifecycle cleanup.</li>
+        <li>Wrap a business method transparently with a custom <code>@Audited</code> interceptor
+          pipeline, so timing and logging live in one place.</li>
+        <li>Diagnose and fix the top three CDI deployment faults:
+          <code>AmbiguousResolutionException</code>, <code>UnsatisfiedResolutionException</code> and
+          <code>ContextNotActiveException</code>.</li>
+      </ol>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — THE CDI FEATURES AS ONE PIPELINE
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · How the five CDI features work as one pipeline</h2>
+
+  <p>CDI is not five separate topics you memorise and forget. In a real application the five features
+    stack on top of one request, each doing exactly one job. Here they are together, and — this is the
+    part worth reading twice — what each one is <em>for</em>.</p>
+
+  <h3>1.1 The five features, and the job each one does</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>CDI Feature</th><th>Role in the integrated architecture</th><th>Benefit</th></tr></thead>
     <tbody>
       <tr>
         <td><strong>Contextual Scopes</strong></td>
-        <td><code>@RequestScoped</code> for incoming transactions; <code>@ApplicationScoped</code> for rate caches.</td>
-        <td>Automatic instance creation and memory release without manual garbage collection tuning.</td>
+        <td><code>@RequestScoped</code> for an incoming transaction; <code>@ApplicationScoped</code> for a rate cache.</td>
+        <td>The container creates an instance when it is needed and releases it when the scope ends — no manual lifetime code.</td>
       </tr>
       <tr>
         <td><strong>Type-Safe Qualifiers</strong></td>
-        <td><code>@Domestic</code> and <code>@International</code> choose payment routing at compile time.</td>
+        <td><code>@Domestic</code> and <code>@International</code> choose the payment route at compile time.</td>
         <td>Eliminates fragile string-based lookups and guarantees type-safety.</td>
       </tr>
       <tr>
         <td><strong>Producer &amp; Disposer</strong></td>
         <td><code>@Produces Connection</code> and <code>@Disposes Connection</code>.</td>
-        <td>Integrates non-CDI third-party resources cleanly into container injection.</td>
+        <td>Brings a non-CDI, third-party resource cleanly into container injection — and closes it again.</td>
       </tr>
       <tr>
         <td><strong>Interceptors</strong></td>
-        <td><code>@Audited</code> around-invoke logging.</td>
-        <td>Applies audit logging and latency timers without altering business code.</td>
+        <td><code>@Audited</code> around-invoke logging and timing.</td>
+        <td>Applies auditing and latency timers without altering a single line of the business method.</td>
       </tr>
       <tr>
         <td><strong>Events &amp; Observers</strong></td>
@@ -59,14 +124,179 @@
     </tbody>
   </table></div>
 
-  <!-- =====================================================================
-       Part 2: Code Walkthrough
-       ===================================================================== -->
-  <span class="eyebrow">code walkthrough</span>
-  <h2>Part 2 · The Integrated Payment Dispatcher Lab</h2>
+  <div class="plainwords"><b>In plain words</b>
+    <p>Think of one customer clicking “Pay”. The <strong>scope</strong> decides how long the objects
+      live. The <strong>qualifier</strong> decides which gateway handles it. The <strong>interceptor</strong>
+      times the call without the method knowing. The <strong>event</strong> tells everyone else what
+      happened without the payment code knowing who is listening. The producer is the extra piece you add
+      when CDI cannot build something by itself.</p>
+    <p>Five features, one click, and the business method at the centre mentions none of them.</p>
+  </div>
 
-  <div class="code-head">1. Qualifiers &amp; Dispatcher Service</div>
-  <pre><code>package com.globalbank.payments;
+  <div class="callout callout--analogy"><span class="callout__i">🏦</span>
+    <div class="callout__b"><b>Analogy</b>
+      A bank counter. The <strong>scope</strong> is how long you keep your own clerk. The
+      <strong>qualifier</strong> is saying “foreign desk, please” instead of “desk”. The
+      <strong>interceptor</strong> is the CCTV camera recording everyone, unasked. The
+      <strong>event</strong> is the bell at the back that tells compliance “a large transfer just
+      happened” — the teller rings it without knowing who runs to answer.</div>
+  </div>
+
+  <h3>1.2 Trace it yourself — predict before you check</h3>
+  <p>Do this now, before you see a line of the code. Guessing first is how the picture sticks.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Which gateway does an overseas payment reach?</h4>
+      <p>A request arrives with <code>isOverseas = true</code>. Two beans implement
+        <code>PaymentGateway</code>. Which one runs, and what made the decision?</p>
+      <p><strong>You should have written:</strong> the <strong><code>@International</code></strong>
+        gateway. The decision was made by the <em>qualifier</em>, at the injection point — the compiler
+        checked it, not a string at runtime.</p>
+    </li>
+    <li>
+      <h4>Where does the timing code live?</h4>
+      <p>The server log shows how long <code>routePayment()</code> took. Is that line inside
+        <code>routePayment()</code>, or somewhere else?</p>
+      <p><strong>You should have written:</strong> somewhere else — inside a separate
+        <strong>interceptor</strong> class. The business method contains no timing code at all; the
+        container wraps the call for you.</p>
+    </li>
+    <li>
+      <h4>Who does the dispatcher tell about the payment?</h4>
+      <p>After the gateway finishes, a compliance service checks the transfer. Does
+        <code>PaymentDispatcher</code> name that service anywhere?</p>
+      <p><strong>You should have written:</strong> no. The dispatcher only <em>fires an event</em>. The
+        compliance service has a method marked <code>@Observes</code> and reacts on its own. That is what
+        decoupling means: the sender never names the receiver.</p>
+    </li>
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>In one sentence, what does an <em>interceptor</em> buy you that pasting logging code into every
+        method does not?</li>
+      <li>You have two beans implementing the same interface and you <code>@Inject</code> it bare. What
+        does CDI do, and what is the fix?</li>
+      <li>Why is a <code>@RequestScoped</code> bean tied to “one request”, and what happens if you use it
+        where there is no request at all?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The concern is written <strong>once</strong> and applied to every tagged method by the
+          container, so the business method stays clean and you change logging in one place.</li>
+        <li>CDI refuses to deploy with an <strong>ambiguous dependency</strong>. Add a
+          <code>@Qualifier</code> to each bean and the matching qualifier at the injection point.</li>
+        <li>A request scope lives for one web request; the container creates the instance when the
+          request starts and destroys it when it ends. With no active request — say a raw
+          <code>new Thread()</code> — the scope is not active, so you get
+          <code>ContextNotActiveException</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — BUILD THE PAYMENT PIPELINE
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Build the payment pipeline, step by step</h2>
+
+  <p>Now you assemble a small but complete CDI application: a dispatcher that routes a payment to one of
+    two gateways chosen by a qualifier, times the call with an interceptor, and announces the result with
+    an event. Create the files in the project you have been building since Session 11 — a
+    <strong>Maven WAR project</strong> (<code>&lt;packaging&gt;war&lt;/packaging&gt;</code>) with an empty
+    <code>src/main/webapp/WEB-INF/beans.xml</code> and the Jakarta EE web + CDI APIs on its classpath, so
+    it can be deployed to WildFly. Step 8 adds a servlet, so the project must be a WAR, not a JAR.
+    Nothing here is a toy — this shape is exactly how real pluggable services are wired.</p>
+
+  <div class="plainwords"><b>In plain words — what you are about to build</b>
+    <p><strong>One method</strong> (<code>routePayment</code>) decides nothing by hand: a
+      <em>qualifier</em> hands it the right gateway, an <em>interceptor</em> times the call behind its
+      back, and an <em>event</em> tells a compliance service what happened. The method itself stays
+      almost empty.</p>
+    <p>Do the steps in order. Each one is small, and each one tells you exactly what you should see
+      before you continue.</p>
+  </div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Step 1 — the two qualifiers</h4>
+      <p>Create two tiny annotations. Each one is marked <code>@Qualifier</code>, which is the single
+        line that tells CDI “this is a label I can match on”.</p>
+      <div class="code-head">src/main/java/com/globalbank/qualifiers/Domestic.java</div>
+      <pre><code>package com.globalbank.qualifiers;
+
+import jakarta.inject.Qualifier;
+import java.lang.annotation.*;
+
+@Qualifier                                     // the one line that makes it a CDI qualifier
+@Retention(RetentionPolicy.RUNTIME)            // keep the label around while the app runs
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER, ElementType.METHOD})
+public @interface Domestic {}</code></pre>
+      <p>Then create <code>International.java</code> in the same package, identical except the name:</p>
+      <pre><code>@Qualifier
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER, ElementType.METHOD})
+public @interface International {}</code></pre>
+      <p><strong>You should see</strong> two small files. Neither does anything on its own yet — they are
+        just names CDI will match later. <strong>What to notice:</strong> a qualifier is a real
+        <em>type</em>, so a typo in it is a compiler error, not a runtime surprise.</p>
+    </li>
+
+    <li>
+      <h4>Step 2 — the gateway interface and its two implementations</h4>
+      <p>One interface, two beans. Both implement it; the <em>only</em> thing that tells them apart is the
+        qualifier on each class.</p>
+      <div class="code-head">PaymentGateway.java — the interface</div>
+      <pre><code>package com.globalbank.payments;
+
+public interface PaymentGateway {
+    void process(double amount);
+}</code></pre>
+      <div class="code-head">The two implementations</div>
+      <pre><code>package com.globalbank.payments;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import com.globalbank.qualifiers.Domestic;
+
+@Domestic                                       // this bean IS the domestic one
+@ApplicationScoped
+public class DomesticPaymentGateway implements PaymentGateway {
+    @Override
+    public void process(double amount) {
+        System.out.println("Clearing $" + amount + " through the local ACH network.");
+    }
+}</code></pre>
+      <pre><code>package com.globalbank.payments;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import com.globalbank.qualifiers.International;
+
+@International                                  // this bean IS the international one
+@ApplicationScoped
+public class InternationalPaymentGateway implements PaymentGateway {
+    @Override
+    public void process(double amount) {
+        System.out.println("Processing SWIFT foreign exchange wire transfer: $" + amount + " USD.");
+    }
+}</code></pre>
+      <p><strong>You should see</strong> two classes that both say
+        <code>implements PaymentGateway</code>. <strong>What to notice:</strong> the qualifier does not
+        change what they <em>are</em> — it only gives each one a name the dispatcher can ask for.</p>
+    </li>
+
+    <li>
+      <h4>Step 3 — the dispatcher, which uses both qualifiers</h4>
+      <p>This is the heart of the lab. Two fields, same type, distinguished only by the qualifier next to
+        <code>@Inject</code>.</p>
+      <div class="code-head">PaymentDispatcher.java</div>
+      <pre><code>package com.globalbank.payments;
 
 import jakarta.inject.Inject;
 import jakarta.enterprise.context.RequestScoped;
@@ -93,66 +323,455 @@ public class PaymentDispatcher {
         }
     }
 }</code></pre>
+      <p><strong>What to notice</strong> — read the code aloud and you can name the decision:</p>
+      <ul>
+        <li><code>@RequestScoped</code> — one dispatcher per web request; the scope ends with the request.</li>
+        <li><code>@Inject @Domestic</code> — “inject the domestic <code>PaymentGateway</code>.”</li>
+        <li><code>@Inject @International</code> — the same type, a different bean, chosen by the label.</li>
+        <li><code>@Audited</code> — a marker you will write in Step 4, which wraps this method with timing
+          and logging.</li>
+      </ul>
+      <p><strong>You should be able to say</strong> which line decides the route. If you cannot yet, do
+        not move on — the next three steps all build on this one.</p>
+    </li>
+
+    <li>
+      <h4>Step 4 — the <code>@Audited</code> interceptor</h4>
+      <p>An interceptor needs two files: a <strong>binding</strong> (the marker) and the
+        <strong>interceptor</strong> itself. The binding does nothing alone; it is the name the dispatcher
+        and the interceptor agree on.</p>
+      <div class="code-head">src/main/java/com/globalbank/interceptors/Audited.java — the binding</div>
+      <pre><code>package com.globalbank.interceptors;
+
+import jakarta.interceptor.InterceptorBinding;
+import java.lang.annotation.*;
+
+@InterceptorBinding                            // declares an interceptor "contract"
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface Audited {}</code></pre>
+      <div class="code-head">src/main/java/com/globalbank/interceptors/AuditedInterceptor.java</div>
+      <pre><code>package com.globalbank.interceptors;
+
+import jakarta.annotation.Priority;
+import jakarta.interceptor.AroundInvoke;
+import jakarta.interceptor.Interceptor;
+import jakarta.interceptor.InvocationContext;
+
+@Interceptor
+@Audited                                       // links this class to the @Audited marker
+@Priority(Interceptor.Priority.APPLICATION)    // switches the interceptor on, application-wide
+public class AuditedInterceptor {
+
+    @AroundInvoke
+    public Object audit(InvocationContext context) throws Exception {
+        long start = System.currentTimeMillis();
+        System.out.println("[AUDIT] calling " + context.getMethod().getName());
+
+        try {
+            return context.proceed();          // &lt;- the real method runs HERE
+        } finally {
+            long ms = System.currentTimeMillis() - start;
+            System.out.println("[AUDIT] finished in " + ms + "ms");
+        }
+      }
+}</code></pre>
+      <p><strong>What to notice:</strong> <code>context.proceed()</code> is the exact point where
+        <code>routePayment()</code> runs. Everything above it happens <em>before</em>; the
+        <code>finally</code> block happens <em>after</em>. Forget <code>proceed()</code> and the real
+        method never runs — the single most common interceptor mistake.</p>
+      <p><strong>You should be able to say: </strong> <code>routePayment()</code> contains no timing code,
+        yet the timing line will appear. That is the interceptor doing its job.</p>
+    </li>
+
+    <li>
+      <h4>Step 5 — an event, and an observer that reacts</h4>
+      <p>The event is just a small record carrying the facts. The observer is any bean with a method whose
+        parameter is marked <code>@Observes</code>.</p>
+      <div class="code-head">PaymentCompletedEvent.java — the payload</div>
+      <pre><code>package com.globalbank.events;
+
+public record PaymentCompletedEvent(double amount, boolean overseas) {}</code></pre>
+      <div class="code-head">CurrencyComplianceService.java — the observer</div>
+      <pre><code>package com.globalbank.events;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+
+@ApplicationScoped
+public class CurrencyComplianceService {
+
+    // Runs automatically whenever a PaymentCompletedEvent is fired
+    public void onPayment(@Observes PaymentCompletedEvent event) {
+        System.out.println("[COMPLIANCE] Verified AML status for $" + event.amount()
+                + " (overseas=" + event.overseas() + ")");
+    }
+}</code></pre>
+      <p>Now fire the event from the dispatcher. Add two imports at the top of
+        <code>PaymentDispatcher.java</code>, plus the injected publisher field, and the
+        <code>fire()</code> call at the end of <code>routePayment()</code>:</p>
+      <pre><code>// new imports at the top of PaymentDispatcher.java
+import jakarta.enterprise.event.Event;
+import com.globalbank.events.PaymentCompletedEvent;
+
+// new field in PaymentDispatcher
+@Inject
+private Event&lt;PaymentCompletedEvent&gt; events;
+
+// new last line inside routePayment(), after the gateway call
+events.fire(new PaymentCompletedEvent(amount, isOverseas));</code></pre>
+      <p><strong>You should be able to say:</strong> <code>PaymentDispatcher</code> still never mentions
+        <code>CurrencyComplianceService</code>. Add a second observer tomorrow — a receipt printer, an
+        audit log — and <code>routePayment()</code> does not change by a single character.</p>
+    </li>
+
+    <li>
+      <h4>Step 6 — watch the expected output before you build it</h4>
+      <p>You now know what the pieces do. Press <strong>Run CDI Pipeline</strong> to see the trace a real
+        server prints for an overseas payment — the qualifier resolution, the interceptor, the gateway,
+        and the event reaching its observer.</p>
+
+      <div class="bench" data-run="canned">
+        <div class="bench__head">
+          <span class="dot"></span>
+          <span class="kind">interactive simulation</span>
+          <span class="mode">CDI Qualifier &amp; Interceptor Execution Replay</span>
+        </div>
+        <pre class="bench__code"><code>// Client submits overseas payment of $4,200.00
+PaymentDispatcher.routePayment(4200.00, isOverseas: true)
+1. @Audited Interceptor captures start timestamp
+2. CDI dispatches to @International PaymentGateway (SWIFT network)
+3. Interceptor records execution time and writes audit log</code></pre>
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Run CDI Pipeline</button>
+          <span class="bench__hint">Traces qualifier selection, interceptor execution, and event emission.</span>
+        </div>
+        <script type="text/plain" class="bench__canned">
+[09:20:01,001] [CDI Resolver] Injected InternationalPaymentGateway via @International qualifier.
+[09:20:01,003] [Interceptor] @Audited invoked on routePayment(4200.00, true). Start timestamp: 09:20:01.003
+[09:20:01,006] [Gateway EJB] Processing SWIFT foreign exchange wire transfer: $4,200.00 USD.
+[09:20:01,009] [CDI Event] Emitted PaymentCompletedEvent.
+[09:20:01,011] [CDI Observer] CurrencyComplianceService received event. Verified AML status: CLEAN.
+[09:20:01,013] [Interceptor] @Audited finished. Method completed in 10ms. Audit ledger updated.
+    </script>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+
+      <p><strong>You should see</strong> six lines appear in order. Read them and match each to a step of
+        this lab: line 1 is Step 1 and Step 2 (qualifier resolution), line 2 and line 6 are Step 4 (the
+        interceptor), line 3 is the gateway, and lines 4–5 are Step 5 (the event and its observer). Nothing
+        in the trace was written inside <code>routePayment()</code> except the gateway call and the
+        <code>fire()</code>.</p>
+      <p>Now run it again in your head with <code>isOverseas: false</code>. <strong>You should be able to
+        predict</strong> the change: line 1 becomes <code>DomesticPaymentGateway via @Domestic
+        qualifier</code> and line 3 clears through the local ACH network. Same method, different bean —
+        chosen by the qualifier.</p>
+    </li>
+
+    <li>
+      <h4>Step 7 — build and deploy it for real</h4>
+      <p>First make the WAR name explicit. Add <code>&lt;finalName&gt;cdi-payments&lt;/finalName&gt;</code>
+        inside the <code>&lt;build&gt;</code> block of <code>pom.xml</code>, so the build produces
+        <code>target/cdi-payments.war</code> and the context root is <code>/cdi-payments</code>. (If you
+        prefer a different name, substitute it in every command and URL on this page.)</p>
+      <p>Build the project, then hand the result to WildFly by copying it into the server's
+        <code>deployments</code> folder (the same pattern you used in Sessions 3 and 4):</p>
+      <pre><code>mvn clean package
+copy target\cdi-payments.war  C:\wildfly\standalone\deployments\      REM  Windows
+cp   target/cdi-payments.war  ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> <code>BUILD SUCCESS</code>, then, in the <em>server</em> console,
+        within a second or two:</p>
+      <pre><code>Deployed "cdi-payments.war"</code></pre>
+      <p>That line means CDI scanned your beans, matched every qualifier, and enabled your interceptor.
+        If instead the deployment fails, do not panic — Part 3 is about exactly that, and the two errors
+        you are most likely to see are <code>AmbiguousResolutionException</code> and
+        <code>UnsatisfiedResolutionException</code>.</p>
+    </li>
+
+    <li>
+      <h4>Step 8 — call it, then prove the qualifier is doing the work</h4>
+      <p>Expose the dispatcher through a tiny servlet so you can trigger it from a browser. A request
+        reaches a servlet, and the servlet asks CDI for the dispatcher with <code>@Inject</code>:</p>
+      <div class="code-head">src/main/java/com/globalbank/web/PayServlet.java — the window onto the pipeline</div>
+      <pre><code>package com.globalbank.web;
+
+import com.globalbank.payments.PaymentDispatcher;
+import jakarta.inject.Inject;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@WebServlet("/pay")
+public class PayServlet extends HttpServlet {
+
+    @Inject                                   // CDI injects the @RequestScoped dispatcher
+    private PaymentDispatcher dispatcher;
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+
+        double amount = Double.parseDouble(request.getParameter("amount"));
+        boolean overseas = Boolean.parseBoolean(request.getParameter("overseas"));
+
+        dispatcher.routePayment(amount, overseas);
+        response.getWriter().println("Payment routed. Check the server log.");
+    }
+}</code></pre>
+      <p>Rebuild, redeploy, then open this URL:</p>
+      <pre><code>http://localhost:8080/cdi-payments/pay?amount=4200&amp;overseas=true</code></pre>
+      <p><strong>You should see this in the server console</strong>, in order:</p>
+      <pre><code>[AUDIT] calling routePayment
+Processing SWIFT foreign exchange wire transfer: $4200.0 USD.
+[COMPLIANCE] Verified AML status for $4200.0 (overseas=true)
+[AUDIT] finished in 12ms</code></pre>
+      <p>Now change the URL to <code>overseas=false</code> and repeat (a fresh request, because the
+        dispatcher is <code>@RequestScoped</code>):</p>
+      <pre><code>http://localhost:8080/cdi-payments/pay?amount=200&amp;overseas=false</code></pre>
+      <p><strong>You should see</strong> the local message —
+        <code>Clearing $200.0 through the local ACH network.</code> — and the compliance line now read
+        <code>overseas=false</code>. Same servlet, same method, different gateway. <strong>That contrast
+        is the whole point:</strong> the qualifier, not an <code>if</code> on a string, chose the bean.</p>
+    </li>
+
+    <li>
+      <h4>Step 9 — break it on purpose, right now</h4>
+      <p>Before you read Part 3, produce the first error yourself so it stops being scary. Ambiguity needs
+        <strong>two</strong> beans that both fit <strong>one</strong> injection point, so you must clear
+        the labels on <em>both sides</em> — the beans and the injection points. Make these four edits:</p>
+      <ul>
+        <li>In <code>DomesticPaymentGateway.java</code>, delete the <code>@Domestic</code> line.</li>
+        <li>In <code>InternationalPaymentGateway.java</code>, delete the <code>@International</code> line.</li>
+        <li>In <code>PaymentDispatcher.java</code>, change <code>@Inject @Domestic</code> to a bare
+          <code>@Inject</code>.</li>
+        <li>In the same file, change <code>@Inject @International</code> to a bare <code>@Inject</code>.</li>
+      </ul>
+      <p>Now both gateways carry only the implicit <code>@Default</code> qualifier, and both fields ask
+        for a bare <code>@Default PaymentGateway</code>. Rebuild and redeploy:</p>
+      <pre><code>mvn clean package
+copy target\cdi-payments.war  C:\wildfly\standalone\deployments\</code></pre>
+      <p><strong>You should see</strong> the deployment fail with
+        <code>AmbiguousResolutionException</code>:
+        <code>Ambiguous dependencies for type PaymentGateway with qualifiers [@Default]</code> — two
+        <code>@Default</code> beans match one bare <code>@Inject PaymentGateway</code>, and nothing says
+        which you meant.</p>
+      <p><strong>Why removing only the bean's label is not enough:</strong> if you delete
+        <code>@International</code> from the gateway but leave <code>@Inject @International</code> on the
+        field, the field asks for a qualifier that no bean has — that is
+        <code>UnsatisfiedResolutionException</code>, a different fault. Ambiguity needs a point that
+        <em>several</em> beans satisfy, so you clear the labels on both sides.</p>
+      <p>Put all four lines back, rebuild, redeploy — it deploys cleanly again. You have just reproduced
+        the most common CDI error, on purpose, and cured it. Part 3 explains exactly why.</p>
+    </li>
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <p>Look back at <code>PaymentDispatcher</code> and answer without scrolling.</p>
+    <ol>
+      <li>Both injected fields are the same type, <code>PaymentGateway</code>. What, exactly, makes CDI
+        give them different beans?</li>
+      <li>You delete the <code>@Audited</code> line from <code>routePayment()</code>. What disappears from
+        the server log, and why does nothing else change?</li>
+      <li>You add a second observer — a receipt printer with an <code>@Observes
+        PaymentCompletedEvent</code> method. What must you change in <code>PaymentDispatcher</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The <strong>qualifier</strong> beside each <code>@Inject</code> — <code>@Domestic</code> on
+          one field, <code>@International</code> on the other. Same type, different label.</li>
+        <li>Only the <code>[AUDIT]</code> lines disappear. The business method never contained timing
+          code, so removing the marker removes the wrapping without touching the logic at all.</li>
+        <li><strong>Nothing.</strong> Fire a CDI event and let observers react; new reactions are added as
+          new classes, and the publisher stays exactly as it is.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       Part 3: Top Troubleshooting Gotchas
+       PART 3 — THE THREE CDI ERRORS
        ===================================================================== -->
-  <span class="eyebrow">troubleshooting</span>
-  <h2>Part 3 · Top 3 CDI Deployment &amp; Runtime Pitfalls</h2>
+
+  <span class="eyebrow">developer toolkit</span>
+  <h2>Part 3 · The three errors you will actually hit</h2>
+
+  <p>Wiring CDI always produces errors while you learn — that is normal, not failure. If you can name
+    these three on sight and know where to look, CDI stops being intimidating. First, learn the one skill
+    that solves all of them.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🔎</span>
+    <div class="callout__b"><b>How to read a CDI error, in three moves</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>Read the exception class name.</strong> <code>Ambiguous</code> means “more than one
+          bean fits”; <code>Unsatisfied</code> means “no bean fits”; <code>ContextNotActive</code> means
+          “the scope you asked for is not alive here”.</li>
+        <li><strong>Read the type after the words <code>for type</code>.</strong> That tells you
+          <em>which</em> injection point is unhappy — the interface or class CDI could not resolve.</li>
+        <li><strong>Check two things, in this order:</strong> does the bean have a qualifier that matches
+          the injection point, and does the bean have a scope (or does <code>beans.xml</code> exist under
+          <code>bean-discovery-mode="annotated"</code>)? Those two questions cover almost every CDI
+          deployment failure.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h3>3.1 The three faults, side by side</h3>
+  <p>Read the symptom, then the cause, then the fix. These are the three you will meet in real work.</p>
+
+  <div class="plainwords"><b>In plain words — where each fault lives</b>
+    <p>The first two — <em>ambiguous</em> and <em>unsatisfied</em> — stop the application
+      <strong>at deployment</strong>. Nothing runs; the server tells you the wiring is wrong before any
+      user is affected. The third, <em>context not active</em>, waits until the application is running
+      and then fails <strong>on one bad line</strong> — usually a scoped bean touched from the wrong
+      thread. Deployment faults are safe: you cannot ship them by accident. Runtime faults are the ones
+      to think about.</p>
+  </div>
 
   <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
     <div class="callout__b"><b>Fault 1: <code>jakarta.enterprise.inject.AmbiguousResolutionException</code></b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Application fails to deploy: <code>Ambiguous dependencies for type PaymentGateway with qualifiers [@Default]</code>.</p>
-      <p style="margin:.3rem 0"><strong>Root Cause:</strong> Two or more beans implement <code>PaymentGateway</code>, and neither has a distinguishing <code>@Qualifier</code> annotation.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Create custom qualifier annotations (e.g., <code>@Domestic</code> and <code>@International</code>) and apply them to both the bean classes and the <code>@Inject</code> fields.</p>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> the application fails to deploy:
+        <code>Ambiguous dependencies for type PaymentGateway with qualifiers [@Default]</code>.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> two or more beans implement
+        <code>PaymentGateway</code>, and neither has a distinguishing <code>@Qualifier</code> annotation.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> create custom qualifier annotations (e.g.
+        <code>@Domestic</code> and <code>@International</code>) and apply them to both the bean classes
+        <em>and</em> the <code>@Inject</code> fields.</p>
     </div>
   </div>
 
   <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
     <div class="callout__b"><b>Fault 2: <code>jakarta.enterprise.inject.UnsatisfiedResolutionException</code></b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Deployment aborted: <code>Unsatisfied dependencies for type AccountService</code>.</p>
-      <p style="margin:.3rem 0"><strong>Root Cause:</strong> CDI could not find any bean implementing that interface, or the module is missing <code>beans.xml</code>, or the bean class is missing a scope annotation under <code>bean-discovery-mode="annotated"</code>.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Verify <code>WEB-INF/beans.xml</code> exists and ensure the target bean has a valid CDI scope (e.g., <code>@ApplicationScoped</code>).</p>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> deployment aborted:
+        <code>Unsatisfied dependencies for type AccountService</code>.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> CDI could not find any bean implementing that
+        interface — either the module is missing <code>beans.xml</code>, or the bean class is missing a
+        scope annotation under <code>bean-discovery-mode="annotated"</code>.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> verify <code>WEB-INF/beans.xml</code> exists and
+        ensure the target bean carries a valid CDI scope (e.g. <code>@ApplicationScoped</code>).</p>
     </div>
   </div>
 
   <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
     <div class="callout__b"><b>Fault 3: <code>jakarta.enterprise.context.ContextNotActiveException</code></b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Invoking a <code>@RequestScoped</code> bean from a raw background thread (e.g., <code>new Thread(...)</code>) crashes at runtime.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Raw unmanaged Java threads have no active HTTP Request context! Use Jakarta EE Concurrency Managed Executor Service (<code>ManagedExecutorService</code>) or inject <code>@ApplicationScoped</code> singletons for background workers.</p>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> invoking a <code>@RequestScoped</code> bean from
+        a raw background thread (e.g. <code>new Thread(...)</code>) crashes at runtime.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> a raw, unmanaged Java thread has no active
+        HTTP request context, so the <code>@RequestScoped</code> scope is not alive on that thread.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> use the Jakarta EE Concurrency
+        <code>ManagedExecutorService</code>, which carries the context across, or inject an
+        <code>@ApplicationScoped</code> singleton for background work.</p>
     </div>
   </div>
 
-  <!-- Interactive Simulation Bench -->
-  <div class="bench" data-run="canned">
-    <div class="bench__head">
-      <span class="dot"></span>
-      <span class="kind">interactive simulation</span>
-      <span class="mode">CDI Qualifier &amp; Interceptor Execution Replay</span>
-    </div>
-    <pre class="bench__code"><code>// Client submits overseas payment of $4,200.00
-PaymentDispatcher.routePayment(4200.00, isOverseas: true)
-1. @Audited Interceptor captures start timestamp
-2. CDI dispatches to @International PaymentGateway (SWIFT network)
-3. Interceptor records execution time and writes audit log</code></pre>
-    <div class="bench__controls">
-      <button class="btn-run" type="button">Run CDI Pipeline</button>
-      <span class="bench__hint">Traces qualifier selection, interceptor execution, and event emission.</span>
-    </div>
-    <script type="text/plain" class="bench__canned">
-[09:20:01,001] [CDI Resolver] Injected InternationalPaymentGateway via @International qualifier.
-[09:20:01,003] [Interceptor] @Audited invoked on routePayment(4200.00, true). Start timestamp: 09:20:01.003
-[09:20:01,006] [Gateway EJB] Processing SWIFT foreign exchange wire transfer: $4,200.00 USD.
-[09:20:01,009] [CDI Event] Emitted ForeignExchangePaymentEvent.
-[09:20:01,011] [CDI Observer] CurrencyComplianceService received event. Verified AML status: CLEAN.
-[09:20:01,013] [Interceptor] @Audited finished. Method completed in 10ms. Audit ledger updated.
-    </script>
-    <pre class="bench__out" aria-live="polite"></pre>
+  <h3>3.2 Reproduce each one, then fix it</h3>
+  <p>You already reproduced Fault 1 in Step 9 by stripping the qualifiers from both the beans and the
+    injection points. Here is the full set, so you have caused all three yourself before the exam.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Ambiguous — you did this in Step 9</h4>
+      <p>Delete <code>@Domestic</code> and <code>@International</code> from the two gateway classes,
+        <em>and</em> the matching qualifiers from the two <code>@Inject</code> fields in
+        <code>PaymentDispatcher</code>, so both beans are <code>@Default</code> and both fields are bare.
+        Rebuild and redeploy. <strong>You should see</strong> the deployment stop with
+        <code>Ambiguous dependencies for type PaymentGateway with qualifiers [@Default]</code> — two
+        <code>@Default</code> beans, one bare injection point. Restore all four qualifiers and it deploys
+        again.</p>
+    </li>
+    <li>
+      <h4>Unsatisfied — remove the scope annotation</h4>
+      <p>Delete <code>@ApplicationScoped</code> from <code>DomesticPaymentGateway</code> so it is a plain
+        class with only a qualifier. Rebuild and redeploy. <strong>You should see</strong>
+        <code>Unsatisfied dependencies for type PaymentGateway with qualifiers [@Domestic]</code> — the
+        injection point still wants a <code>@Domestic</code> bean, but with no scope the class is not a
+        bean at all.</p>
+      <p><strong>The fix:</strong> give it a scope. Any valid CDI scope works; the point is that
+        <em>being discovered</em> requires a scope under annotated discovery. Restore it, rebuild,
+        redeploy.</p>
+    </li>
+    <li>
+      <h4>Context not active — call the request-scoped dispatcher from a raw thread</h4>
+      <p>In the servlet, wrap the call in a plain thread instead of calling it directly:</p>
+      <pre><code>new Thread(() -&gt; dispatcher.routePayment(amount, overseas)).start();</code></pre>
+      <p>Rebuild, redeploy, and hit the URL again. <strong>You should see</strong> a
+        <code>ContextNotActiveException</code> in the server log: the raw thread has no HTTP request, so
+        the <code>@RequestScoped</code> dispatcher has no scope to live in.</p>
+      <p><strong>The fix:</strong> either call the dispatcher on the request thread (as it did before),
+        or — if the work genuinely must go to the background — let the container manage the thread with
+        <code>ManagedExecutorService</code>, which reproduces the request context for you. Restore the
+        direct call.</p>
+    </li>
+  </ol>
+
+  <h3>3.3 Troubleshooting: the three errors beginners actually see</h3>
+  <p>When deployment or a request goes wrong, find your symptom in this table before doing anything
+    else.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>AmbiguousResolutionException</code></td>
+        <td>More than one bean matches an injection point, and nothing says which you meant</td>
+        <td>Add a <code>@Qualifier</code> to each candidate and the matching qualifier on the <code>@Inject</code> field. Do not guess — make the choice explicit.</td>
+      </tr>
+      <tr>
+        <td><code>UnsatisfiedResolutionException</code></td>
+        <td>No bean matches the injection point</td>
+        <td>Check that <code>WEB-INF/beans.xml</code> exists and that the target class carries a CDI scope annotation (e.g. <code>@ApplicationScoped</code>). A class with no scope is not a bean.</td>
+      </tr>
+      <tr>
+        <td><code>ContextNotActiveException</code></td>
+        <td>You asked for a scoped bean outside the scope it belongs to — usually <code>@RequestScoped</code> on a raw thread</td>
+        <td>Do the work on the request thread, or use <code>ManagedExecutorService</code> (or an <code>@ApplicationScoped</code> singleton) for background work so the context is preserved.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The rule that saves the most time</b>
+      CDI errors are almost always about <strong>wiring</strong>, not about your business logic. Before
+      you touch a single method body, ask the two wiring questions: <em>is there exactly one matching
+      bean for this injection point, and does that bean have a scope that is alive on this thread?</em>
+      The three exceptions above are just those two questions failing.</div>
   </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <p>Cover Part 3 and answer from memory. Then open the answers.</p>
+    <ol>
+      <li>You see <code>Unsatisfied dependencies for type AccountService</code>. What two things do you
+        check first?</li>
+      <li>Which of the three faults is a <em>runtime</em> fault rather than a deployment fault, and what
+        triggers it?</li>
+      <li>A colleague says “just add a qualifier to fix <code>ContextNotActiveException</code>.” Explain
+        why that cannot help.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>That <code>WEB-INF/beans.xml</code> exists, and that the class implementing
+          <code>AccountService</code> carries a CDI scope annotation so it is discovered as a bean.</li>
+        <li><strong><code>ContextNotActiveException</code></strong> — it is thrown when a scoped bean is
+          used outside its scope at runtime, most often a <code>@RequestScoped</code> bean touched from a
+          raw <code>new Thread()</code>. The other two stop the app at deployment.</li>
+        <li>A qualifier only decides <em>which</em> bean is injected; it says nothing about whether the
+          required scope is active. The exception means the scope is not alive on that thread — the fix
+          is to run the work where the context exists, or use <code>ManagedExecutorService</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       Assessment Quiz
+       QUIZ
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
     <h3>Consolidation Assessment (Sessions 11 &amp; 12)</h3>
@@ -212,14 +831,129 @@ PaymentDispatcher.routePayment(4200.00, isOverseas: true)
         ],
         "a": 1,
         "why": "CDI Events implement the Observer pattern: producers fire events without having any direct dependency on the observer beans."
+      },
+      {
+        "q": "A producer method opens a database connection but you never write a matching @Disposes method. What is the consequence?",
+        "opts": [
+          "Nothing — the container closes it anyway",
+          "The connection is never closed, so connections leak until the database refuses new ones",
+          "The application will not compile",
+          "The connection becomes @ApplicationScoped"
+        ],
+        "a": 1,
+        "why": "A disposer is the cleanup half of a producer. Without it, every produced instance is abandoned open — the classic resource leak."
+      },
+      {
+        "q": "Why is a custom @Qualifier safer than a @Named string label for choosing between beans?",
+        "opts": [
+          "It runs faster at runtime",
+          "It is a real type, so a mistyped qualifier fails to compile; a mistyped @Named string only breaks at runtime",
+          "@Named is not supported by CDI",
+          "It makes the bean @ApplicationScoped"
+        ],
+        "a": 1,
+        "why": "The compiler checks qualifier types, catching a typo immediately, while a @Named string is unchecked until the code runs."
       }
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the lab. It is here because exam questions and the reference guides
+    use these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>🧩 The full interceptor wiring, in order</strong></summary>
+    <p>Four pieces, each with its own annotation. Miss one and the interceptor silently never runs.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Piece</th><th>Annotation</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Binding</strong></td><td><code>@InterceptorBinding</code></td><td>The marker you invent (e.g. <code>@Audited</code>) that links interceptor to target.</td></tr>
+        <tr><td><strong>Interceptor class</strong></td><td><code>@Interceptor</code> + the binding</td><td>Holds the wrapping logic. One method is marked <code>@AroundInvoke</code>.</td></tr>
+        <tr><td><strong>The around method</strong></td><td><code>@AroundInvoke</code></td><td>Takes an <code>InvocationContext</code>, returns <code>Object</code>, and calls <code>context.proceed()</code> to run the real method.</td></tr>
+        <tr><td><strong>Enabling</strong></td><td><code>@Priority</code> (or <code>beans.xml</code>)</td><td><code>@Priority(Interceptor.Priority.APPLICATION)</code> turns it on everywhere. Without enabling, nothing happens.</td></tr>
+        <tr><td><strong>Applying</strong></td><td>the binding, on a bean or method</td><td>Tagging a method with the binding is what gets it wrapped.</td></tr>
+      </tbody>
+    </table></div>
+    <p><code>InvocationContext</code> also lets the interceptor read and change the call: <code>getMethod()</code>,
+      <code>getParameters()</code>, <code>setParameters(...)</code> and <code>getTarget()</code>.</p>
+  </details>
+
+  <details>
+    <summary><strong>🏭 Producer and disposer rules — what you can and cannot produce</strong></summary>
+    <ul>
+      <li>A producer can be a <strong>method</strong> (<code>@Produces</code> on a method) or a
+        <strong>field</strong> (<code>@Produces</code> on a field).</li>
+      <li>The produced object gets its own <strong>scope</strong> (e.g. <code>@RequestScoped</code>) and
+        its own <strong>qualifiers</strong> — put a qualifier on the producer and inject with the same
+        qualifier.</li>
+      <li>A producer method may take <strong>injected parameters</strong>; CDI supplies them before
+        calling it.</li>
+      <li>A <strong>disposer</strong> matches a producer when its <code>@Disposes</code> parameter has the
+        same type and qualifiers as the producer's return. One disposer per producer.</li>
+      <li>Only <strong>produced</strong> objects can be disposed — a disposer never fires for a bean CDI
+        constructed normally.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>📡 Event fine print — qualifiers, async and transaction phases</strong></summary>
+    <ul>
+      <li><strong>Qualified events.</strong> Observers can be narrowed with a qualifier:
+        <code>@Observes @Domestic PaymentCompletedEvent</code> only reacts to domestic payments. Add the
+        qualifier when firing with <code>eventPublisher.select(...).fire(...)</code>.</li>
+      <li><strong>Async.</strong> <code>fireAsync()</code> runs <code>@ObservesAsync</code> observers on a
+        background thread; <code>fire()</code> runs <code>@Observes</code> observers on the caller's
+        thread and makes the caller wait.</li>
+      <li><strong>Transaction-phase observers.</strong>
+        <code>@Observes(during = TransactionPhase.AFTER_SUCCESS)</code> delays the reaction until the
+        surrounding transaction commits — handy so you only notify a customer if the save actually
+        succeeded.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>🏷️ The qualifiers you already have: @Default, @Any, @Named</strong></summary>
+    <p>Qualifiers are not new — CDI has been using them invisibly all along.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Qualifier</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><code>@Default</code></td><td>Every bean with no explicit qualifier silently has this one. It is why a <em>single</em> unqualified bean injects fine — and why <em>two</em> unqualified beans clash: both are <code>@Default</code>.</td></tr>
+        <tr><td><code>@Any</code></td><td>A wildcard every bean also carries. Injecting <code>@Any Instance&lt;PaymentGateway&gt;</code> gives you <em>all</em> implementations to loop over.</td></tr>
+        <tr><td><code>@Named</code></td><td>A built-in, string-based qualifier used mainly to reach beans from Jakarta Faces (EL) pages. Avoid it for type-safe code — use your own qualifier instead.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🗂️ Bean scopes you will meet, and how long each lives</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Scope</th><th>How long the instance lives</th></tr></thead>
+      <tbody>
+        <tr><td><code>@ApplicationScoped</code></td><td>One instance for the whole application. Shared by every user — guard mutable state.</td></tr>
+        <tr><td><code>@RequestScoped</code></td><td>One instance per web request; created when the request starts, destroyed when it ends. No request, no scope.</td></tr>
+        <tr><td><code>@SessionScoped</code></td><td>One instance per HTTP session — survives several requests from the same browser.</td></tr>
+        <tr><td><code>@Dependent</code></td><td>No scope of its own: it lives exactly as long as the bean it was injected into.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The <code>@RequestScoped</code> row is the one behind
+      <code>ContextNotActiveException</code>: use it where no request is alive and there is nothing for
+      the scope to attach to.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
   <h2>One-Line Summary</h2>
   <div class="tablewrap summary"><table><tbody>
@@ -229,6 +963,81 @@ PaymentDispatcher.routePayment(4200.00, isOverseas: true)
     <tr><td><strong>In-Memory Events</strong></td><td><code>Event&lt;T&gt;</code> and <code>@Observes</code> deliver loosely coupled publish-subscribe messaging.</td></tr>
     <tr><td><strong>Troubleshooting</strong></td><td>Check <code>beans.xml</code> for missing beans; ensure thread management matches active scopes.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Two beans implement one interface and you <code>@Inject</code> it bare</td>
+        <td>Add a qualifier to each bean and the same qualifier at the injection point.</td>
+      </tr>
+      <tr>
+        <td>Telling beans apart with <code>@Named("x")</code> strings</td>
+        <td>Use a type-safe <code>@Qualifier</code> annotation, checked by the compiler.</td>
+      </tr>
+      <tr>
+        <td>A bean class with no scope annotation under annotated discovery</td>
+        <td>Add a scope such as <code>@ApplicationScoped</code>, or CDI will not see it as a bean and you get <code>UnsatisfiedResolutionException</code>.</td>
+      </tr>
+      <tr>
+        <td>A producer that opens a resource but has no disposer</td>
+        <td>Write the matching <code>@Disposes</code> method so CDI closes it when the scope ends.</td>
+      </tr>
+      <tr>
+        <td>Pasting timing or logging code into every business method</td>
+        <td>Move it into one <code>@AroundInvoke</code> interceptor and tag methods with your binding.</td>
+      </tr>
+      <tr>
+        <td>Writing an interceptor but never enabling it</td>
+        <td>Give it <code>@Priority</code> (or list it in <code>beans.xml</code>), or it silently never runs.</td>
+      </tr>
+      <tr>
+        <td>Forgetting <code>context.proceed()</code> in an interceptor</td>
+        <td>Call it — otherwise the real method never executes at all.</td>
+      </tr>
+      <tr>
+        <td>Invoking a <code>@RequestScoped</code> bean from a raw <code>new Thread()</code></td>
+        <td>Keep the work on the request thread, or use <code>ManagedExecutorService</code> so the context is carried across.</td>
+      </tr>
+      <tr>
+        <td>A publisher calling each reaction directly</td>
+        <td>Fire a CDI event and let <code>@Observes</code> methods react, so new reactions need no change to the publisher.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this review turns up again in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this review</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Inject</code> and scopes — the foundations under all of this</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI Part 1</a></td></tr>
+      <tr><td>Qualifiers, producers, interceptors and events in depth</td><td><a href="session-12-cdi-part2.html">Session 12 — CDI Part 2</a></td></tr>
+      <tr><td>Qualifiers and producers feeding security beans</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+      <tr><td>Interceptors — how the container applies transactions</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>CDI events versus real message queues across machines (JMS)</td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a></td></tr>
+      <tr><td>Producing and injecting external resources</td><td><a href="session-08-connectors.html">Session 8 — Jakarta Connectors</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/cdi/" target="_blank" rel="noopener">Jakarta Contexts and Dependency Injection (CDI) Specification</a></li>
+          <li><a href="https://docs.jboss.org/weld/reference/latest/en-US/html/" target="_blank" rel="noopener">JBoss Weld (CDI Reference Implementation) Documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

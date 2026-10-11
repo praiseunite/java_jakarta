@@ -14,7 +14,7 @@
     { slug: "01-setup",              file: "01-setup.html",              unit: "Prep",    title: "Set up your environment" },
 
     { group: "Week 1 — Core EJB Architecture (TL01–TL04)" },
-    { slug: "s01-02",  file: "session-01-02-intro-and-beans.html",  unit: "TL01", title: "Introduction & Session Bean Types (S1–S2)" },
+    { slug: "s01-02",  file: "session-01-02-intro-and-beans.html",  unit: "TL01", title: "Enterprise Beans, Explained Slowly (S1–S2)" },
     { slug: "s03",     file: "session-03-resource-creation.html",   unit: "TL02", title: "Resource Creation in Jakarta EJB (S3)" },
     { slug: "s04",     file: "session-04-working-with-ejb.html",    unit: "TL03", title: "Working with Jakarta Enterprise Beans (S4)" },
     { slug: "s04t",    file: "session-04-tiy.html",                 unit: "TL04", title: "Try It Yourself: Sessions 1–4" },
@@ -25,6 +25,8 @@
     { slug: "s07t",    file: "session-07-tiy.html",                 unit: "TL07", title: "Try It Yourself: Sessions 5–6" },
     { slug: "s07",     file: "session-07-messaging.html",           unit: "TL08", title: "Jakarta Messaging (JMS) (S7)" },
 
+    { slug: "ss1",     file: "self-study-1.html",                   unit: "SS1",  title: "Self-Study Block 1 — Sessions 1–8: revision, assignments & labs" },
+
     { group: "Week 3 — Connectors & Transactions (TL09–TL12)" },
     { slug: "s08",     file: "session-08-connectors.html",          unit: "TL09", title: "Jakarta Connectors Architecture (S8)" },
     { slug: "s08t",    file: "session-08-tiy.html",                 unit: "TL10", title: "Try It Yourself: Sessions 7–8" },
@@ -32,15 +34,22 @@
     { slug: "s10",     file: "session-10-ejb-transactions.html",    unit: "TL11b", title: "EJB Transactions & JNDI (S10)" },
     { slug: "s10t",    file: "session-10-tiy.html",                 unit: "TL12", title: "Try It Yourself: Sessions 9–10" },
 
-    { group: "Week 4 — CDI Framework (TL13–TL16)" },
+    { group: "Week 4 — CDI & Security (TL13–TL17)" },
     { slug: "s11",     file: "session-11-cdi-part1.html",           unit: "TL13", title: "Jakarta CDI – Part I (S11)" },
-    { slug: "s12",     file: "session-12-cdi-part2.html",           unit: "TL14", title: "Jakarta CDI – Part II (S12)" },
+    { slug: "s12",     file: "session-12-cdi-part2.html",           unit: "TL14+16", title: "Jakarta CDI – Part II (S12)" },
     { slug: "s12t",    file: "session-12-tiy.html",                 unit: "TL15", title: "Try It Yourself: Sessions 11–12" },
-    { slug: "s13",     file: "session-13-cdi-beans-security.html",  unit: "TL16", title: "CDI Beans: Qualifiers & Events (S13)" },
+    { slug: "s13",     file: "session-13-cdi-beans-security.html",  unit: "TL17", title: "Jakarta Security, Explained Slowly (S13)" },
 
-    { group: "Week 5 — Security & Packaging (TL17–TL20)" },
-    { slug: "s14",     file: "session-14-packaging.html",           unit: "TL18", title: "Packaging Jakarta Applications (S14)" },
+    { group: "Week 5 — Packaging & Deployment (TL18–TL20)" },
+    { slug: "s14",     file: "session-14-packaging.html",           unit: "TL18+19", title: "Packaging Jakarta Applications (S14)" },
     { slug: "s14t",    file: "session-14-tiy.html",                 unit: "TL20", title: "Try It Yourself: Sessions 13–14" },
+
+    { slug: "ss2",     file: "self-study-2.html",                   unit: "SS2",  title: "Self-Study Block 2 — Sessions 9–14: revision, assignments & labs" },
+
+    { group: "Practicum — build it for real" },
+    { slug: "p1",     file: "practical-01-core.html",               unit: "P21", title: "Practical 1 — Build the Core (S1–S4)" },
+    { slug: "p2",     file: "practical-02-front-door.html",         unit: "P22", title: "Practical 2 — The Front Door (S5–S10)" },
+    { slug: "p3",     file: "practical-03-secure-ship.html",        unit: "P23", title: "Practical 3 — Secure & Ship (S11–S14)" },
 
     { group: "Bonus Material" },
     { slug: "13-jpa-persistence", file: "13-jpa-persistence.html",   unit: "Bonus",       title: "JPA: Storing Objects Properly" },
@@ -124,7 +133,13 @@
       a.href = m.file;
       if (m.slug === SLUG) a.setAttribute("aria-current", "page");
       if (done[m.slug]) a.classList.add("is-done");
-      var n = m.unit.replace(/[^0-9]/g, "") || "·";
+      /* The badge repeats the manual's own unit code, so a student can map a page
+         straight back to the Presenter's Manual. "TL" is dropped to keep it short;
+         the a/b split (TL11a/TL11b) and the merged units (TL14+16) must survive,
+         which is why this is not a digits-only strip. */
+      var n = /^TL/.test(m.unit) ? m.unit.slice(2)
+            : /^[A-Z]+\d/.test(m.unit) ? m.unit
+            : "·";
       a.innerHTML = "<span class='num'>" + n + "</span><span class='label'>" + m.title + "</span><span class='tick'>✓</span>";
       li.appendChild(a);
       list.appendChild(li);
@@ -255,6 +270,46 @@
     });
   }
 
+  /* ---- YouTube click-to-load --------------------------------------- */
+  function initVideos() {
+    document.querySelectorAll("[data-yt]").forEach(function (card) {
+      var id = card.getAttribute("data-yt");
+      var title = card.getAttribute("data-title");
+      if (!title) {
+        var h4 = card.querySelector(".video-card__info h4");
+        title = h4 ? h4.textContent.trim() : "Watch Masterclass";
+      }
+      var embed = card.querySelector(".video-card__embed");
+      if (!embed || !/^[\w-]{11}$/.test(id)) return;
+      embed.innerHTML = "";
+      var ph = document.createElement("button");
+      ph.type = "button";
+      ph.className = "video-card__placeholder";
+      ph.innerHTML = '<span class="play-icon">▶</span><span class="ph-title"></span><span class="ph-note">Click to stream (requires internet)</span>';
+      ph.querySelector(".ph-title").textContent = title;
+      embed.appendChild(ph);
+      ph.addEventListener("click", function () {
+        var iframe = document.createElement("iframe");
+        iframe.src = "https://www.youtube-nocookie.com/embed/" + id + "?autoplay=1&rel=0";
+        iframe.setAttribute("allowfullscreen", "");
+        iframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture");
+        iframe.title = title;
+        embed.innerHTML = "";
+        embed.appendChild(iframe);
+      });
+      var info = card.querySelector(".video-card__info");
+      if (info && !info.querySelector(".video-card__link")) {
+        var a = document.createElement("a");
+        a.className = "video-card__link";
+        a.href = "https://www.youtube.com/watch?v=" + id;
+        a.target = "_blank";
+        a.rel = "noopener";
+        a.textContent = "Open on YouTube ↗";
+        info.appendChild(a);
+      }
+    });
+  }
+
   /* ---- Assemble ------------------------------------------------- */
   document.addEventListener("DOMContentLoaded", function () {
     var page = document.querySelector("main.page");
@@ -281,6 +336,7 @@
     updateThemeLabel();
     refreshProgress();
     buildQuizzes();
+    initVideos();
 
     // expose a tiny hook for other scripts / index page
     window.Course = { PAGES: PAGES, done: function () { return readDone(); }, refreshProgress: refreshProgress };

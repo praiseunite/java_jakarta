@@ -1,36 +1,94 @@
 <title>Try It Yourself — Review &amp; Consolidation (Sessions 7 &amp; 8)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Try It Yourself Review for Sessions 7 & 8: Asynchronous messaging pipelines, Message-Driven Beans, JCA Resource Adapters, and robust JDBC transactions.">
+<meta name="description" content="A hands-on lab for Sessions 7 and 8: build, deploy and run a real asynchronous order pipeline — a JMS producer, a queued message, a message-driven bean, and a pooled JDBC insert — then learn to fix the three faults a beginner actually hits.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s08t";</script>
 
 <main class="page">
 
   <h1>Try It Yourself · Review &amp; Consolidation (Sessions 7 &amp; 8)</h1>
-  <p class="lede">Sessions 7 and 8 tackled the enterprise integration backplane: decoupling high-load workflows with
-    <strong>Jakarta Messaging (JMS)</strong> and connecting to enterprise backends and relational databases using
-    <strong>Jakarta Connectors Architecture (JCA)</strong> and <strong>JDBC</strong>. This review synthesizes both into an integrated asynchronous data pipeline.</p>
+  <p class="lede">Sessions 7 and 8 built the enterprise integration backplane: <strong>Jakarta Messaging
+    (JMS)</strong>, which decouples slow work so users never wait for it, and <strong>Jakarta Connectors
+    (JCA)</strong> plus <strong>JDBC</strong>, which reach outside the application for data. This page
+    turns both into one thing you can actually run: a <strong>web request answered in milliseconds</strong>,
+    a message that waits on a queue, a <strong>message-driven bean</strong> that picks it up in the
+    background, and a row that appears in the database — built, deployed and proved on your own WildFly.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL10)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Trace an asynchronous processing pipeline: Web Producer → JMS Queue → MDB Consumer → JDBC Database Update</li>
-        <li>Contrast Point-to-Point queuing with Publish/Subscribe event broadcasting under production loads</li>
-        <li>Implement bulletproof JDBC resource management inside an asynchronous transaction</li>
-        <li>Diagnose and prevent message loops, Dead Letter Queue (DLQ) escalations, and database connection pool leaks</li>
+        <li><strong>Every step is typed, not described.</strong> You get the exact command or the exact code,
+          and then a line telling you what you should see if it worked.</li>
+        <li><strong>You build one real thing.</strong> A working asynchronous order pipeline — JMS producer,
+          queue, message-driven bean, JDBC insert — on your own server. Not a diagram.</li>
+        <li><strong>Every failure is listed.</strong> The three faults beginners actually hit, with the cause
+          and the fix for each.</li>
+        <li><strong>Nothing is assumed.</strong> JDK 17, Maven and WildFly from Sessions 1–6 are all you need.
+          The JCA material and the dense lookups are moved into the collapsed Reference section at the end.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       Part 1: The Integrated Asynchronous Architecture
-       ===================================================================== -->
-  <span class="eyebrow">consolidation</span>
-  <h2>Part 1 · The Asynchronous Processing Pipeline</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a list copied from a manual — six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Trace a request through Web Producer → JMS Queue → MDB → JDBC, and say what each stage is for</td><td>Part 1</td></tr>
+      <tr><td>Explain why the user gets an answer in 1–3 ms even though the database write happens later</td><td>Part 1</td></tr>
+      <tr><td>Create a JMS queue and confirm a datasource on WildFly with one command each</td><td>Part 2</td></tr>
+      <tr><td>Write, build and deploy a message-driven bean that turns a message into a database row</td><td>Part 2</td></tr>
+      <tr><td>Prove the work really happened in the background — in the server log <em>and</em> in the database</td><td>Part 2</td></tr>
+      <tr><td>Diagnose a poison message, a connection-pool leak, and a SQL injection hole</td><td>Part 3</td></tr>
+    </tbody>
+  </table></div>
 
-  <p>In high-throughput enterprise systems, user-facing web tiers do not execute expensive database writes directly.
-    Instead, the web tier acts as a <strong>JMS Producer</strong>, and a pooled <strong>Message-Driven Bean (MDB)</strong>
-    acts as the consumer, performing the database write via a pooled JDBC connection:</p>
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small label on the left of each block tells you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// lab</code> — do this on your own machine, in order.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch a replay. Nothing touches your computer.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// troubleshooting</code> — a fault, its symptom, and the fix.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Parts 1 and 3 are reading. Part 2 is the lab: open a terminal next to it and work through the numbered
+      steps in order, checking the “what you should see” line before moving on.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — THE PIPELINE, IN PLAIN WORDS
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · The pipeline, in plain words</h2>
+
+  <h3>1.1 Why a checkout page should not wait</h3>
+  <p>A customer clicks <strong>Pay</strong>. Behind that one click the system has to charge the card,
+    reserve the stock, generate an invoice and send a confirmation email. If the page does all of that
+    before it answers, the customer stares at a spinner for as long as the slowest step takes — and if any
+    single step is down, the whole click fails, even the parts that would have worked.</p>
+  <p>So a high-throughput web tier does <strong>one small thing</strong> instead. It drops a note describing
+    the order onto a <strong>queue</strong> and answers the customer immediately. A separate, invisible
+    worker picks the note up later and does the slow work. The web tier that writes to the queue is the
+    <strong>JMS Producer</strong>; the background worker that reads from it is a <strong>Message-Driven
+    Bean (MDB)</strong>; and the database write happens over a <strong>pooled JDBC connection</strong>.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>The web page takes the order. Somebody else cooks it.</p>
+    <p>The customer is told “order received” in a few milliseconds. The kitchen works through the ticket
+      when it can — even if that is ten seconds later, and even if the customer has already closed the tab.</p>
+  </div>
+
+  <h3>1.2 The four stages, and who does what</h3>
+  <p>That whole idea has four stages. Read the table left to right: each stage hands its work to the next,
+    and never the other way round.</p>
 
   <div class="tablewrap"><table>
     <thead><tr><th>Stage</th><th>Component</th><th>Technology Used</th><th>Operational Latency</th></tr></thead>
@@ -62,14 +120,218 @@
     </tbody>
   </table></div>
 
-  <!-- =====================================================================
-       Part 2: Code Walkthrough
-       ===================================================================== -->
-  <span class="eyebrow">code walkthrough</span>
-  <h2>Part 2 · Assembling the End-to-End Pipeline</h2>
+  <div class="callout callout--analogy"><span class="callout__i">🍳</span>
+    <div class="callout__b"><b>Analogy</b>
+      Stage 1 is the waiter writing your ticket and pinning it on the rail. Stage 2 is the rail itself — it
+      holds tickets safely even when the kitchen is slammed. Stage 3 is whichever cook is free grabbing the
+      next ticket. Stage 4 is that cook plating the dish. The customer never waits for the cooking; they
+      only wait for the waiter.</div>
+  </div>
 
-  <div class="code-head">1. The Asynchronous MDB Consumer with JDBC Persistence</div>
-  <pre><code>package com.globalbank.messaging;
+  <h3>1.3 Watch the pipeline run before you build it</h3>
+  <p>Press <strong>Run</strong>. This is a replay of a real server log: three orders are sent to the queue,
+    and then — note the timestamps — the MDB workers drain them in the background.</p>
+
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Full Async JMS + JDBC Pipeline Execution</span>
+    </div>
+    <pre class="bench__code"><code>// High-volume batch: 3 orders sent to JMS Queue
+producer.send(orderQueue, "ORDER #881: 2x SSD Laptop");
+producer.send(orderQueue, "ORDER #882: 1x Monitor");
+producer.send(orderQueue, "ORDER #883: 4x USB Hub");
+// MDB worker pool drains queue and executes parameterized JDBC INSERTs</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Async Pipeline</button>
+      <span class="bench__hint">Traces asynchronous broker message delivery and pooled JDBC transaction commits.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:18:22,001] [Web Producer] Dispatched 3 messages to 'java:/jms/queue/OrderQueue' (took 4ms total).
+[08:18:22,012] [MDB Pool #1] OrderProcessingMDB received MessageID: ID:001 -> "ORDER #881"
+[08:18:22,015] [MDB Pool #1] Leased connection from PostgreSQL pool. Executing PreparedStatement.executeUpdate().
+[08:18:22,018] [MDB Pool #1] Insert committed. Connection returned to pool. Message #001 acknowledged.
+[08:18:22,021] [MDB Pool #2] OrderProcessingMDB received MessageID: ID:002 -> "ORDER #882"
+[08:18:22,024] [MDB Pool #2] Insert committed. Connection returned to pool. Message #002 acknowledged.
+[08:18:22,028] [MDB Pool #1] OrderProcessingMDB received MessageID: ID:003 -> "ORDER #883"
+[08:18:22,031] [MDB Pool #1] Insert committed. All 3 asynchronous orders successfully persisted.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>What you just saw</b>
+      One producer call took <strong>4 ms total</strong> for three orders — that is the number the customer
+      waits for. Everything after it happened later, on other threads, and the customer was not connected
+      to any of it. Notice that <strong>two different worker instances</strong> were used: the container
+      keeps a pool of MDBs, exactly like a pool of stateless beans.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>If the database is switched off while a message is being sent, does the customer's click fail?</li>
+      <li>Which stage would still be working if the customer had already closed their browser?</li>
+      <li>Why can the web tier answer in 1–3 ms when the database write may take fifty?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>No.</strong> The click only had to reach the queue. The database is not touched until
+          stage 4, long after the browser was answered. If the write does fail, the message is retried or
+          parked on the Dead Letter Queue (Part 3) — the user never sees it.</li>
+        <li><strong>Stages 3 and 4 — the MDB and the JDBC insert.</strong> They run on their own threads,
+          with no connection to the browser at all. That is what “asynchronous” means.</li>
+        <li>Because the web tier <strong>only writes a message</strong>. The slow work was handed to the
+          queue, and the MDB does it later. The producer never waits for stage 3 or 4.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — BUILD THE PIPELINE YOURSELF
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Build the pipeline yourself</h2>
+  <p>Everything from here is typed on your own machine, in order. Ten steps. Do not skip the “what you
+    should see” lines — they are how you catch a mistake while it is still small.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What you will have at the end</b>
+      A working web address — <code>http://localhost:8080/async-orders/order?item=SSD%20Laptop</code> — that
+      answers <strong>instantly</strong>, and a new row in the <code>processed_orders</code> table that was
+      written <strong>afterwards, in the background, by a message-driven bean</strong>. Not a simulation.</div>
+  </div>
+
+  <h3>2.1 The three classes you are about to write</h3>
+  <p>One small web application, packaged as <code>async-orders.war</code>, holds three classes. Keep their
+    jobs separate in your head — that separation <em>is</em> the architecture.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Class</th><th>Its one job</th></tr></thead>
+    <tbody>
+      <tr><td><code>OrderServlet</code> (web tier)</td><td>Answer a URL. It hands the order to the sender and returns immediately.</td></tr>
+      <tr><td><code>OrderSender</code> (producer)</td><td>Put the order text onto the JMS queue. Stage 1.</td></tr>
+      <tr><td><code>OrderProcessingMDB</code> (consumer)</td><td>Wake up when a message arrives and write it into the database with JDBC. Stages 3 and 4.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>2.2 Before you begin</h3>
+  <p>Four things must be ready. If any is missing, the session that installs it is named beside it.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>What</th><th>Check it with</th><th>You want to see</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>JDK 17</td><td><code>java -version</code></td><td><code>openjdk version "17…</code></td></tr>
+      <tr><td>2</td><td>Maven</td><td><code>mvn -v</code></td><td><code>Apache Maven 3.9…</code></td></tr>
+      <tr><td>3</td><td>WildFly 30+, running</td><td>open <code>http://localhost:9990</code></td><td>the management console login</td></tr>
+      <tr><td>4</td><td>PostgreSQL, with the <code>GlobalBankDS</code> datasource from Session 3</td><td>step 2 below</td><td><code>jndi-name =&gt; "java:/jdbc/GlobalBankDB"</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Create the JMS queue (stage 2)</h4>
+      <p>A queue does not exist until an administrator makes it. Connect to WildFly's management CLI and add
+        one. On Windows use <code>jboss-cli.bat</code> instead of <code>jboss-cli.sh</code>; in both,
+        <code>$WILDFLY_HOME</code> means the folder you unzipped WildFly into.</p>
+      <pre><code>$WILDFLY_HOME/bin/jboss-cli.sh --connect
+
+/subsystem=messaging-activemq/server=default/jms-queue=OrderQueue:add(entries=["java:/jms/queue/OrderQueue"])</code></pre>
+      <p><strong>What you should see:</strong> the line</p>
+      <pre><code>{"outcome" =&gt; "success"}</code></pre>
+      <p>Now confirm it, and note the exact JNDI name it printed — your code will ask for that string
+        character for character:</p>
+      <pre><code>/subsystem=messaging-activemq/server=default/jms-queue=OrderQueue:read-resource</code></pre>
+      <p><strong>What you should see:</strong> a block containing
+        <code>"entries" =&gt; ["java:/jms/queue/OrderQueue"]</code> —
+        which is exactly the <code>destinationLookup</code> value used in step 5.</p>
+      <p>If you instead see <code>"outcome" =&gt; "failed"</code> with <em>“Duplicate resource”</em>, the
+        queue already exists: that is fine, carry on.</p>
+    </li>
+
+    <li>
+      <h4>Confirm the datasource (stage 4)</h4>
+      <p>The MDB will ask for a pooled <code>DataSource</code> by its JNDI name. Check the one Session 3
+        created:</p>
+      <pre><code>/subsystem=datasources/data-source=GlobalBankDS:read-resource</code></pre>
+      <p><strong>What you should see:</strong> a block whose first line is</p>
+      <pre><code>"jndi-name" =&gt; "java:/jdbc/GlobalBankDB",</code></pre>
+      <p>If you get <em>“not found”</em>, add it now with the same command Session 3 used, then run
+        <code>reload</code>:</p>
+      <pre><code>/subsystem=datasources/data-source=GlobalBankDS:add( \
+    jndi-name="java:/jdbc/GlobalBankDB", \
+    driver-name="postgresql", \
+    connection-url="jdbc:postgresql://localhost:5432/globalbank", \
+    user-name="bank_admin", \
+    password="SecretPassword123", \
+    min-pool-size=5, \
+    max-pool-size=25, \
+    pool-prefill=true \
+)</code></pre>
+    </li>
+
+    <li>
+      <h4>Create the table the MDB will write into</h4>
+      <p>The MDB runs one <code>INSERT</code>. Give it a table to insert into. From a PostgreSQL prompt:</p>
+      <pre><code>CREATE TABLE processed_orders (
+    id            BIGSERIAL PRIMARY KEY,
+    order_payload VARCHAR(255) NOT NULL,
+    processed_at  TIMESTAMP    NOT NULL DEFAULT NOW()
+);</code></pre>
+      <p>Or straight from your shell:</p>
+      <pre><code>psql -U bank_admin -d globalbank -c "CREATE TABLE IF NOT EXISTS processed_orders (id BIGSERIAL PRIMARY KEY, order_payload VARCHAR(255) NOT NULL, processed_at TIMESTAMP NOT NULL DEFAULT NOW());"</code></pre>
+      <p><strong>What you should see:</strong> <code>CREATE TABLE</code>. Confirm with
+        <code>SELECT COUNT(*) FROM processed_orders;</code> → <code>0</code>. Remember that zero; step 9
+        changes it.</p>
+    </li>
+
+    <li>
+      <h4>Create the project skeleton and its build file</h4>
+      <p>Make a folder called <code>async-orders</code> and inside it create this <code>pom.xml</code>. Only
+        the <code>packaging</code> line and the single dependency really matter — the rest is bookkeeping.</p>
+      <div class="code-head">pom.xml</div>
+      <pre><code>&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;async-orders&lt;/artifactId&gt;
+  &lt;version&gt;1.0&lt;/version&gt;
+  &lt;packaging&gt;war&lt;/packaging&gt;
+
+  &lt;properties&gt;
+    &lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+  &lt;/properties&gt;
+
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+      &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+      &lt;version&gt;10.0.0&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/project&gt;</code></pre>
+      <p><code>&lt;packaging&gt;war&lt;/packaging&gt;</code> means “build me a <code>.war</code>”.
+        <code>&lt;scope&gt;provided&lt;/scope&gt;</code> means “I need the Jakarta EE API to compile, but the
+        server already ships its own copy — do not bundle mine.” Getting that wrong causes confusing version
+        clashes at deploy time.</p>
+    </li>
+
+    <li>
+      <h4>Write the message-driven bean — the heart of the lab</h4>
+      <p>Create <code>src/main/java/com/globalbank/messaging/OrderProcessingMDB.java</code>. This single
+        class does stages 3 and 4: it listens on the queue, and on each message it opens a pooled JDBC
+        connection and inserts a row.</p>
+      <div class="code-head">OrderProcessingMDB.java</div>
+      <pre><code>package com.globalbank.messaging;
 
 import jakarta.annotation.Resource;
 import jakarta.ejb.ActivationConfigProperty;
@@ -120,17 +382,222 @@ public class OrderProcessingMDB implements MessageListener {
         }
     }
 }</code></pre>
+      <p>Read it once, because every line is doing a job you have already met:</p>
+      <ul>
+        <li><code>@MessageDriven</code> with <code>destinationLookup</code> ties this class to
+          <code>java:/jms/queue/OrderQueue</code> — the exact name you printed in step 1.
+          <code>destinationType</code> says the destination is a <strong>Queue</strong>, not a Topic.</li>
+        <li><code>@Resource(lookup = "java:/jdbc/GlobalBankDB")</code> injects the
+          <strong>pooled</strong> datasource. You never open a raw connection yourself.</li>
+        <li><code>onMessage()</code> is called by <strong>the container</strong>, once per message. Nobody
+          in your code ever calls it.</li>
+        <li><code>try (Connection conn = …)</code> is <strong>try-with-resources</strong>. It returns the
+          connection to the pool even if the insert throws — this is the fix for trap 2 in Part 3.</li>
+        <li><code>PreparedStatement</code> with a <code>?</code> placeholder binds the value safely — the
+          fix for trap 3. Never build SQL by concatenating strings.</li>
+        <li>Throwing a <code>RuntimeException</code> when something fails tells the container “this did not
+          work”; it rolls back and retries, or eventually moves the message to the Dead Letter Queue
+          (trap 1).</li>
+      </ul>
+    </li>
+
+    <li>
+      <h4>Write the producer and the web page that uses it (stage 1)</h4>
+      <p>The producer is a small stateless bean. It injects a managed <code>JMSContext</code> and the queue,
+        and sends. Create
+        <code>src/main/java/com/globalbank/messaging/OrderSender.java</code>:</p>
+      <div class="code-head">OrderSender.java</div>
+      <pre><code>package com.globalbank.messaging;
+
+import jakarta.annotation.Resource;
+import jakarta.ejb.Stateless;
+import jakarta.inject.Inject;
+import jakarta.jms.JMSConnectionFactory;
+import jakarta.jms.JMSContext;
+import jakarta.jms.Queue;
+
+@Stateless
+public class OrderSender {
+
+    @Inject
+    @JMSConnectionFactory("java:/ConnectionFactory")
+    private JMSContext jmsContext;          // a managed connection to the broker — do not close it
+
+    @Resource(lookup = "java:/jms/queue/OrderQueue")
+    private Queue orderQueue;               // the administered destination, looked up by name
+
+    public void submit(String order) {
+        jmsContext.createProducer().send(orderQueue, order);   // stage 1: hand it to the queue and return
+    }
+}</code></pre>
+      <p>Two lines carry the meaning: <code>@JMSConnectionFactory</code> gives you a ready-made line to the
+        broker, and <code>@Resource</code> drops the pre-made queue into the field. You do not create,
+        start or close either one — the container does.</p>
+      <p>Now the web page, at
+        <code>src/main/java/com/globalbank/web/OrderServlet.java</code>. It answers one URL, hands the value
+        to the sender, and prints its reply <em>before</em> any database work has happened:</p>
+      <div class="code-head">OrderServlet.java</div>
+      <pre><code>package com.globalbank.web;
+
+import com.globalbank.messaging.OrderSender;
+import jakarta.ejb.EJB;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@WebServlet("/order")
+public class OrderServlet extends HttpServlet {
+
+    @EJB
+    private OrderSender sender;             // the container injects a ready-made producer
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+
+        String item = request.getParameter("item");     // the ?item=... part of the URL
+        sender.submit("ORDER: " + item);                // drop it on the queue — this returns in ms
+
+        response.setContentType("text/plain");
+        response.getWriter().println("Order accepted (returned immediately)");
+    }
+}</code></pre>
+      <p>Notice what is <strong>not</strong> here: no database call, no waiting, no SQL. The servlet's whole
+        job is to hand the order over and answer. The MDB does everything else — later.</p>
+    </li>
+
+    <li>
+      <h4>Build it</h4>
+      <p>From inside the <code>async-orders</code> folder:</p>
+      <pre><code>mvn clean package</code></pre>
+      <p><strong>What you should see:</strong> <code>BUILD SUCCESS</code>, and a real deployable file at
+        <code>target/async-orders.war</code>. If the build fails, scroll up and read the
+        <em>first</em> <code>ERROR</code> line, not the last.</p>
+    </li>
+
+    <li>
+      <h4>Deploy it by copying one file</h4>
+      <p>WildFly watches a folder named <code>deployments</code>. Copy the war in and the server deploys it
+        for you — no menus, no configuration. (Substitute the folder you unzipped WildFly into for
+        <code>C:\wildfly</code>.)</p>
+      <pre><code>copy target\async-orders.war  C:\wildfly\standalone\deployments\      REM  Windows
+cp   target/async-orders.war  ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p><strong>What you should see</strong> in the <em>server</em> window, within a second or two:</p>
+      <pre><code>Deployed "async-orders.war"</code></pre>
+      <p>That line is your application going live. Nothing else works until you see it.</p>
+    </li>
+
+    <li>
+      <h4>Send a message and watch the background work happen</h4>
+      <p>Open your browser at:</p>
+      <pre><code>http://localhost:8080/async-orders/order?item=SSD%20Laptop</code></pre>
+      <p><strong>What you should see in the browser — instantly:</strong></p>
+      <pre><code>Order accepted (returned immediately)</code></pre>
+      <p><strong>What you should then see in the server console, a moment later:</strong></p>
+      <pre><code>MDB received background order: ORDER: SSD Laptop</code></pre>
+      <p><strong>And in the database:</strong></p>
+      <pre><code>psql -U bank_admin -d globalbank -c "SELECT id, order_payload, processed_at FROM processed_orders;"</code></pre>
+      <p>→ one row: <code>ORDER: SSD Laptop</code>, with a <code>processed_at</code> timestamp.</p>
+      <p>Stop and appreciate this. Your browser got an answer before that row existed. The servlet wrote to
+        a queue; the container woke a pooled MDB on another thread; the MDB borrowed a pooled JDBC
+        connection, inserted the row, and handed the connection back. You wrote one annotation and one
+        business rule per class. The container wrote the rest.</p>
+    </li>
+
+    <li>
+      <h4>Prove it is really asynchronous</h4>
+      <p>Hit the URL five or six times in quick succession, changing the item each time:</p>
+      <pre><code>http://localhost:8080/async-orders/order?item=Monitor
+http://localhost:8080/async-orders/order?item=USB%20Hub
+http://localhost:8080/async-orders/order?item=Keyboard</code></pre>
+      <p>Every page answers <em>immediately</em>. Then count the rows:</p>
+      <pre><code>SELECT COUNT(*) FROM processed_orders;</code></pre>
+      <p>The count matches the number of clicks — but the clicks never waited for the inserts. That is the
+        entire reason companies put a queue in the middle, and you just proved it on your own machine.</p>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>Make the pause visible</b>
+          Stop WildFly for a second, click the link a few times (they will fail — the queue is gone with
+          the server), then notice the difference when it is running: the producer only needs the
+          <em>broker</em> to be up, not the consumer. That decoupling in time is what “temporally
+          decoupled” means in the manual's vocabulary.</div>
+      </div>
+    </li>
+
+  </ol>
+
+  <h3>2.3 When it goes wrong — the three you will actually hit</h3>
+  <p>Everyone meets these. Find your symptom, apply the fix, carry on. This is normal developer work, not
+    failure.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>NameNotFoundException: java:/jms/queue/OrderQueue</code></td>
+        <td>The queue's JNDI name in your code does not match what was registered (a typo, or step 1 was never run)</td>
+        <td>In <code>jboss-cli</code> run the <code>read-resource</code> from step 1 and copy the exact <code>entries</code> string into <code>destinationLookup</code>. Redeploy.</td>
+      </tr>
+      <tr>
+        <td><code>IJ000453: Unable to get a connection from pool</code></td>
+        <td>The connection pool is exhausted — a connection was not returned</td>
+        <td>Make sure every <code>Connection</code> and <code>PreparedStatement</code> is opened inside <code>try (…)</code>. Never call <code>close()</code> by hand in a <code>catch</code>.</td>
+      </tr>
+      <tr>
+        <td>The servlet answers, but no row ever appears</td>
+        <td>The transaction rolled back — the cause is <em>not</em> the message</td>
+        <td>Find the <strong><code>Caused by:</code></strong> line in the server log (bad column name, missing table, wrong credentials) and fix that. Look for the real cause, not the wrapper.</td>
+      </tr>
+      <tr>
+        <td>The same log line repeats endlessly, CPU climbing</td>
+        <td>A poison message the MDB keeps failing on, being redelivered forever</td>
+        <td>This is trap 1 below: cap redelivery and let the broker move it to the Dead Letter Queue.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <p>Do these in your own words, then open the answers.</p>
+    <ol>
+      <li>Below, which two annotations actually tell the container that this class is the consumer of the
+        order queue?</li>
+      <li>Your servlet has no SQL in it at all. Where did the SQL go?</li>
+      <li>Delete the <code>try (…)</code> parentheses around the connection in
+        <code>saveOrderRecord()</code> and rebuild. Predict what happens after many messages, and which
+        error from the table above you will then see.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>@MessageDriven</code> (this class is an MDB) together with
+          <code>@ActivationConfigProperty(propertyName = "destinationLookup", …)</code> (this is the
+          destination it listens on). <code>destinationType = "jakarta.jms.Queue"</code> confirms the kind.</li>
+        <li>Into the <strong>MDB</strong>, in <code>saveOrderRecord()</code>. The web tier only produces;
+          the background consumer does the persistence. That split is the lesson of Sessions 7 and 8.</li>
+        <li>Without try-with-resources the connection is never reliably returned to the pool. After enough
+          messages the pool runs dry and you see
+          <strong><code>IJ000453: Unable to get a connection from pool</code></strong> — trap 2 in Part 3.
+          Put the <code>try (…)</code> back.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       Part 3: Top Troubleshooting Gotchas
+       PART 3 — WHEN IT GOES WRONG
        ===================================================================== -->
+
   <span class="eyebrow">troubleshooting</span>
-  <h2>Part 3 · Top 3 Integration Gotchas for Sessions 7 &amp; 8</h2>
+  <h2>Part 3 · When it goes wrong — the top three integration traps</h2>
+  <p>These three faults account for most of the pain in real asynchronous systems. Learn the symptom, then
+    the fix — you will meet every one of them in production.</p>
 
   <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
-    <div class="callout__b"><b>Trap 1: The "Poison Message" Infinite Loop &amp; DLQ</b>
+    <div class="callout__b"><b>Trap 1: The “Poison Message” Infinite Loop &amp; DLQ</b>
       <p style="margin:.3rem 0"><strong>Symptom:</strong> An MDB repeatedly throws an exception on a malformed message, consuming 100% server CPU as the broker endlessly retries delivery.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Configure maximum redelivery attempts (e.g., 3 retries) in WildFly's Artemis subsystem. Once exceeded, the broker automatically diverts the failed message to a <strong>Dead Letter Queue (DLQ)</strong> for administrative inspection.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Configure maximum redelivery attempts (e.g., 3 retries) in WildFly's Artemis subsystem. Once exceeded, the broker automatically diverts the failed message to a <strong>Dead Letter Queue (DLQ)</strong> for administrative inspection. The exact CLI commands are in the Reference at the end.</p>
     </div>
   </div>
 
@@ -148,38 +615,41 @@ public class OrderProcessingMDB implements MessageListener {
     </div>
   </div>
 
-  <!-- Interactive Simulation Bench -->
-  <div class="bench" data-run="canned">
-    <div class="bench__head">
-      <span class="dot"></span>
-      <span class="kind">interactive simulation</span>
-      <span class="mode">Full Async JMS + JDBC Pipeline Execution</span>
-    </div>
-    <pre class="bench__code"><code>// High-volume batch: 3 orders sent to JMS Queue
-producer.send(orderQueue, "ORDER #881: 2x SSD Laptop");
-producer.send(orderQueue, "ORDER #882: 1x Monitor");
-producer.send(orderQueue, "ORDER #883: 4x USB Hub");
-// MDB worker pool drains queue and executes parameterized JDBC INSERTs</code></pre>
-    <div class="bench__controls">
-      <button class="btn-run" type="button">Run Async Pipeline</button>
-      <span class="bench__hint">Traces asynchronous broker message delivery and pooled JDBC transaction commits.</span>
-    </div>
-    <script type="text/plain" class="bench__canned">
-[08:18:22,001] [Web Producer] Dispatched 3 messages to 'java:/jms/queue/OrderQueue' (took 4ms total).
-[08:18:22,012] [MDB Pool #1] OrderProcessingMDB received MessageID: ID:001 -> "ORDER #881"
-[08:18:22,015] [MDB Pool #1] Leased connection from PostgreSQL pool. Executing PreparedStatement.executeUpdate().
-[08:18:22,018] [MDB Pool #1] Insert committed. Connection returned to pool. Message #001 acknowledged.
-[08:18:22,021] [MDB Pool #2] OrderProcessingMDB received MessageID: ID:002 -> "ORDER #882"
-[08:18:22,024] [MDB Pool #2] Insert committed. Connection returned to pool. Message #002 acknowledged.
-[08:18:22,028] [MDB Pool #1] OrderProcessingMDB received MessageID: ID:003 -> "ORDER #883"
-[08:18:22,031] [MDB Pool #1] Insert committed. All 3 asynchronous orders successfully persisted.
-    </script>
-    <pre class="bench__out" aria-live="polite"></pre>
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>Why these three, and not others</b>
+      Notice that all three are about the <em>seam</em> between two systems, which is exactly where
+      Sessions 7 and 8 live. Trap 1 is the queue and the consumer disagreeing about a message. Trap 2 is
+      the bean and the connection pool disagreeing about who owns a connection. Trap 3 is your SQL and
+      somebody else's data disagreeing about what a value is. In every case the fix is to let the container
+      own what the container is meant to own.</div>
   </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · the three traps</b>
+    <ol>
+      <li>Your server log shows the exact same message being processed over and over, forever. Which trap is it, and where is the message eventually parked?</li>
+      <li>Which single keystroke pattern in your Java code prevents trap 2?</li>
+      <li>A colleague writes <code>"DELETE FROM orders WHERE id = " + idFromMessage</code>. Which trap, and what should the line become?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Trap 1, the poison message.</strong> After the configured maximum redelivery attempts,
+          the broker diverts it to the <strong>Dead Letter Queue</strong>.</li>
+        <li>Opening every resource inside <strong><code>try (…)</code></strong> — try-with-resources — so
+          the connection is returned to the pool even when the code throws.</li>
+        <li><strong>Trap 3, SQL injection.</strong> It should become
+          <code>PreparedStatement ps = conn.prepareStatement("DELETE FROM orders WHERE id = ?");</code>
+          followed by <code>ps.setLong(1, idFromMessage);</code> — the value is bound, never pasted.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
        Assessment Quiz
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
     <h3>Consolidation Assessment (Sessions 7 &amp; 8)</h3>
@@ -195,6 +665,17 @@ producer.send(orderQueue, "ORDER #883: 4x USB Hub");
         ],
         "a": 1,
         "why": "MDBs are server-side background workers invoked by the container whenever a message arrives on their subscribed destination."
+      },
+      {
+        "q": "In the pipeline you built, which component answers the user's web request, and when?",
+        "opts": [
+          "The MDB, after the database insert finishes",
+          "The web tier (producer), immediately after it writes the message to the queue",
+          "The database, when it returns the inserted row",
+          "The DLQ, once the message is parked"
+        ],
+        "a": 1,
+        "why": "The producer returns as soon as the message is accepted by the broker, in a few milliseconds. The MDB and its JDBC insert happen later, on other threads."
       },
       {
         "q": "What happens to a message when an unrecoverable exception occurs repeatedly during MDB processing?",
@@ -217,6 +698,17 @@ producer.send(orderQueue, "ORDER #883: 4x USB Hub");
         ],
         "a": 0,
         "why": "PreparedStatement compiles query templates and binds parameters safely, preventing SQL injection while boosting performance."
+      },
+      {
+        "q": "A Queue and a Topic both carry messages. What is the essential difference?",
+        "opts": [
+          "A Queue delivers each message to exactly one consumer (1:1); a Topic broadcasts each message to every subscriber (1:N)",
+          "A Queue is slower than a Topic",
+          "A Topic cannot be used by an MDB",
+          "They are identical in every way"
+        ],
+        "a": 0,
+        "why": "Point-to-point queuing gives 1:1 delivery to one consumer; publish/subscribe topics give 1:N delivery to all subscribers."
       },
       {
         "q": "What JCA file archive wraps an enterprise resource adapter for deployment into WildFly?",
@@ -244,9 +736,119 @@ producer.send(orderQueue, "ORDER #883: 4x USB Hub");
     </script>
   </section>
 
+  <hr>
+
+  <!-- =====================================================================
+       Reference — optional depth, collapsed by default
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to finish the lab. It is here because the manual and exam questions use these
+    exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>🎯 The manual's consolidation objectives for TL10, in their own words</strong></summary>
+    <p>These are the four things this review is assessed on. Everything in them has been re-explained
+      plainly in the Parts above.</p>
+    <ol>
+      <li>Trace an asynchronous processing pipeline: Web Producer → JMS Queue → MDB Consumer → JDBC Database Update</li>
+      <li>Contrast Point-to-Point queuing with Publish/Subscribe event broadcasting under production loads</li>
+      <li>Implement bulletproof JDBC resource management inside an asynchronous transaction</li>
+      <li>Diagnose and prevent message loops, Dead Letter Queue (DLQ) escalations, and database connection pool leaks</li>
+    </ol>
+  </details>
+
+  <div class="callout callout--key"><span class="callout__i">📌</span>
+    <div class="callout__b"><b>Queue or Topic?</b>
+      A <strong>Queue</strong> is point-to-point: each message is delivered to <strong>exactly one</strong>
+      consumer (1:1). A <strong>Topic</strong> is publish/subscribe: each message is delivered to
+      <strong>every</strong> subscriber (1:N). The lab used a <code>Queue</code>, which is why
+      <code>destinationType</code> was <code>jakarta.jms.Queue</code> — and why two MDB instances split the
+      work instead of both doing it.</div>
+  </div>
+
+  <details>
+    <summary><strong>⚙️ The full WildFly CLI recipes for this lab — plus the trap-1 DLQ setup</strong></summary>
+    <p>Create and inspect the JMS queue (stage 2):</p>
+    <pre><code>/subsystem=messaging-activemq/server=default/jms-queue=OrderQueue:add(entries=["java:/jms/queue/OrderQueue"])
+/subsystem=messaging-activemq/server=default/jms-queue=OrderQueue:read-resource
+
+# Cap redelivery and send failures to the Dead Letter Queue (trap 1)
+/subsystem=messaging-activemq/server=default/address-setting=#:write-attribute(name=max-delivery-attempts, value=3)
+/subsystem=messaging-activemq/server=default/address-setting=#:write-attribute(name=dead-letter-address, value=jms.queue.DLQ)</code></pre>
+    <p>Add the PostgreSQL datasource if it is missing (stage 4):</p>
+    <pre><code>/subsystem=datasources/data-source=GlobalBankDS:add( \
+    jndi-name="java:/jdbc/GlobalBankDB", \
+    driver-name="postgresql", \
+    connection-url="jdbc:postgresql://localhost:5432/globalbank", \
+    user-name="bank_admin", \
+    password="SecretPassword123", \
+    min-pool-size=5, \
+    max-pool-size=25, \
+    pool-prefill=true \
+)
+reload</code></pre>
+    <div class="callout callout--tip"><span class="callout__i">🔬</span>
+      <div class="callout__b"><b>The one line to notice in the datasource command</b>
+        <code>jndi-name="java:/jdbc/GlobalBankDB"</code> is the DataSource announcing the name your bean asks
+        for. Everything else describes the pool. <code>min-pool-size</code> and <code>max-pool-size</code>
+        are the exact bounds trap 2 exhausts: too small and requests queue up, too large and you overwhelm
+        the database.</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><strong>📋 MDB activation config — the annotations in the lab, decoded</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation / property</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>@MessageDriven</code></td><td>Marks the class as a message-driven bean. The container, not a client, drives it.</td></tr>
+        <tr><td><code>destinationLookup = "java:/jms/queue/OrderQueue"</code></td><td>Which destination (queue or topic) this bean consumes. Must match the JNDI name exactly.</td></tr>
+        <tr><td><code>destinationType = "jakarta.jms.Queue"</code></td><td>Whether the destination is a Queue (1:1) or a Topic (1:N).</td></tr>
+        <tr><td><code>@Resource(lookup = "java:/jdbc/GlobalBankDB")</code></td><td>Injects the pooled DataSource — never a raw <code>DriverManager</code> connection.</td></tr>
+        <tr><td>implements <code>MessageListener</code></td><td>The single method <code>onMessage(Message)</code> the container calls once per delivered message.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔌 JCA in one page — resource adapters and the <code>.rar</code></strong></summary>
+    <p><strong>Jakarta Connectors (JCA)</strong> standardises how an application server plugs into an
+      <strong>Enterprise Information System (EIS)</strong> — a mainframe, an ERP like SAP, a messaging
+      system. Without a standard, every server would need its own custom driver for every system; the JCA
+      standard collapses that into <strong>M+N</strong>: each server has one standard socket, and each EIS
+      ships one standard adapter.</p>
+    <p>That adapter is packaged as a <code>.rar</code> — a <strong>Resource Adapter Archive</strong> — and
+      deployed into WildFly like any other module. Your JDBC <code>DataSource</code> is the everyday example
+      of a JCA outbound connection: the application asks for a connection by name and the adapter hands it
+      a pooled one.</p>
+    <div class="plainwords"><b>In plain words</b>
+      <p>A <code>.rar</code> is a universal travel adapter: the vendor builds it once, and it fits the
+        standard socket on any certified server. Write once, plug in anywhere.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary><strong>🧯 What the container does when <code>onMessage()</code> throws</strong></summary>
+    <ol>
+      <li>The current transaction is <strong>rolled back</strong> — the half-finished insert never happens.</li>
+      <li>The message is <strong>not acknowledged</strong>, so it stays “in flight” and is redelivered.</li>
+      <li>This repeats up to <code>max-delivery-attempts</code> times. Set too high, a single poison message
+        burns CPU forever (trap 1).</li>
+      <li>Once the limit is passed, the broker diverts the message to the <strong>Dead Letter Queue</strong>,
+        leaving the production queue clear for healthy messages.</li>
+    </ol>
+    <p>The operational habit that follows: <em>always</em> monitor the DLQ, and treat every message on it as
+      a bug report about your payload handling.</p>
+  </details>
+
+  <hr>
+
   <!-- =====================================================================
        Summary
        ===================================================================== -->
+
   <span class="eyebrow">recap</span>
   <h2>One-Line Summary</h2>
   <div class="tablewrap summary"><table><tbody>
@@ -256,6 +858,51 @@ producer.send(orderQueue, "ORDER #883: 4x USB Hub");
     <tr><td><strong>Parameterized SQL</strong></td><td>Always use <code>PreparedStatement</code> to prevent SQL injection and reuse compiled plans.</td></tr>
     <tr><td><strong>Safe Pooling</strong></td><td>Always rely on try-with-resources to prevent catastrophic connection pool exhaustion.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Doing the database write inside the servlet so the user waits for it</td><td>Send to the queue and return; let the MDB persist in the background.</td></tr>
+      <tr><td>Typing the <code>destinationLookup</code> JNDI name from memory</td><td>Copy it from the queue's <code>read-resource</code> <code>entries</code> line.</td></tr>
+      <tr><td>Building SQL with <code>"… WHERE id = " + value</code></td><td>Bind the value with <code>PreparedStatement</code> and a <code>?</code> placeholder.</td></tr>
+      <tr><td>Closing a connection by hand inside <code>catch</code></td><td>Open it in <code>try (…)</code> so it is returned to the pool on every path.</td></tr>
+      <tr><td>Ignoring a repeated “failed to process message” log line</td><td>It is a poison message: cap redelivery and check the DLQ.</td></tr>
+      <tr><td>Assuming the row is written the instant the user's page answers</td><td>It is not — that is the point. Verify with the server log and the table, not with the browser.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this lab is used again — often in the very next session:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this page</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>JMS producers, queues, <code>JMSContext</code></td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a></td></tr>
+      <tr><td>Message-driven beans and <code>onMessage()</code></td><td><a href="session-07-messaging.html">Session 7 — Messaging</a> and every later MDB example</td></tr>
+      <tr><td>JCA resource adapters and <code>.rar</code> files</td><td><a href="session-08-connectors.html">Session 8 — Connectors</a></td></tr>
+      <tr><td>Transactions around the background write</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>Pooled data access and rows that survive</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+      <tr><td>Packaging and deploying the war</td><td><a href="session-14-packaging.html">Session 14 — Packaging</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/messaging/" target="_blank" rel="noopener">Jakarta Messaging (JMS) Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/connectors/" target="_blank" rel="noopener">Jakarta Connectors Architecture (JCA) Specification</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 
