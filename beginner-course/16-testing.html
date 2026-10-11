@@ -1,25 +1,196 @@
-<title>Testing & Reading Errors</title>
-<meta name="description" content="Write a JUnit test, understand the test pyramid, and get fluent at reading Java stack traces and WildFly logs.">
+<title>Testing &amp; Reading Errors, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Testing and error-reading written for people who have never written a unit test, used JUnit or deliberately read a stack trace. Why we test, a first JUnit 5 test, the test pyramid, a four-step method for stack traces, and how to read the WildFly log.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "16-testing";</script>
 
 <main class="page">
 
-  <h1>Unit 16 · Testing &amp; reading errors</h1>
-  <p class="lede">Two survival skills the original course left out: writing an automated test so you
-    <em>know</em> your logic works, and reading a stack trace so a wall of red text becomes one
-    fixable line.</p>
+  <h1>Testing &amp; reading errors</h1>
+  <p class="lede">Two survival skills that often go untaught: writing an automated
+    <strong>test</strong> so you <em>know</em> your logic works, and reading a <strong>stack
+    trace</strong> so a wall of red text becomes one fixable line. You do not need to have written a
+    test, used JUnit, or deliberately read an error before. Every difficult word gets explained the
+    moment it appears.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Each new word — test, assertion, stack
+          trace, log — gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> If a line of a test matters, it gets explained line
+          by line.</li>
+        <li><strong>You can try the hard part here.</strong> Press <em>Run</em> on a real failing
+          trace and decode it yourself.</li>
+        <li><strong>By the end you can do it for real.</strong> Write a test, run it with
+          <code>mvn test</code>, and know how to read a WildFly failure when you meet one.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Not eight bullet points from a manual — just six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say, in one sentence, why a project needs automated tests</td><td>Part 1</td></tr>
+      <tr><td>Write a JUnit 5 test using <code>@Test</code>, <code>assertEquals</code> and <code>assertThrows</code></td><td>Part 2</td></tr>
+      <tr><td>Say which kind of test to write most of, and why</td><td>Part 3</td></tr>
+      <tr><td>Turn a stack trace into "this file, this line" using a four-step method</td><td>Part 4</td></tr>
+      <tr><td>Read a WildFly console log and tell a healthy line from a broken one</td><td>Part 5</td></tr>
+      <tr><td>Answer the exam-style questions on this topic</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press <strong>Run</strong> and watch a real trace replay, line by line. Nothing touches your computer.</li>
+        <li><code>// terminal</code> — a pretend command line. Nothing you type here touches your computer.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers stay hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — WHY WE TEST AT ALL
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
-  <h2>Why test at all</h2>
-  <p>A test is code that runs your code and checks the result. Once written, it re-checks in seconds,
-    forever. It catches the bug you’d otherwise find in production at 2 a.m.</p>
+  <h2>Part 1 · Why we test at all</h2>
+
+  <h3>1.1 A test is code that checks code</h3>
+  <p>You already know how to check your work by hand: run the program, click the button, look at the
+    answer. That works — once. It tells you nothing about tomorrow, and nothing about the change you
+    have not made yet.</p>
+  <p>A <strong>test</strong> is different. It is a short piece of Java that:</p>
+  <ol>
+    <li>calls one of your methods,</li>
+    <li>compares what came back with what you expected, and</li>
+    <li>shouts if the two do not match.</li>
+  </ol>
+  <p>Once written, a test re-checks your code in <strong>seconds</strong> — and it keeps re-checking
+    it <strong>forever</strong>, every time you change anything.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A test is <strong>a robot that pokes your code and checks it still behaves</strong>. You write
+      it once; it does the poking for you from then on.</p>
+  </div>
+
+  <h3>1.2 The bug you would otherwise meet at 2 a.m.</h3>
+  <p>Here is the real argument, and it is an argument about <em>time</em>.</p>
+  <p>Imagine you change one small method. Nothing looks wrong. You ship it. Two days later the phone
+    rings: a customer cannot pay, and it is 2 a.m.</p>
+  <p>A test would have caught that same break in <strong>two seconds</strong>, on your own machine,
+    before anybody shipped anything. That is what it is for: it catches the bug you would otherwise
+    find in production, at the worst possible moment.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b>Analogy</b>
+      A smoke alarm. You fit it <em>before</em> there is a fire. You barely notice it while things are
+      fine, and it shouts the instant something starts to smoulder. A test is a smoke alarm for code —
+      completely useless the day you need it if you did not install it beforehand.</div>
+  </div>
+
+  <h3>1.3 What a test is not</h3>
+  <p>Two things people assume, wrongly:</p>
+  <ul>
+    <li><strong>A test is not a proof.</strong> It checks the cases <em>you thought of</em>. It cannot
+      promise there are no bugs — only that the bugs you tested for have been caught.</li>
+    <li><strong>A test is not something you add at the end.</strong> It is written as you go, and it
+      stays in the project, running every time the project is built.</li>
+  </ul>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The test that passes no matter what</b>
+      A test with <em>no check in it</em> — it calls your method, then does nothing — will
+      <strong>always pass, even when the code is completely broken</strong>. It gives you a warm green
+      feeling and zero safety. Every test must end in an <strong>assertion</strong>: a real comparison
+      that is allowed to fail. You will see one in Part 2.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>In one sentence, what is a test?</li>
+      <li>Why is a test more useful than clicking around by hand?</li>
+      <li>Why is a test with no check in it worse than useless?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A short piece of code that <strong>calls your code and checks the result</strong>, failing
+          if the two do not match.</li>
+        <li>Because it re-checks <strong>in seconds, forever</strong>, on every build — instead of the
+          one time you happened to try it by hand.</li>
+        <li>Because it <strong>passes whether or not the code is correct</strong>, so it gives false
+          confidence. A real test must contain an assertion that can fail.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — YOUR FIRST JUNIT 5 TEST
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
-  <h2>A JUnit 5 test</h2>
-  <div class="code-head">CalculatorBeanTest.java</div>
-  <pre><code>import org.junit.jupiter.api.Test;
+  <h2>Part 2 · Your first JUnit 5 test</h2>
+
+  <h3>2.1 What JUnit is</h3>
+  <p><strong>JUnit</strong> is a Java library whose only job is to find your test methods, run them,
+    and tell you which passed. <strong>JUnit 5</strong> is the current version, and it is the one you
+    will meet in this course.</p>
+  <p>The test below is a <strong>unit test</strong>: a test of <em>one class on its own</em>, with
+    nothing real around it. No server, no database, no container.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>Why you may write <code>new</code> here</b>
+      In a unit test you deliberately test the <strong>plain class</strong>, without the container.
+      <code>new CalculatorBean()</code> is correct here: you want the raw logic, not the machinery
+      around it. (Outside tests, you still never <code>new</code> a <em>container-managed bean</em> —
+      that rule is about beans, not about ordinary classes.)</div>
+  </div>
+
+  <h3>2.2 The class under test, then the test</h3>
+  <p>Read the concept first, then the code. Nothing here is magic — it is four familiar pieces of Java
+    wearing two new annotations. First the plain class being tested, then the test for it.</p>
+
+  <p>Here is that class in full, complete and compilable — two small methods, no framework anywhere:</p>
+  <div class="code-head">src/main/java/com/globalbank/CalculatorBean.java</div>
+  <pre><code>package com.globalbank;
+
+public class CalculatorBean {
+
+    public int add(int a, int b) {
+        return a + b;
+    }
+
+    public int divide(int a, int b) {
+        if (b == 0) {
+            throw new ArithmeticException("Cannot divide by zero!");
+        }
+        return a / b;
+    }
+}</code></pre>
+
+  <p>And here is its test. Maven keeps tests in a <strong>separate source folder</strong> that mirrors
+    the main one — <code>src/test/java/…</code>, in the same package as the class under test. Maven
+    compiles and runs everything under <code>src/test/java</code> when you type <code>mvn test</code>,
+    and never packages a test into the application you ship.</p>
+  <div class="code-head">src/test/java/com/globalbank/CalculatorBeanTest.java</div>
+  <pre><code>package com.globalbank;
+
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class CalculatorBeanTest {
@@ -38,20 +209,121 @@ class CalculatorBeanTest {
         assertEquals("Cannot divide by zero!", ex.getMessage());
     }
 }</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      There is no <code>main</code> method and no <code>System.out.println</code>. You never call
+      these methods yourself. <strong>JUnit finds every <code>@Test</code> method and runs it for
+      you</strong>, then reports which passed and which failed. That is the whole trick.</div>
+  </div>
+
   <div class="tablewrap"><table>
     <thead><tr><th>Piece</th><th>Meaning</th></tr></thead>
     <tbody>
       <tr><td><code>@Test</code></td><td>“Run this method as a test.”</td></tr>
       <tr><td><code>assertEquals(expected, actual)</code></td><td>Fail the test unless they match.</td></tr>
-      <tr><td><code>assertThrows(Type.class, () -&gt; …)</code></td><td>Fail unless the lambda throws that exception.</td></tr>
+      <tr><td><code>assertThrows(Type.class, () -&gt; …)</code></td><td>Fail unless the <strong>lambda</strong> on the right throws that exception.</td></tr>
       <tr><td>Arrange → Act → Assert</td><td>The shape of almost every test: set up, do the thing, check.</td></tr>
     </tbody>
   </table></div>
-  <p>Run them with <code>mvn test</code> (try it in the terminal on any unit page), or the green ▶ next
-    to a test method in IntelliJ.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>lambda</strong> is a small function written inline, with no name of its own. The
+      <code>() -&gt; …</code> arrow is read as “<em>whatever is on the left are the inputs → whatever
+      is on the right is the code to run</em>”. The <code>()</code> is empty because this little
+      function takes nothing.</p>
+    <p>So read <code>() -&gt; calc.divide(1, 0)</code> aloud as: “<strong>a small nameless function
+      that takes no inputs and calls <code>calc.divide(1, 0)</code></strong>”. <code>assertThrows</code>
+      runs that little function and fails unless it throws the exception you named.</p>
+  </div>
+
+  <p>An <strong>assertion</strong> is the checking line — the part that is allowed to fail. The two in
+    that test ask two completely different questions: “did it give the right answer?” and “did it
+    fail in the <em>right way</em>?”</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <code>@Test</code> method is just a normal Java method with a label on top. JUnit calls it
+      for you. Inside it, every <code>assert…</code> line is one check. If a check fails, the test
+      fails — and the report tells you exactly which one.</p>
+    <p><code>assertEquals(15, calc.add(10, 5))</code> reads as: “I expected <strong>15</strong>; the
+      code gave me <code>calc.add(10, 5)</code>. If those differ, shout.”</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍲</span>
+    <div class="callout__b"><b>Analogy</b>
+      A chef tasting the soup before it leaves the kitchen. One spoonful answers a precise question —
+      <em>“is this salty enough?”</em> — and the chef either nods or fixes it. A test is that taste,
+      performed by a robot, on every single batch, without ever getting tired.</div>
+  </div>
+
+  <h3>2.3 Arrange → Act → Assert</h3>
+  <p>Almost every test you will ever write has the same three-part shape. Naming the parts makes a
+    test easy to read at a glance:</p>
+  <ul>
+    <li><strong>Arrange</strong> — set up what the test needs (<code>new CalculatorBean()</code>).</li>
+    <li><strong>Act</strong> — do the one thing being tested (<code>calc.add(10, 5)</code>).</li>
+    <li><strong>Assert</strong> — check the result (<code>assertEquals(15, …)</code>).</li>
+  </ul>
+
+  <h3>2.4 Running your tests</h3>
+  <p>Run every test in the project with one command:</p>
+  <pre><code>mvn test</code></pre>
+  <p>Or, inside an IDE such as <strong>IntelliJ IDEA</strong> (a Java editor that can also run your
+    code), click the small green ▶ triangle in the gutter next to a test method. Both routes do the
+    same thing: JUnit runs each <code>@Test</code> and shows a green tick or a red cross.</p>
+  <p>Practise the build command in the simulated terminal below — it is safe and touches nothing on
+    your computer.</p>
+
+  <div class="terminal" data-terminal="setup">
+    <div class="terminal__bar"></div>
+    <div class="terminal__screen"></div>
+    <div class="terminal__inputline"></div>
+  </div>
+  <p style="font-size:.9rem;color:var(--ink-faint)">Try <code>help</code>, then
+    <code>mvn clean package</code> — Maven runs your tests as part of the build, before it packages
+    anything.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Testing only the happy path</b>
+      It is easy to test the one input that works — <code>add(10, 5)</code> — and stop. The bugs live
+      in the edges: zero, a negative number, an empty string, a missing value. Notice that our second
+      test checks <em>the failure case</em>, not the success case. Always test what happens when
+      something is wrong.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>What does <code>@Test</code> actually do?</li>
+      <li>What are the three parts of Arrange → Act → Assert?</li>
+      <li>What is an assertion, and why does a test without one prove nothing?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>It labels a normal method so <strong>JUnit finds it and runs it</strong> as a test. You
+          never call it yourself.</li>
+        <li><strong>Arrange</strong> the setup, <strong>Act</strong> the one thing being tested,
+          <strong>Assert</strong> the result.</li>
+        <li>A comparison that is allowed to fail (<code>assertEquals</code>,
+          <code>assertThrows</code>…). Without one, the test passes even when the code is wrong.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — THE TEST PYRAMID
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
-  <h2>The test pyramid</h2>
+  <h2>Part 3 · The test pyramid</h2>
+
+  <p>Not all tests are the same size. Some check one class in a flash; some boot a server and take
+    seconds. Because you will never have infinite time, the mix matters: you want <em>many</em> of the
+    cheap ones and <em>few</em> of the expensive ones. That shape has a name — the
+    <strong>test pyramid</strong>.</p>
+
   <div class="tablewrap"><table>
     <thead><tr><th>Level</th><th>Tests</th><th>Speed / count</th></tr></thead>
     <tbody>
@@ -60,18 +332,124 @@ class CalculatorBeanTest {
       <tr><td><strong>End-to-end</strong></td><td>The whole app through its HTTP API or UI.</td><td>Slow · fewest</td></tr>
     </tbody>
   </table></div>
-  <p>Write mostly unit tests. They’re fast enough to run on every save and pinpoint the break.</p>
+
+  <p>Two words in that table need translating:</p>
+  <ul>
+    <li><strong>Isolation</strong> means the class under test is the only real thing present. Anything
+      it depends on is replaced.</li>
+    <li>A <strong>mock</strong> is a stand-in object that pretends to be a collaborator — a fake
+      database, say — and hands back whatever you told it to, so the test does not need the real
+      thing. <em>Mock its collaborators</em> means: replace the neighbours with fakes.</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A unit test checks <strong>one class</strong>. An integration test checks <strong>a few things
+      working together</strong>. An end-to-end test drives the <strong>whole application</strong>
+      exactly as a user would.</p>
+    <p>Each step is more realistic and much slower — so you write a <strong>pyramid</strong>: a wide
+      base of fast unit tests, a smaller middle, and a thin point on top.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏥</span>
+    <div class="callout__b"><b>Analogy</b>
+      A health check-up pyramid. Everyone gets the quick routine checks — temperature, blood pressure —
+      because they take seconds and catch most problems. Far fewer people need an X-ray. Very few need
+      a full-body scan, and you would never scan every patient every visit: it is slow, costly and
+      unnecessary. Fast, cheap checks first; the big machine only where it earns its place.</div>
+  </div>
+
+  <p>So the rule is simple: <strong>write mostly unit tests.</strong> They are fast enough to run on
+    every save, and when one fails it points at a single class — which means it pinpoints the break.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The upside-down pyramid</b>
+      If almost all of your tests are end-to-end, you have built an <em>ice-cream cone</em>: slow to
+      run, painful to keep working, and — worst of all — when one fails you have no idea <em>which</em>
+      of a hundred moving parts broke. Keep the base wide and the point thin.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>Name the three levels of the pyramid, from cheapest to most expensive.</li>
+      <li>What is a mock, and why does a unit test use one?</li>
+      <li>Which level should you have the most of, and why?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Unit</strong>, then <strong>integration</strong>, then
+          <strong>end-to-end</strong>.</li>
+        <li>A stand-in object that pretends to be a collaborator, so the test can run without the real
+          database or server.</li>
+        <li><strong>Unit tests.</strong> They are fast enough to run on every save, and a failure
+          points at one class — so they pinpoint the break.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4 — READING A STACK TRACE
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
-  <h2>Reading a stack trace — the method</h2>
-  <ol>
-    <li>Read the <strong>top line</strong>: the exception type and message (<em>what</em> went wrong).</li>
-    <li>Scan down to the <strong>first frame in your own package</strong> (<code>com.globalbank.…</code>)
-      — that’s <em>where</em> in your code it blew up. Frames above it are library internals.</li>
-    <li>Read every <strong>“Caused by:”</strong> from the bottom up. The <em>deepest</em> one is the
-      root cause; the ones above are wrappers.</li>
-    <li>Open that file at that line number. Fix <em>that</em>.</li>
+  <h2>Part 4 · Reading a stack trace</h2>
+
+  <h3>4.1 What a stack trace is</h3>
+  <p>When your program crashes, the JVM prints a <strong>stack trace</strong>: the list of method
+    calls it was <em>inside</em> at the moment it blew up. The top line names what went wrong; the
+    lines below are the trail of calls it walked down to get there.</p>
+  <p>The words look intimidating purely because there are so many of them. Read as a list of clues,
+    they are not.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A stack trace is <strong>a receipt of the last few method calls before the crash</strong>.
+      Every line is “I was here”. Your job is only to find the one line that says <em>“I was
+      here — in your code.”</em></p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍞</span>
+    <div class="callout__b"><b>Analogy</b>
+      A trail of breadcrumbs through a dark forest. The trail is <em>long</em>, and most of it passes
+      through somebody else's land — libraries, frameworks, the server. You do not inspect every
+      crumb. You walk the trail until it reaches <strong>your own garden</strong>, because that is the
+      only place you can plant a fix.</div>
+  </div>
+
+  <h3>4.2 The four-step method</h3>
+  <p>Applied in this order, every time, a trace collapses into one line and one fix:</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Read the top line</h4>
+      <p>The exception type and its message tell you <em>what</em> went wrong —
+        <code>NullPointerException</code>, <code>EJBException</code>, and so on. That is the headline,
+        not the answer.</p>
+    </li>
+    <li>
+      <h4>Scan down to the first frame in your own package</h4>
+      <p>Frames look like <code>at com.globalbank.ejb.AccountService.open(AccountService.java:47)</code>.
+        Anything above it that belongs to a library is the framework's plumbing. The first line that
+        names <strong>your</strong> package (<code>com.globalbank.…</code>) is <em>where</em> in your
+        code it blew up.</p>
+    </li>
+    <li>
+      <h4>Read every “Caused by:” from the bottom up</h4>
+      <p>A trace can stack several causes, each wrapping the one below. The <strong>deepest</strong>
+        one at the bottom is the root cause; the ones above it are wrappers that only <em>reported</em>
+        the trouble.</p>
+    </li>
+    <li>
+      <h4>Open that file at that line number — and fix that</h4>
+      <p>The line number is in the frame. Go to it. That is where the fix belongs — not in the library
+        frames above it.</p>
+    </li>
   </ol>
+
+  <h3>4.3 Try it — decode a real trace</h3>
+  <p>Below is a deployment that failed. Apply the four-step method, decide your answer, then press
+    <strong>Run</strong> to check it.</p>
 
   <div class="bench" data-run="canned">
     <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">replay — decode this trace</span></div>
@@ -79,7 +457,7 @@ class CalculatorBeanTest {
 // Q: which file &amp; line do you open first, and what's the root cause?</code></pre>
     <div class="bench__controls">
       <button class="btn-run" type="button">Run</button>
-      <span class="bench__hint">Answer: AccountService.java:47 — the root cause is a NullPointerException on 'repo'.</span>
+      <span class="bench__hint">Decide your answer first, then press Run to replay the trace.</span>
     </div>
     <script type="text/plain" class="bench__canned">
 Caused by: jakarta.ejb.EJBException: Invocation failed
@@ -95,42 +473,278 @@ Fix: 'repo' was never injected. Add @Inject to the field (or check the bean is d
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The top line said <code>EJBException</code> — a big, scary, framework-sounding error. The actual
+      problem was underneath it: a <strong>missing injection</strong>, so <code>this.repo</code> was
+      <code>null</code>. The top line is only the wrapper. The <em>bottom</em> “Caused by:” is the
+      truth.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Reading the whole trace instead of the method</b>
+      Beginners read from the top down and stop at the first line — or give up on the volume. Follow
+      the four steps instead: top line for <em>what</em>, first own-package frame for <em>where</em>,
+      deepest cause for <em>why</em>. Most traces then take ten seconds, not ten minutes.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before you move on</b>
+    <ol>
+      <li>The top line of a stack trace tells you…?</li>
+      <li>Which frame is <em>where</em> the problem is, in your own code?</li>
+      <li>Which “Caused by:” is the root cause?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The exception <strong>type and message</strong> — what went wrong.</li>
+        <li>The <strong>first frame that names your own package</strong>
+          (<code>com.globalbank.…</code>). Frames above it are library internals.</li>
+        <li>The <strong>deepest one at the bottom</strong>. The ones above are wrappers that only
+          report the trouble.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 5 — READING THE WILDFLY LOG
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
-  <h2>Reading the WildFly log</h2>
+  <h2>Part 5 · Reading the WildFly log</h2>
+
+  <p>WildFly keeps a running diary of everything it does. Most of it scrolls past harmlessly. A
+    handful of lines tell you the few things you actually care about — whether the server is up,
+    whether <em>your</em> application deployed, and what its bean names are.</p>
+  <p>You are not going to read the whole thing. You are going to <strong>scan for a few
+    signatures</strong>. Here they are.</p>
+
   <div class="tablewrap"><table>
     <thead><tr><th>Line you’ll look for</th><th>Means</th></tr></thead>
     <tbody>
       <tr><td><code>WFLYSRV0025: WildFly … started in …ms</code></td><td>Server is up.</td></tr>
       <tr><td><code>WFLYUT0021: Registered web context: '/myapp'</code></td><td>Your web app deployed; base URL is <code>/myapp</code>.</td></tr>
-      <tr><td><code>java:global/myapp/MyBean!…</code></td><td>The JNDI name for a bean — copy it for lookups (Unit 05).</td></tr>
+      <tr><td><code>java:global/myapp/MyBean!…</code></td><td>The JNDI name for a bean — copy it for lookups (see <a href="session-03-resource-creation.html">Session 3</a>).</td></tr>
       <tr><td><code>WFLYCTL0013: Operation ("deploy") failed</code> / a stack trace</td><td>Deployment broke — the cause follows.</td></tr>
       <tr><td><code>ERROR [org.hibernate…]</code></td><td>A JPA/DB problem — often a bad mapping or missing table.</td></tr>
     </tbody>
   </table></div>
-  <p>The full log is <code>standalone/log/server.log</code>, or the IntelliJ <em>Services</em> console.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>The log answers two questions. <strong>“Is it healthy?”</strong> — look for
+      <code>started in …ms</code> and <code>Registered web context</code>. <strong>“Did it
+      break?”</strong> — look for the word <code>failed</code> or <code>ERROR</code>, and remember
+      the stack trace from Part 4 is attached right below it.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚗</span>
+    <div class="callout__b"><b>Analogy</b>
+      A car's dashboard. Dozens of dials and lights, but you only ever react to one or two: the fuel
+      gauge, and a warning light. The full story is not on the dashboard at all — it is written in the
+      garage's diagnostic report. The WildFly log is the same: a few lights on the console, and the
+      complete record in <code>standalone/log/server.log</code>.</div>
+  </div>
+
+  <p>The full log is written to <code>standalone/log/server.log</code>, or streamed into the IntelliJ
+    <em>Services</em> console while the server runs.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Before you blame your code, find your own <strong><code>Registered web context</code></strong>
+      line. If it is missing, your app never deployed — and no amount of reading a request error will
+      help. Confirm the app is live <em>first</em>.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 5 · before you move on</b>
+    <ol>
+      <li>Which two lines tell you the server is up and your app is live?</li>
+      <li>What does a line starting <code>java:global/…</code> give you?</li>
+      <li>Where is the complete server log kept?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>WFLYSRV0025: … started in …ms</code> for the server, and
+          <code>WFLYUT0021: Registered web context: '/myapp'</code> for the app.</li>
+        <li>The <strong>JNDI name</strong> of a deployed bean — copy it exactly for lookups.</li>
+        <li><code>standalone/log/server.log</code>, or the IntelliJ <em>Services</em> console.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
 
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Check yourself</h3>
+    <h3>Check yourself — testing &amp; reading errors</h3>
     <script type="application/json">
     [
-      {"q":"assertThrows(ArithmeticException.class, () -> calc.divide(1, 0)) passes when...","opts":["divide returns 0","divide throws an ArithmeticException","divide returns Infinity","the test is skipped"],"a":1,"why":"assertThrows fails unless the lambda throws exactly that exception type."},
-      {"q":"Which level should you have the MOST of?","opts":["End-to-end tests","Integration tests","Unit tests — fast, isolated, pinpoint the break","Manual tests"],"a":2,"why":"The pyramid: many fast unit tests, fewer integration, fewest end-to-end."},
-      {"q":"In a stack trace, the root cause is...","opts":["The very top line","The first line mentioning your package","The deepest 'Caused by:' at the bottom","The last line of the file"],"a":2,"why":"Read 'Caused by:' bottom-up; the deepest is the origin, the ones above wrap it."},
-      {"q":"In the sample trace, what do you fix?","opts":["CMTTxInterceptor","SignupServlet line 22","AccountService line 47 — 'repo' is null, so inject it","Restart WildFly"],"a":2,"why":"The NPE says this.repo is null at AccountService:47 — the dependency was never injected."},
-      {"q":"You need the JNDI name of a deployed bean. Where do you get it?","opts":["Guess from the class name","From the WildFly log line starting java:global/...","From pom.xml","From the browser console"],"a":1,"why":"WildFly prints the exact bound name at deploy time; copy it verbatim (it's case-sensitive)."}
+      {"q":"A test that calls your method and contains no assertion will…","opts":["fail every time","pass even when the code is broken, because nothing can fail","skip itself automatically","run twice"],"a":1,"why":"With no check in it there is nothing that can fail, so the test is green no matter what the code does."},
+      {"q":"assertThrows(ArithmeticException.class, () -> calc.divide(1, 0)) passes when…","opts":["divide returns 0","divide throws an ArithmeticException","divide returns Infinity","the test is skipped"],"a":1,"why":"assertThrows runs the small inline function (the lambda) and fails unless it throws exactly that exception type."},
+      {"q":"Which level of the test pyramid should you have the MOST of?","opts":["End-to-end tests","Integration tests","Unit tests — fast, isolated, and they pinpoint the break","Manual tests"],"a":2,"why":"Many fast unit tests, fewer integration, fewest end-to-end. That is what keeps the base wide and the point thin."},
+      {"q":"In a stack trace, the root cause is…","opts":["the very top line","the first line mentioning your package","the deepest 'Caused by:' at the bottom","the last line of the file"],"a":2,"why":"Read 'Caused by:' bottom-up. The deepest one is the origin; the ones above it only wrap it."},
+      {"q":"In the sample trace, what do you fix?","opts":["CMTTxInterceptor","SignupServlet line 22","AccountService line 47 — 'repo' is null, so inject it","Restart WildFly"],"a":2,"why":"The NullPointerException says this.repo is null at AccountService:47 — the dependency was never injected."},
+      {"q":"You need the JNDI name of a deployed bean. Where do you get it?","opts":["Guess it from the class name","From the WildFly log line starting java:global/...","From pom.xml","From the browser console"],"a":1,"why":"WildFly prints the exact bound name at deploy time. Copy it verbatim — it is case-sensitive."}
     ]
     </script>
   </section>
 
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE — optional depth, collapsed by default
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the unit. It is here because exam questions and real projects
+    use these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📋 The full JUnit 5 annotation table</strong></summary>
+    <p>Part 2 used exactly one annotation. These are the rest you will meet in a real project:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>@Test</code></td><td>Marks a method as a test. JUnit runs it on its own.</td></tr>
+        <tr><td><code>@BeforeEach</code></td><td>Runs before <em>every</em> test method — the usual place to build fresh objects.</td></tr>
+        <tr><td><code>@AfterEach</code></td><td>Runs after <em>every</em> test method — the usual place to clean up.</td></tr>
+        <tr><td><code>@BeforeAll</code></td><td>Runs once before all the tests in the class. The method must be <code>static</code>.</td></tr>
+        <tr><td><code>@AfterAll</code></td><td>Runs once after all the tests. The method must be <code>static</code>.</td></tr>
+        <tr><td><code>@DisplayName("…")</code></td><td>Gives a test a readable name in the report instead of the method name.</td></tr>
+        <tr><td><code>@Disabled</code></td><td>Skips the test — with a reason, ideally.</td></tr>
+        <tr><td><code>@Nested</code></td><td>Groups related tests together in an inner class.</td></tr>
+        <tr><td><code>@Tag("…")</code></td><td>Labels a test so you can run only a subset, by tag.</td></tr>
+        <tr><td><code>@Timeout</code></td><td>Fails the test if it runs longer than a given time.</td></tr>
+        <tr><td><code>@ExtendWith</code></td><td>Registers an extension — for example a mocking extension such as <code>MockitoExtension</code>.</td></tr>
+        <tr><td><code>@ParameterizedTest</code></td><td>Runs the same test many times with different inputs, supplied by <code>@ValueSource</code> or <code>@CsvSource</code>.</td></tr>
+        <tr><td><code>@RepeatedTest</code></td><td>Runs the same test a fixed number of times.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>✅ The assertion methods you will use most</strong></summary>
+    <p>Every test ends in one or more of these. Each one is a check that is allowed to fail.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Assertion</th><th>Passes when…</th></tr></thead>
+      <tbody>
+        <tr><td><code>assertEquals(expected, actual)</code></td><td>the two values are equal.</td></tr>
+        <tr><td><code>assertNotEquals(expected, actual)</code></td><td>they are not equal.</td></tr>
+        <tr><td><code>assertTrue(condition)</code> / <code>assertFalse(condition)</code></td><td>the condition is true / false.</td></tr>
+        <tr><td><code>assertNull(value)</code> / <code>assertNotNull(value)</code></td><td>the value is null / not null.</td></tr>
+        <tr><td><code>assertThrows(Class&lt;T&gt; type, Executable code)</code></td><td>the code throws exactly that exception type. It returns the exception, so you can read its message.</td></tr>
+        <tr><td><code>assertDoesNotThrow(Executable code)</code></td><td>the code finishes without throwing.</td></tr>
+        <tr><td><code>assertSame(a, b)</code> / <code>assertNotSame(a, b)</code></td><td>a and b are / are not the very same object (identity, not just equal values).</td></tr>
+        <tr><td><code>assertArrayEquals(a, b)</code></td><td>two arrays have equal contents.</td></tr>
+        <tr><td><code>assertAll(…)</code></td><td>groups several assertions so <em>all</em> of them run, and reports every failure instead of stopping at the first.</td></tr>
+        <tr><td><code>assertTimeout(Duration, Executable)</code></td><td>the code finishes within the time. <code>assertTimeoutPreemptively(…)</code> does the same but aborts the code if it overruns.</td></tr>
+        <tr><td><code>fail("message")</code></td><td>always fails — useful for a branch that should never be reached.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔺 The three test-pyramid levels, side by side</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Level</th><th>What it exercises</th><th>Speed &amp; count</th><th>Typical tools</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Unit</strong></td><td>One class, with its collaborators replaced by mocks.</td><td>Milliseconds · many</td><td>JUnit 5 (optionally with a mocking library).</td></tr>
+        <tr><td><strong>Integration</strong></td><td>Several real parts together — a bean plus a real database.</td><td>Seconds · fewer</td><td>Arquillian, Testcontainers.</td></tr>
+        <tr><td><strong>End-to-end</strong></td><td>The whole application, driven through its HTTP API or its UI.</td><td>Slow · fewest</td><td>Browser or HTTP driving tools.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The healthy shape is a wide base, a smaller middle and a thin top. Reverse it and you get the
+      slow, brittle “ice-cream cone” from Part 3.</p>
+  </details>
+
+  <details>
+    <summary><strong>🪵 WildFly log signatures worth memorising</strong></summary>
+    <p>The handful of lines from Part 5, plus where the complete record lives.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Signature</th><th>What it tells you</th></tr></thead>
+      <tbody>
+        <tr><td><code>WFLYSRV0025: WildFly … started in …ms</code></td><td>The server finished starting and is ready.</td></tr>
+        <tr><td><code>WFLYUT0021: Registered web context: '/myapp'</code></td><td>Your web app deployed; its base URL is <code>/myapp</code>.</td></tr>
+        <tr><td><code>java:global/myapp/MyBean!…</code></td><td>The JNDI name WildFly bound for a bean — copy it exactly for lookups.</td></tr>
+        <tr><td><code>WFLYCTL0013: Operation ("deploy") failed</code></td><td>Deployment broke; the cause is in the stack trace that follows.</td></tr>
+        <tr><td><code>ERROR [org.hibernate…]</code></td><td>A persistence problem — often a bad mapping or a table that does not exist.</td></tr>
+      </tbody>
+    </table></div>
+    <p>The full log lives at <code>standalone/log/server.log</code>, or streams into the IntelliJ
+      <em>Services</em> console.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-line summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td>JUnit</td><td><code>@Test</code> + <code>assertEquals</code>/<code>assertThrows</code>; Arrange–Act–Assert; run with <code>mvn test</code>.</td></tr>
-    <tr><td>Pyramid</td><td>Many unit, some integration, few end-to-end.</td></tr>
-    <tr><td>Stack trace</td><td>Type/message → first frame in your package → deepest “Caused by:” → fix that line.</td></tr>
-    <tr><td>WildFly log</td><td>“…started”, “Registered web context”, <code>java:global/…</code>, and any “failed” + trace.</td></tr>
+    <tr><td>A test</td><td>Code that calls your code and checks the result. It re-runs in seconds, forever, and catches what you would otherwise meet in production at 2 a.m.</td></tr>
+    <tr><td>JUnit</td><td>The library that finds and runs your <code>@Test</code> methods, then reports the result.</td></tr>
+    <tr><td>An assertion</td><td>The check that is allowed to fail — <code>assertEquals</code>, <code>assertThrows</code>, and friends. No assertion, no safety.</td></tr>
+    <tr><td>Arrange → Act → Assert</td><td>The shape of almost every test: set up, do the one thing, check the result.</td></tr>
+    <tr><td>Run them</td><td><code>mvn test</code>, or the green ▶ in IntelliJ.</td></tr>
+    <tr><td>The pyramid</td><td>Many unit, some integration, few end-to-end.</td></tr>
+    <tr><td>Stack trace</td><td>Top line for what → first own-package frame for where → deepest “Caused by:” for why → fix that line.</td></tr>
+    <tr><td>WildFly log</td><td>Scan for <code>started in …ms</code>, <code>Registered web context</code>, <code>java:global/…</code>, and any <code>failed</code> or <code>ERROR</code> plus its trace.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>A test with no assertion — it passes no matter what the code does</td><td>End every test in a real check: <code>assertEquals</code>, <code>assertThrows</code>, <code>assertNotNull</code>…</td></tr>
+      <tr><td>Testing only the happy path</td><td>Test the edges too: zero, negatives, empty strings, missing values, and the failure cases.</td></tr>
+      <tr><td>Writing almost all end-to-end tests</td><td>Keep the base wide: mostly fast unit tests, with a thin top of end-to-end ones.</td></tr>
+      <tr><td>Reading a stack trace from the top down and stopping at the first line</td><td>Use the four steps: top line for what, first own-package frame for where, deepest “Caused by:” for why.</td></tr>
+      <tr><td>Fixing the library frame at the top of a trace</td><td>Fix the line in <em>your</em> code that the trace names — the fix cannot live in the library.</td></tr>
+      <tr><td>Blaming your code when the app never deployed</td><td>First confirm the <code>Registered web context</code> line for your app exists in the log.</td></tr>
+      <tr><td>Hunting through the whole server log by eye</td><td>Scan for the known signatures; the complete record is in <code>standalone/log/server.log</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Testing and error-reading are used in every later unit:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this unit</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Where JUnit sits in a project, and running <code>mvn test</code></td><td><a href="01-setup.html">Set up your workshop</a></td></tr>
+      <tr><td>Writing a unit test for a service that saves objects</td><td><a href="13-jpa-persistence.html">JPA — storing objects properly</a></td></tr>
+      <tr><td>Testing an HTTP endpoint built with JAX-RS</td><td><a href="15-rest-jaxrs.html">REST with JAX-RS</a></td></tr>
+      <tr><td>The build that runs your tests before it packages anything</td><td><a href="session-14-packaging.html">Session 14 — Packaging &amp; Deploying</a></td></tr>
+      <tr><td>A stack trace thrown out of a transactional bean</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://junit.org/junit5/docs/current/user-guide/" target="_blank" rel="noopener">JUnit 5 User Guide</a></li>
+          <li><a href="https://jakarta.ee/learn/docs/jakartaee-tutorial/current/" target="_blank" rel="noopener">Jakarta EE Tutorial</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

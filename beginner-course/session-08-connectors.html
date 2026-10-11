@@ -1,159 +1,445 @@
-<title>Session 8 — Understanding Jakarta Connectors Architecture (JCA) &amp; JDBC</title>
+<title>Session 8 — Connecting to Outside Systems: JCA and JDBC, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 8: Jakarta Connectors Architecture (JCA), Resource Adapters (.rar), Enterprise Information Systems (EIS), system-level contracts, and the complete JDBC API deep dive.">
+<meta name="description" content="Session 8, written for people who have never seen Jakarta EE before. What an Enterprise Information System is, why connecting many servers to many systems explodes, how one standard resource adapter (.rar) fixes it, the four JCA system contracts, outbound versus inbound communication, and a plain-English JDBC deep dive — including why PreparedStatement stops SQL injection.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s08";</script>
 
 <main class="page">
 
-  <h1>Session 8 · Understanding Jakarta Connectors Architecture &amp; JDBC</h1>
-  <p class="lede">Enterprise systems never live in a vacuum. Organizations rely on an assortment of diverse,
-    heterogeneous backends: ERP platforms (SAP), mainframe transaction monitors (IBM CICS), messaging providers,
-    and relational databases. The <strong>Jakarta Connectors Architecture (JCA)</strong> provides the universal standard
-    adapter plug for enterprise integration, while <strong>JDBC</strong> provides standardized SQL database access.</p>
+  <h1>Session 8 · Connecting to Outside Systems — JCA and JDBC, Explained Slowly</h1>
+  <p class="lede">Your application almost never stands alone. It has to reach the big back-office systems a
+    company already runs — an SAP finance platform, an IBM mainframe, a message broker, a plain database —
+    and most of those were built long before your code existed. This page is about how Jakarta EE lets your
+    code talk to all of them through <strong>one standard plug</strong> (Jakarta Connectors, or
+    <strong>JCA</strong>), and how it talks to relational databases in particular
+    (<strong>JDBC</strong>). You do not need to have met any of these words before — each one is explained
+    the moment it appears.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Define the Jakarta Connectors Architecture (JCA) and Enterprise Information Systems (EIS)</li>
-        <li>Explain the $M \times N$ integration dilemma and how pluggable Resource Adapters (<code>.rar</code>) solve it</li>
-        <li>Detail JCA System-Level Contracts (Connection Management, Transaction Inflow, Security, Work Management)</li>
-        <li>Contrast Outbound, Inbound, and Bidirectional EIS communication architectures</li>
-        <li>Differentiate between Common Client Interface (CCI), Service Provider Interface (SPI), and JDBC</li>
-        <li>Master JDBC operations: Drivers, <code>PreparedStatement</code>, <code>CallableStatement</code>, <code>ResultSet</code> navigation, and auto-cleanup</li>
+        <li><strong>No jargon without a translation.</strong> Every new word — EIS, resource adapter,
+          <code>.rar</code>, contract, XA — gets a plain-English box the first time it appears.</li>
+        <li><strong>Nothing is assumed.</strong> We build up from “two systems that must talk” to a full
+          distributed transaction, one small step at a time.</li>
+        <li><strong>You can watch it happen.</strong> Press <em>Run</em> on the simulation and see a
+          two-phase commit replay, line by line.</li>
+        <li><strong>You will leave knowing the one trap that matters.</strong> Why gluing user input into
+          SQL is dangerous — and the one-character habit that stops it dead.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       8.1 The M x N Integration Dilemma
-       ===================================================================== -->
-  <span class="eyebrow">session 8.1</span>
-  <h2>Part 1 · The $M \times N$ Integration Problem &amp; JCA</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a list of manual headings — just six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what an Enterprise Information System (EIS) is, and what problem Jakarta Connectors solves</td><td>Part 1</td></tr>
+      <tr><td>Explain why connecting many servers to many back-end systems explodes, and how one <code>.rar</code> adapter stops it</td><td>Part 1</td></tr>
+      <tr><td>Name the four JCA system contracts and say, in a sentence, what each one quietly does for you</td><td>Part 2</td></tr>
+      <tr><td>Tell outbound communication from inbound, and say what starts each one</td><td>Part 2</td></tr>
+      <tr><td>Say how CCI, SPI and JDBC differ from one another</td><td>Part 3 &amp; Reference</td></tr>
+      <tr><td>Write a database read that is safe from SQL injection and cleans up after itself</td><td>Part 3</td></tr>
+    </tbody>
+  </table></div>
 
-  <p>An <strong>Enterprise Information System (EIS)</strong> is any core corporate data engine: SAP ERP,
-    IBM CICS mainframes, Siebel CRM, or legacy transaction managers. Without a standard, connecting $M$ application
-    servers to $N$ external systems requires $M \times N$ brittle, vendor-locked point-to-point connectors.</p>
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press <strong>Run</strong> and watch real server output replay. Nothing touches your computer.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — THE M×N PROBLEM & JCA
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · Why joining systems together explodes — and how a standard adapter fixes it</h2>
+
+  <h3>1.1 Your code is the new kid in a very old building</h3>
+  <p>Picture a bank. Long before anyone wrote your application, that bank already ran:</p>
+  <ul>
+    <li>an <strong>SAP ERP</strong> system for finance and payroll (ERP stands for enterprise resource planning),</li>
+    <li>an <strong>IBM CICS</strong> mainframe that has processed transactions since the 1980s,</li>
+    <li>a <strong>Siebel CRM</strong> holding every customer record (CRM stands for customer relationship management),</li>
+    <li>a <strong>message broker</strong> and a <strong>relational database</strong> or two.</li>
+  </ul>
+  <p>Your new app has to talk to all of them. None of them is going away to suit you, and you are not
+    allowed to rewrite them. You just have to <em>connect</em>.</p>
+
+  <h3>1.2 What an EIS actually is</h3>
+  <p>Those systems have a collective name.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>The term</b>
+      An <strong>Enterprise Information System (EIS)</strong> is any core corporate data engine — an
+      <strong>SAP ERP</strong> platform, an <strong>IBM CICS</strong> mainframe, a <strong>Siebel
+      CRM</strong>, or a legacy transaction manager — that a business runs its operations on.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An EIS is just <strong>a big, established back-office system</strong> the company already depends on.
+      Your job is not to replace it. Your job is to plug into it.</p>
+  </div>
+
+  <h3>1.3 The explosion: M servers times N systems</h3>
+  <p>Here is the trouble. Imagine the bank runs <strong>three</strong> application servers (one for the web
+    site, one for the mobile app, one for internal tools), and they each need to reach <strong>four</strong>
+    back-end systems (SAP, the mainframe, the CRM, the database).</p>
+  <p>Without a shared standard, every server needs its own hand-written connector to every system. That is
+    not three plus four. It is three <em>times</em> four:</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>M application servers, each needing a custom connector to N systems, means
+      <strong>M×N</strong> separate connectors to write, test and maintain. Three servers times four
+      systems is <strong>twelve</strong> brittle connectors. Add one more back-end and you are suddenly at
+      fifteen. The cost grows by multiplication, not addition.</p>
+  </div>
+
+  <p>Every one of those connectors is custom, vendor-locked, point-to-point code. Each is a place to leak a
+    connection, mishandle a password, or break when the mainframe team upgrades. This is the
+    <strong>M×N integration problem</strong>.</p>
+
+  <h3>1.4 The fix: agree on one shape of plug</h3>
+  <p>The way out is the same trick that transformed world trade.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📦</span>
+    <div class="callout__b"><b>Analogy — the shipping container</b>
+      Before the standard shipping container, every load of cargo was packed, lifted and stowed its own way:
+      every combination of ship, crane, truck and dock needed custom handling. Then the world agreed on
+      <em>one box</em>. Now any crane lifts it, any ship stows it, any truck carries it. One agreed shape
+      collapsed a tangle of special cases into a single standard. <strong>JCA is that agreement, for
+      software.</strong></div>
+  </div>
+
+  <p><strong>Jakarta Connectors Architecture (JCA)</strong> is the standard. Instead of every server writing
+    its own connector to SAP, the <em>SAP vendor</em> writes <strong>one</strong> connector that follows the
+    JCA standard. That connector is called a <strong>resource adapter</strong>, and it is packaged as a
+    single file with the extension <code>.rar</code> — a <strong>Resource Adapter Archive</strong>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🔌</span>
+    <div class="callout__b"><b>Analogy — the universal travel adapter</b>
+      You travel with one laptop charger and one little adapter that fits every country's wall socket. You
+      do not buy a different laptop for every country. A <code>.rar</code> resource adapter is that one
+      adapter: the EIS vendor builds it once, and it plugs into the standard “socket” that every certified
+      Jakarta EE server provides.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>M×N custom connectors become <strong>M + N</strong>: each server just has its standard socket, and
+      each system ships one standard plug (its <code>.rar</code>). Write once, plug in anywhere.</p>
+  </div>
+
+  <h3>1.5 Before and after, side by side</h3>
+  <p>This is the whole argument for JCA in one table. Read the left column as “the pain”, the right as “what
+    the standard buys you”.</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Without JCA ($M \times N$ Nightmare)</th><th>With JCA Pluggable Architecture</th></tr></thead>
+    <thead><tr><th>Without a standard — the M×N tangle</th><th>With JCA — one pluggable adapter</th></tr></thead>
     <tbody>
       <tr>
-        <td>Every application server requires custom proprietary drivers to talk to SAP, CICS, or Tuxedo.</td>
-        <td>The EIS vendor creates <strong>one standardized Resource Adapter</strong> (packaged as a <code>.rar</code> file).</td>
+        <td>Every application server needs its own custom, proprietary drivers to talk to SAP, CICS or Tuxedo.</td>
+        <td>The EIS vendor creates <strong>one standardized resource adapter</strong> (packaged as a <code>.rar</code> file).</td>
       </tr>
       <tr>
-        <td>No unified connection pooling; each vendor driver implements custom threading and pooling.</td>
-        <td>The application server container manages connection pooling uniformly across all adapters.</td>
+        <td>There is no unified connection pooling; each vendor driver invents its own threading and pooling.</td>
+        <td>The application server container manages connection pooling <strong>uniformly</strong> across every adapter.</td>
       </tr>
       <tr>
-        <td>Distributed transactions across multiple backends are impossible or hand-coded.</td>
-        <td>Standard 2-Phase Commit (XA) coordinates transactions seamlessly across databases and mainframes.</td>
+        <td>Transactions that span several back-ends at once are impossible, or painfully hand-coded.</td>
+        <td>Standard <strong>two-phase commit (XA)</strong> coordinates transactions seamlessly across databases and mainframes.</td>
       </tr>
     </tbody>
   </table></div>
 
+  <p>Do not worry about “connection pooling”, “two-phase commit” or “XA” yet — those are exactly what Part 2
+    explains. For now, notice only the shape: <em>one standard plug replaces a pile of custom wiring.</em></p>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What is an EIS? Give two examples.</li>
+      <li>Why does connecting M servers to N systems need M×N connectors, not M + N?</li>
+      <li>What is a resource adapter, and what file extension is it packaged as?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>An Enterprise Information System: a core back-office corporate system. Any two of
+          <strong>SAP ERP</strong>, an <strong>IBM CICS mainframe</strong>, <strong>Siebel CRM</strong>, a
+          legacy transaction manager, a message broker, a database.</li>
+        <li>Because without a standard, <strong>every server needs its own custom connector to every
+          system</strong> — the counts multiply. JCA turns that back into M + N by giving each system one
+          standard adapter.</li>
+        <li>A standard connector the EIS vendor writes once so any certified server can use it. It is
+          packaged as a <code>.rar</code> file — a <strong>Resource Adapter Archive</strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       8.2 System-Level Contracts & Communication Models
+       PART 2 — SYSTEM CONTRACTS & COMMUNICATION MODELS
        ===================================================================== -->
-  <span class="eyebrow">session 8.2 &amp; 8.3</span>
-  <h2>Part 2 · JCA System-Level Contracts &amp; Communication Models</h2>
 
-  <p>JCA operates on standard system-level contracts defined between the application server and the resource adapter:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · The contracts the server and the adapter sign — and which way the data flows</h2>
+
+  <h3>2.1 What a “system-level contract” means</h3>
+  <p>When a resource adapter plugs into a server, the two of them have to agree on who handles what. That
+    agreement is written down in the JCA standard as a set of <strong>system-level contracts</strong>. A
+    contract here is not legal paperwork — it is simply a <em>fixed list of jobs the server promises to do
+    for the adapter</em>, so the adapter never has to do them itself.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏠</span>
+    <div class="callout__b"><b>Analogy — the tenancy agreement</b>
+      When you rent a flat, the agreement spells out that the <em>landlord</em> handles the plumbing, the
+      heating and the building's security, while <em>you</em> just live and work there. You do not fix the
+      boiler. The JCA contracts are that agreement: the server handles connections, transactions, security
+      and threads, and the adapter just gets on with talking to the EIS.</div>
+  </div>
+
+  <h3>2.2 The four things the server quietly handles</h3>
+  <p>There are four contracts. You will not write code for any of them — that is the point — but you should
+    be able to say what each one buys you.</p>
+
+  <h4>1. Connection Management — borrow a connection, never build one</h4>
+  <p>The server keeps a ready <strong>pool</strong> of open connections to the EIS and lends them out. Your
+    beans borrow a connection, use it, and hand it back — with <strong>zero manual socket handling</strong>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🪜</span>
+    <div class="callout__b"><b>Analogy — the equipment-hire depot</b>
+      You need a ladder for an hour. You do not buy one, store it and maintain it — you hire one from the
+      depot, use it, and return it. The depot keeps a stock ready and looks after them. A connection pool is
+      that depot: a stock of warm connections, borrowed and returned in milliseconds.</div>
+  </div>
+
+  <h4>2. Transaction Management — all of it, or none of it</h4>
+  <p>Sometimes one action has to change <em>two</em> systems at once — say, debit a PostgreSQL database
+    <em>and</em> record the same movement in SAP. Either both changes stick, or neither does; a half-done
+    money transfer is a disaster. The server's transaction manager — its <strong>JTA</strong> (Jakarta
+    Transaction API) — enlists the EIS into the same transaction as the database, using a protocol called
+    <strong>XA</strong>. XA runs a <strong>two-phase commit</strong>: first it asks every system “are you
+    ready to commit?”, and only if <em>all</em> of them say yes does it tell them all to commit for real.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧳</span>
+    <div class="callout__b"><b>Analogy — booking a trip, flight and hotel together</b>
+      A good travel agent will not book your flight until she knows the hotel is free, and will not confirm
+      the hotel until the flight is held. She checks both (“ready? … ready?”), then confirms both together.
+      If the hotel is full, she quietly releases the flight hold too — so you are never left with half a
+      holiday. That “ask everyone first, then commit everyone together” is exactly two-phase commit.</div>
+  </div>
+
+  <h4>3. Security Management — your identity travels with the request</h4>
+  <p>When your bean calls the mainframe, the mainframe wants to know <em>who</em> is really asking. The
+    security contract <strong>propagates the caller's identity and credentials</strong> through to the EIS,
+    so the backend can refuse unauthorized access instead of trusting anything that knocks.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🪪</span>
+    <div class="callout__b"><b>Analogy — the conference lanyard</b>
+      At a big conference your badge is scanned at every room, and each scanner already knows who you are —
+      you do not re-register at every door. The security contract carries your identity along with the
+      request, so the mainframe recognises you without a fresh login at every step.</div>
+  </div>
+
+  <h4>4. Work Management — the adapter borrows workers, it does not hire its own</h4>
+  <p>An adapter sometimes needs to run background tasks. If it spawned its own threads, a buggy adapter could
+    spawn thousands and starve the whole server of CPU. Instead, the work contract lets the adapter
+    <strong>run tasks on the server's own managed thread pool</strong>, so the server stays in control.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">👥</span>
+    <div class="callout__b"><b>Analogy — the shared staffing pool</b>
+      A department that hires its own staff off the books can blow the whole company's budget. One that
+      requests workers from the company's central staffing pool can only ever use what the company allows.
+      Work Management keeps every adapter's background tasks inside the server's shared, bounded pool.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Four promises, one sentence each: <strong>pool my connections</strong> (Connection Management),
+      <strong>make my changes all-or-nothing across systems</strong> (Transaction Management),
+      <strong>carry my identity to the backend</strong> (Security Management), and <strong>run my background
+      work on your threads, not mine</strong> (Work Management). The full, formal table is in the Reference
+      at the end if you want the exact wording.</p>
+  </div>
+
+  <h3>2.3 Which way does the data flow?</h3>
+  <p>A resource adapter can carry traffic in either direction. The difference is simply <strong>who starts
+    the exchange</strong> — who knocks on whose door.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚪</span>
+    <div class="callout__b"><b>Analogy — who knocks on the door</b>
+      <strong>Outbound</strong> is your app knocking on the EIS's door to ask for something.
+      <strong>Inbound</strong> is the EIS knocking on <em>your</em> app's door to announce that something
+      happened. <strong>Bidirectional</strong> means both can knock, any time.</div>
+  </div>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>System Contract</th><th>Responsibility</th><th>Developer Benefit</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong>Connection Management</strong></td>
-        <td>Enables the container to pool connections to the external EIS.</td>
-        <td>Your beans borrow and return connections with zero manual socket handling.</td>
-      </tr>
-      <tr>
-        <td><strong>Transaction Management</strong></td>
-        <td>Integrates EIS resource managers into container JTA transactions.</td>
-        <td>Supports XA 2-phase commit (e.g., commit PostgreSQL DB and SAP ERP atomically).</td>
-      </tr>
-      <tr>
-        <td><strong>Security Management</strong></td>
-        <td>Propagates caller identity and credentials to the backend EIS.</td>
-        <td>Prevents unauthorized access on mainframe systems.</td>
-      </tr>
-      <tr>
-        <td><strong>Work Management</strong></td>
-        <td>Allows the adapter to execute tasks using server-managed thread pools.</td>
-        <td>Prevents runaway background threads from starving application server CPUs.</td>
-      </tr>
-    </tbody>
-  </table></div>
-
-  <h3>Direction of Communication</h3>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Model</th><th>Data Flow</th><th>Trigger Initiator</th></tr></thead>
+    <thead><tr><th>Model</th><th>Data flow</th><th>Who starts it</th></tr></thead>
     <tbody>
       <tr>
         <td><strong>Outbound</strong></td>
-        <td>App Server → Backend EIS</td>
-        <td>Application EJB invokes a method on the Resource Adapter to send data.</td>
+        <td>App server → backend EIS</td>
+        <td>Your application EJB invokes a method on the resource adapter to send data out.</td>
       </tr>
       <tr>
         <td><strong>Inbound</strong></td>
-        <td>Backend EIS → App Server</td>
-        <td>An external event in the EIS triggers an MDB or message endpoint in the server.</td>
+        <td>Backend EIS → app server</td>
+        <td>An external event inside the EIS triggers a message-driven bean (MDB) or message endpoint in the server.</td>
       </tr>
       <tr>
         <td><strong>Bidirectional</strong></td>
-        <td>Both Directions</td>
-        <td>Supports interactive requests and asynchronous notifications simultaneously.</td>
+        <td>Both directions</td>
+        <td>Supports interactive requests and asynchronous notifications at the same time.</td>
       </tr>
     </tbody>
   </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>“Inbound” is the one beginners forget. It means the <em>outside</em> system can wake up <em>your</em>
+      code — the same message-driven bean idea from Session 1, where the container calls
+      <code>onMessage()</code> for you when something arrives.</p>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>A common mix-up</b>
+      “Outbound” does not mean “output” and “inbound” does not mean “input”. They describe <em>who
+      initiates</em> the call, not which way a single value travels. An outbound call can still return data;
+      what makes it outbound is that <strong>your application started it</strong>.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>Name the four JCA system contracts.</li>
+      <li>Which contract makes a change to the database and SAP succeed together or not at all — and what is
+        the protocol called?</li>
+      <li>In the inbound model, who starts the exchange, and what does it typically trigger in your server?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Connection Management, Transaction Management, Security Management, Work
+          Management.</strong></li>
+        <li>The <strong>Transaction Management</strong> contract. It enlists the EIS into the server's JTA
+          transaction and uses <strong>XA two-phase commit</strong> to make both commit together or both
+          roll back.</li>
+        <li>The <strong>EIS</strong> starts it — an external event inside it — and that triggers a
+          <strong>message-driven bean</strong> (or message endpoint) in the server.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       8.3 JDBC Deep Dive
+       PART 3 — JDBC DEEP DIVE
        ===================================================================== -->
-  <span class="eyebrow">session 8.4 &amp; 8.5</span>
-  <h2>Part 3 · Java Database Connectivity (JDBC) Deep Dive</h2>
 
-  <p>While JCA provides universal connectivity to any EIS, <strong>JDBC</strong> is the dedicated Java standard
-    for relational databases (PostgreSQL, Oracle, MySQL, SQL Server). In enterprise systems, JDBC operations follow
-    a strict 6-stage pipeline:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Talking to the database safely — JDBC and its three statement types</h2>
 
-  <div class="tablewrap"><table>
-    <thead><tr><th>Stage</th><th>JDBC Operation</th><th>Enterprise Implementation Best Practice</th></tr></thead>
-    <tbody>
-      <tr><td>1</td><td>Load Driver</td><td>Automatic in modern JDBC 4.0+ via Java ServiceLoader on classpath.</td></tr>
-      <tr><td>2</td><td>Establish Connection</td><td>Use pooled JNDI <code>DataSource</code>; avoid raw <code>DriverManager</code>.</td></tr>
-      <tr><td>3</td><td>Create Statement</td><td><strong>Always use <code>PreparedStatement</code></strong> to prevent SQL Injection and benefit from pre-compiled execution plans.</td></tr>
-      <tr><td>4</td><td>Execute Query</td><td><code>executeQuery()</code> for SELECT; <code>executeUpdate()</code> for INSERT/UPDATE/DELETE.</td></tr>
-      <tr><td>5</td><td>Process Results</td><td>Navigate the forward-only <code>ResultSet</code> cursor using <code>rs.next()</code>.</td></tr>
-      <tr><td>6</td><td>Resource Cleanup</td><td>Use Java <code>try-with-resources</code> to guarantee deterministic closure of <code>ResultSet</code>, <code>Statement</code>, and <code>Connection</code>.</td></tr>
-    </tbody>
-  </table></div>
+  <h3>3.1 JDBC in one line, and how it relates to JCA</h3>
+  <p>JCA connects your server to <em>any</em> kind of EIS. But the system almost every application talks to
+    is an ordinary <strong>relational database</strong>, and that has its own dedicated Java standard:
+    <strong>JDBC</strong> (Java Database Connectivity). JDBC is the standard way to run SQL against
+    PostgreSQL, Oracle, MySQL or SQL Server.</p>
 
-  <h3>The Three Statement Types</h3>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Statement Type</th><th>Syntax Example</th><th>When to Use</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><code>Statement</code></td>
-        <td><code>conn.createStatement()</code></td>
-        <td>Static DDL (e.g., <code>CREATE TABLE</code>). <em>Never use with user-provided parameters!</em></td>
-      </tr>
-      <tr>
-        <td><code>PreparedStatement</code></td>
-        <td><code>conn.prepareStatement("SELECT * FROM acc WHERE id = ?")</code></td>
-        <td><strong>Standard for all parameterized queries.</strong> Pre-compiles SQL and blocks injection attacks.</td>
-      </tr>
-      <tr>
-        <td><code>CallableStatement</code></td>
-        <td><code>conn.prepareCall("{call calculate_interest(?)}")</code></td>
-        <td>Used to execute stored procedures inside the database engine.</td>
-      </tr>
-    </tbody>
-  </table></div>
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>JCA</strong> is the general-purpose plug for any back-end system. <strong>JDBC</strong> is the
+      specialised plug for relational databases. You will meet two more three-letter names in passing —
+      <strong>CCI</strong> (the generic client interface for talking to an EIS through an adapter) and
+      <strong>SPI</strong> (the contract side the adapter implements for the server). A tidy comparison of
+      CCI, SPI and JDBC is in the Reference; for now, just know JDBC is the database-only one.</p>
+  </div>
 
-  <div class="code-head">Robust Enterprise JDBC Operation with Auto-Cleanup</div>
+  <h3>3.2 How one database call flows</h3>
+  <p>Every JDBC operation follows the same six-step shape. You do not need to memorise it — read it once to
+    see the pattern, then watch it in the code below.</p>
+  <ol>
+    <li><strong>Load the driver.</strong> In modern JDBC (4.0+) this is automatic — the driver on the
+      classpath registers itself. No more <code>Class.forName(...)</code>.</li>
+    <li><strong>Get a connection.</strong> Ask a pooled <code>DataSource</code> (looked up by JNDI name) —
+      the hire depot from Part 2 — not the raw <code>DriverManager</code>, the older call that opens a
+      brand-new connection by hand every time. That is the Connection Management contract from Part 2 at
+      work.</li>
+    <li><strong>Make a statement.</strong> Almost always a <code>PreparedStatement</code> (Section 3.3
+      explains why).</li>
+    <li><strong>Run it.</strong> <code>executeQuery()</code> for a <code>SELECT</code>;
+      <code>executeUpdate()</code> for <code>INSERT</code>, <code>UPDATE</code> or <code>DELETE</code>.</li>
+    <li><strong>Read the results.</strong> A <code>ResultSet</code> is a forward-only cursor; you step
+      through it one row at a time with <code>rs.next()</code>.</li>
+    <li><strong>Clean up.</strong> Close everything — handled for you by <em>try-with-resources</em>
+      (Section 3.5).</li>
+  </ol>
+  <p>The full pipeline, with the best practice for each stage, is in the Reference.</p>
+
+  <h3>3.3 The three kinds of statement</h3>
+  <p>JDBC gives you three ways to send SQL. Choosing the right one is mostly about <strong>safety</strong>.</p>
+  <ul>
+    <li><strong><code>Statement</code></strong> — for fixed SQL with no outside values in it, such as a
+      one-off <code>CREATE TABLE</code>. You build it with <code>conn.createStatement()</code>.
+      <em>Never</em> feed it user-provided values.</li>
+    <li><strong><code>PreparedStatement</code></strong> — the standard choice for anything with a value in
+      it. You write the SQL with a <code>?</code> where each value goes, then fill the blanks separately. It
+      pre-compiles the SQL and blocks injection attacks (next section).</li>
+    <li><strong><code>CallableStatement</code></strong> — for calling a <strong>stored procedure</strong>, a
+      named routine that lives inside the database engine itself. You build it with
+      <code>conn.prepareCall("{call calculate_interest(?)}")</code>.</li>
+  </ul>
+  <p>The side-by-side comparison table lives in the Reference. The one you will reach for ninety per cent of
+    the time is <code>PreparedStatement</code> — and here is why that matters so much.</p>
+
+  <h3>3.4 The trap: SQL injection</h3>
+  <p>Suppose you build a query by gluing the user's input straight into the SQL text:</p>
+
+  <div class="code-head">DANGER — never build SQL by string concatenation</div>
+  <pre><code>// accountId came from the web form as text
+String sql = "SELECT balance FROM accounts WHERE account_id = " + accountId;
+Statement st = conn.createStatement();
+ResultSet rs = st.executeQuery(sql);     // whatever the user typed is now part of the command</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The user's text became part of the <em>command</em>, not just the data. If someone types
+      <code>0 OR 1=1</code> as the account id, the query returns <strong>every</strong> row. Nastier input
+      can read other tables, or delete them. The database did nothing wrong — it just ran the sentence you
+      handed it.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>This is SQL injection, the classic beginner catastrophe</b>
+      Any time user input is <em>concatenated</em> into SQL, the user can smuggle in their own commands. The
+      fix is never “filter bad words”. The fix is to stop mixing data and commands in the first place: use a
+      <code>PreparedStatement</code> with a <code>?</code> placeholder, and bind the value separately with
+      <code>setInt</code>, <code>setString</code> and friends.</div>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">📝</span>
+    <div class="callout__b"><b>Analogy — the form with fixed boxes</b>
+      String concatenation is like handing a clerk a blank sheet and asking them to act on whatever is
+      written — including any extra orders someone scribbles at the bottom. A <code>PreparedStatement</code>
+      is a printed form with a box labelled <em>“Account ID:”</em>. Whatever goes in that box is read as a
+      value, full stop. There is no room to write a second instruction, because the form has no blank line
+      for one.</div>
+  </div>
+
+  <h3>3.5 The safe, complete version</h3>
+  <p>Now the same read done properly: a pooled connection, a <code>PreparedStatement</code> with a bound
+    parameter, a forward-only <code>ResultSet</code>, and automatic cleanup. This is the pattern to copy.</p>
+
+  <div class="code-head">AccountDAO.java — one safe database read, start to finish</div>
   <pre><code>package com.globalbank.dao;
 
 import javax.sql.DataSource;
@@ -187,6 +473,34 @@ public class AccountDAO {
     }
 }</code></pre>
 
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Two habits do all the work. The <code>?</code> plus <code>ps.setInt(1, accountId)</code> means the
+      account id is <em>always</em> treated as a value — SQL injection simply cannot happen here. And the
+      <code>try (…)</code> header opens the connection and statement and <strong>closes them automatically
+      in reverse order</strong>, even if an exception is thrown. There is no <code>finally</code> block and
+      no leaked connection.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words — what try-with-resources is</b>
+    <p>Anything you open inside the <code>try (…)</code> brackets is closed for you the instant the block
+      ends, whether it finished normally or blew up. For a pooled connection, “closed” means <em>returned to
+      the pool</em>, ready for the next request — exactly the Connection Management contract from Part 2.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚪</span>
+    <div class="callout__b"><b>Analogy — the self-closing gate</b>
+      A spring-loaded gate shuts behind you on its own — you never leave it swinging open, even if you walk
+      through in a hurry. Try-with-resources is that spring: you cannot forget to close the connection,
+      because closing is automatic the moment you leave.</div>
+  </div>
+
+  <h3>3.6 Everything at once: one transaction across two systems</h3>
+  <p>Here is the capstone that ties Part 2 and Part 3 together. A single money transfer updates a PostgreSQL
+    database <em>and</em> an SAP ERP system, reached through its JCA resource adapter. The Transaction
+    Management contract puts both inside one <strong>XA two-phase commit</strong>, so they either both
+    succeed or both roll back. Press <strong>Run</strong> and read the trace.</p>
+
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
     <div class="bench__head">
@@ -217,85 +531,304 @@ tx.commit(); // 2-Phase Commit coordinates both resources</code></pre>
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Watch the two phases. In <strong>Phase 1 (Prepare)</strong> the manager asks each resource to vote;
+      both answer <code>XA_OK</code>. Only then does <strong>Phase 2 (Commit)</strong> tell them both to
+      commit for real. If either had voted no, neither would have committed — the database and SAP stay in
+      step. That is the travel-agent analogy from Part 2, running for real.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <ol>
+      <li>Why is <code>"… WHERE id = " + userInput</code> with a plain <code>Statement</code> dangerous, and
+        what should you use instead?</li>
+      <li>What does a try-with-resources block do for a pooled <code>Connection</code> when the block ends?</li>
+      <li>Which statement type calls a stored procedure, and which method builds it?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because the user's text becomes part of the SQL command — that is <strong>SQL injection</strong>.
+          Use a <code>PreparedStatement</code> with a <code>?</code> placeholder and bind the value with
+          <code>setInt</code>/<code>setString</code>.</li>
+        <li>It <strong>closes</strong> the connection automatically, which for a pooled connection means
+          <strong>returning it to the pool</strong> — in reverse order of opening, even on an exception.</li>
+        <li><code>CallableStatement</code>, built with <code>conn.prepareCall("{call …}")</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       QUIZ
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 8 · Knowledge Check</h3>
+    <h3>Check yourself — Session 8</h3>
     <script type="application/json">
     [
       {
-        "q": "What is the primary file packaging format for a JCA Resource Adapter?",
+        "q": "An Enterprise Information System (EIS) is best described as…",
         "opts": [
-          ".jar",
-          ".war",
-          ".rar (Resource Adapter Archive)",
-          ".ear"
+          "A new kind of database index",
+          "A core back-end corporate system such as SAP ERP, an IBM CICS mainframe or a legacy transaction manager",
+          "The web browser the user runs",
+          "A unit-testing framework"
         ],
+        "a": 1,
+        "why": "An EIS is any established back-office data engine — SAP, CICS, Siebel, a legacy transaction manager — that your application must integrate with."
+      },
+      {
+        "q": "Without a standard, connecting M application servers to N external systems needs how many custom connectors?",
+        "opts": ["M + N", "M × N", "Exactly one", "N − M"],
+        "a": 1,
+        "why": "Every server needs a bespoke connector to every system, so the count multiplies to M×N. JCA collapses that to one standard adapter per system."
+      },
+      {
+        "q": "How is a JCA resource adapter packaged?",
+        "opts": [".jar", ".war", ".rar (Resource Adapter Archive)", ".ear"],
         "a": 2,
-        "why": "JCA resource adapters are packaged into .rar (Resource Adapter Archive) files containing Java classes and native libraries."
+        "why": "A resource adapter ships as a .rar — a Resource Adapter Archive — that any certified Jakarta EE server can deploy and manage."
       },
       {
-        "q": "How does JCA solve the M x N integration problem?",
+        "q": "Which JCA system contract lets an external ERP take part in a distributed two-phase-commit transaction?",
+        "opts": ["Connection Management", "Transaction Management", "Security Management", "Work Management"],
+        "a": 1,
+        "why": "The Transaction Management contract enlists the EIS resource manager into the server's JTA transaction, so XA two-phase commit can coordinate it with the database."
+      },
+      {
+        "q": "In the inbound communication model, who starts the exchange?",
         "opts": [
-          "By banning mainframes",
-          "By requiring each EIS vendor to build only one standard Resource Adapter that plugs into any certified Jakarta EE application server",
-          "By converting all data into text files",
-          "By forcing all databases to use SQLite"
+          "Your application EJB calls out to the EIS",
+          "An event inside the EIS triggers a message endpoint (an MDB) in the server",
+          "The browser calls the database directly",
+          "Nobody — inbound means no communication"
         ],
         "a": 1,
-        "why": "A single standard .rar adapter allows any certified application server to interact with the EIS using standard system contracts."
+        "why": "Inbound flows from the EIS into the server: an external event wakes a message-driven bean or other endpoint. Outbound is the reverse — your EJB calls out."
       },
       {
-        "q": "Which JDBC statement type should always be used when executing SQL queries that contain user-provided parameters?",
+        "q": "Which statement type must you use for any SQL that includes user-supplied values?",
+        "opts": ["Statement", "PreparedStatement", "CallableStatement", "A plain String"],
+        "a": 1,
+        "why": "PreparedStatement sends the SQL template and the values separately, so user input is always treated as data and never as commands — which is what neutralises SQL injection."
+      },
+      {
+        "q": "You need to invoke a stored procedure inside the database engine. Which statement type is built for that?",
+        "opts": ["Statement", "PreparedStatement", "CallableStatement", "DriverStatement"],
+        "a": 2,
+        "why": "CallableStatement is designed to invoke stored procedures, built with prepareCall, and supports IN/OUT parameters."
+      },
+      {
+        "q": "What does Java try-with-resources give a JDBC block?",
         "opts": [
-          "Statement",
-          "PreparedStatement",
-          "StaticStatement",
-          "NativeStatement"
+          "It makes queries run faster",
+          "It automatically closes the ResultSet, Statement and Connection in reverse order, even if an error is thrown",
+          "It encrypts the database tables",
+          "It removes the need for a DataSource"
         ],
         "a": 1,
-        "why": "PreparedStatement pre-compiles SQL templates and isolates parameter values, completely neutralizing SQL Injection vulnerabilities."
-      },
-      {
-        "q": "Which JCA system contract enables an external ERP system to participate in a distributed two-phase commit transaction?",
-        "opts": [
-          "Transaction Management Contract",
-          "Security Contract",
-          "Work Management Contract",
-          "Lifecycle Contract"
-        ],
-        "a": 0,
-        "why": "The Transaction Management Contract connects the EIS resource manager to the server's JTA transaction manager via XA protocols."
-      },
-      {
-        "q": "Which JDBC statement type is specifically designed to invoke database stored procedures?",
-        "opts": [
-          "CallableStatement",
-          "PreparedStatement",
-          "ProcedureStatement",
-          "BatchStatement"
-        ],
-        "a": 0,
-        "why": "CallableStatement extends PreparedStatement and provides specialized support for SQL stored procedure invocations with IN/OUT parameters."
+        "why": "try-with-resources guarantees deterministic cleanup: each resource closes in reverse order of opening, returning the pooled connection no matter what happens."
       }
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the session. It is here because exam questions and the textbook
+    use these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📜 The four JCA system contracts, in full</strong></summary>
+    <p>The formal version of Part 2.2 — the exact responsibility and the benefit it gives you.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>System contract</th><th>Responsibility</th><th>Developer benefit</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Connection Management</strong></td>
+          <td>Enables the container to pool connections to the external EIS.</td>
+          <td>Your beans borrow and return connections with zero manual socket handling.</td>
+        </tr>
+        <tr>
+          <td><strong>Transaction Management</strong></td>
+          <td>Integrates EIS resource managers into container JTA transactions.</td>
+          <td>Supports XA 2-phase commit (e.g. commit a PostgreSQL DB and SAP ERP atomically).</td>
+        </tr>
+        <tr>
+          <td><strong>Security Management</strong></td>
+          <td>Propagates caller identity and credentials to the backend EIS.</td>
+          <td>Prevents unauthorized access on mainframe systems.</td>
+        </tr>
+        <tr>
+          <td><strong>Work Management</strong></td>
+          <td>Allows the adapter to execute tasks using server-managed thread pools.</td>
+          <td>Prevents runaway background threads from starving application-server CPUs.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🧮 The three JDBC statement types, side by side</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Statement type</th><th>Syntax example</th><th>When to use</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><code>Statement</code></td>
+          <td><code>conn.createStatement()</code></td>
+          <td>Static DDL (e.g. <code>CREATE TABLE</code>). <em>Never use with user-provided parameters!</em></td>
+        </tr>
+        <tr>
+          <td><code>PreparedStatement</code></td>
+          <td><code>conn.prepareStatement("SELECT * FROM acc WHERE id = ?")</code></td>
+          <td><strong>Standard for all parameterized queries.</strong> Pre-compiles SQL and blocks injection attacks.</td>
+        </tr>
+        <tr>
+          <td><code>CallableStatement</code></td>
+          <td><code>conn.prepareCall("{call calculate_interest(?)}")</code></td>
+          <td>Used to execute stored procedures inside the database engine.</td>
+        </tr>
+      </tbody>
+    </table></div>
+    <p><code>CallableStatement</code> extends <code>PreparedStatement</code> and adds support for the
+      <code>IN</code>/<code>OUT</code> parameters that stored procedures use.</p>
+  </details>
+
+  <details>
+    <summary><strong>🪜 The six-stage JDBC pipeline, with best practice</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Stage</th><th>JDBC operation</th><th>Enterprise best practice</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Load driver</td><td>Automatic in modern JDBC 4.0+ via the Java <code>ServiceLoader</code> on the classpath.</td></tr>
+        <tr><td>2</td><td>Establish connection</td><td>Use a pooled JNDI <code>DataSource</code>; avoid raw <code>DriverManager</code>.</td></tr>
+        <tr><td>3</td><td>Create statement</td><td><strong>Always use <code>PreparedStatement</code></strong> to prevent SQL injection and benefit from pre-compiled execution plans.</td></tr>
+        <tr><td>4</td><td>Execute query</td><td><code>executeQuery()</code> for <code>SELECT</code>; <code>executeUpdate()</code> for <code>INSERT</code>/<code>UPDATE</code>/<code>DELETE</code>.</td></tr>
+        <tr><td>5</td><td>Process results</td><td>Navigate the forward-only <code>ResultSet</code> cursor using <code>rs.next()</code>.</td></tr>
+        <tr><td>6</td><td>Resource cleanup</td><td>Use Java <code>try-with-resources</code> to guarantee deterministic closure of <code>ResultSet</code>, <code>Statement</code> and <code>Connection</code>.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔗 JDBC connection-URL formats</strong></summary>
+    <p>Every database has its own URL shape. The pool's <code>connection-url</code> (configured once by an
+      administrator, as in Session 3) looks like one of these:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Database</th><th>JDBC URL format</th></tr></thead>
+      <tbody>
+        <tr><td><strong>PostgreSQL</strong></td><td><code>jdbc:postgresql://host:5432/database</code></td></tr>
+        <tr><td><strong>MySQL</strong></td><td><code>jdbc:mysql://host:3306/database</code></td></tr>
+        <tr><td><strong>Oracle</strong></td><td><code>jdbc:oracle:thin:@host:1521:SID</code> &nbsp;or&nbsp; <code>jdbc:oracle:thin:@//host:1521/service</code></td></tr>
+        <tr><td><strong>SQL Server</strong></td><td><code>jdbc:sqlserver://host:1433;databaseName=database</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>They all start with <code>jdbc:</code>, then name the driver, then the host, port and database. You
+      rarely type these in Java — they live in the server's DataSource configuration.</p>
+  </details>
+
+  <details>
+    <summary><strong>🧩 CCI vs SPI vs JDBC — three interfaces, not one</strong></summary>
+    <p>Three acronyms that are easy to confuse. The short version: JDBC is for databases, CCI is for
+      everything else, and SPI is the part the adapter vendor writes.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Interface</th><th>What it is</th><th>Who writes against it</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>CCI</strong> — Common Client Interface</td>
+          <td>A generic, EIS-agnostic <em>client</em> API your code uses to send and receive data through any resource adapter.</td>
+          <td>Application developers (like JDBC, but for non-database EIS such as SAP or CICS).</td>
+        </tr>
+        <tr>
+          <td><strong>SPI</strong> — Service Provider Interface</td>
+          <td>The <em>system-contract</em> side the resource adapter implements so the server can manage its connections, transactions, security and work.</td>
+          <td>The EIS / adapter vendor — not you.</td>
+        </tr>
+        <tr>
+          <td><strong>JDBC</strong></td>
+          <td>The specialised Java standard for <em>relational databases only</em>.</td>
+          <td>Application developers, for everyday SQL.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>JCA</strong></td><td>Standard architecture for plugging enterprise systems (SAP, CICS) into app servers via <code>.rar</code>.</td></tr>
-    <tr><td><strong>System Contracts</strong></td><td>Connection Management (pooling), Transaction (XA 2PC), Security, and Work Management.</td></tr>
-    <tr><td><strong>Communication</strong></td><td>Outbound (App to EIS), Inbound (EIS to App via MDB), Bidirectional (Both).</td></tr>
-    <tr><td><strong><code>PreparedStatement</code></strong></td><td>Mandatory for parameterized SQL; prevents injection and boosts performance.</td></tr>
-    <tr><td><strong>Auto-Cleanup</strong></td><td>Always use Java <code>try-with-resources</code> to guarantee deterministic closure of DB connections.</td></tr>
+    <tr><td>EIS</td><td>A core back-office corporate system your app must integrate with — SAP, an IBM CICS mainframe, a database.</td></tr>
+    <tr><td>The M×N problem</td><td>Without a standard, M servers each need a custom connector to N systems — M×N brittle connectors to maintain.</td></tr>
+    <tr><td>JCA</td><td>The standard that fixes it: each EIS vendor ships one resource adapter (a <code>.rar</code>) that plugs into any certified server. M×N becomes M + N.</td></tr>
+    <tr><td>System contracts</td><td>Connection Management (pooling), Transaction Management (XA 2-phase commit), Security Management (identity propagation), Work Management (server-managed threads).</td></tr>
+    <tr><td>Communication</td><td>Outbound (app → EIS), Inbound (EIS → app, triggers an MDB), Bidirectional (both).</td></tr>
+    <tr><td>JDBC</td><td>The Java standard for relational databases, run as a six-stage pipeline from pooled DataSource to cleanup.</td></tr>
+    <tr><td><code>PreparedStatement</code></td><td>Mandatory for parameterized SQL: a <code>?</code> placeholder keeps user input as data, which stops injection and pre-compiles the query.</td></tr>
+    <tr><td><code>CallableStatement</code></td><td>Runs a stored procedure inside the database, built with <code>prepareCall</code>.</td></tr>
+    <tr><td>Auto-cleanup</td><td>Java <code>try-with-resources</code> closes <code>ResultSet</code>, <code>Statement</code> and <code>Connection</code> in reverse order — returning pooled connections every time.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Gluing user input into SQL with a plain <code>Statement</code></td><td>Use a <code>PreparedStatement</code> with <code>?</code> placeholders and <code>setInt</code>/<code>setString</code> to bind values.</td></tr>
+      <tr><td>Calling <code>DriverManager.getConnection()</code> directly in a bean</td><td>Ask for a pooled JNDI <code>DataSource</code> — that is the Connection Management contract doing the work.</td></tr>
+      <tr><td>Forgetting to close <code>ResultSet</code>, <code>Statement</code> or <code>Connection</code></td><td>Open them inside a <code>try-with-resources</code>; they close themselves in reverse order, even on error.</td></tr>
+      <tr><td>Hand-writing a point-to-point connector for every backend</td><td>Use the EIS vendor's standard <code>.rar</code> resource adapter and let the server manage it.</td></tr>
+      <tr><td>Letting an adapter spawn its own threads</td><td>Rely on the Work Management contract so background tasks run on the server's managed pool.</td></tr>
+      <tr><td>Hand-coding commit and rollback across two systems</td><td>Enlist both in one JTA transaction and let XA two-phase commit coordinate them.</td></tr>
+      <tr><td>Using a plain <code>Statement</code> to call a stored procedure</td><td>Use a <code>CallableStatement</code> with <code>prepareCall("{call …}")</code>.</td></tr>
+      <tr><td>Thinking JCA and JDBC are the same thing</td><td>JDBC is only for relational databases; JCA connects to <em>any</em> EIS (SAP, CICS, and more).</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this session turns up in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Pooled <code>DataSource</code> and looking a resource up by JNDI name</td><td><a href="session-03-resource-creation.html">Session 3 — Resources, JNDI and Connection Pools</a></td></tr>
+      <tr><td>Inbound communication waking a message-driven bean</td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a></td></tr>
+      <tr><td>Checking data is valid before it reaches the database</td><td><a href="session-09-bean-validation.html">Session 9 — Bean Validation</a></td></tr>
+      <tr><td>The Transaction Management contract, JTA and XA two-phase commit</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>The Security Management contract and propagating identity</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+      <tr><td>JDBC underneath, with objects mapped to tables for you</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/connectors/" target="_blank" rel="noopener">Jakarta Connectors Specification</a></li>
+          <li><a href="https://jakarta.ee/learn/docs/jakartaee-tutorial/current/" target="_blank" rel="noopener">Jakarta EE Tutorial</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

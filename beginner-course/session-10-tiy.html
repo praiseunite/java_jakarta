@@ -1,19 +1,97 @@
-<title>Try It Yourself — Review &amp; Consolidation (Sessions 9 &amp; 10)</title>
+<title>Try It Yourself — Sessions 9 &amp; 10 Lab: Validation &amp; Transactions</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Try It Yourself Review for Sessions 9 & 10: Combining Jakarta Bean Validation with advanced transactional execution, UserTransaction BMT boundaries, and rollback recovery.">
+<meta name="description" content="A solo lab for Sessions 9 &amp; 10: build, deploy and test a Bean-Validated, transactional EJB money-transfer service on WildFly — and prove that a business rule really rolls the money back.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s10t";</script>
 
 <main class="page">
 
-  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 9 &amp; 10)</h1>
-  <p class="lede">Sessions 9 and 10 established the dual integrity guardrails of enterprise applications:
-    <strong>Jakarta Bean Validation</strong> guarantees that data is clean, complete, and format-valid before it reaches
-    business logic, while <strong>Advanced EJB Transactions</strong> guarantee that multi-step operations execute with absolute
-    ACID safety or roll back cleanly without data loss.</p>
+  <h1>Try It Yourself · Sessions 9 &amp; 10 — Guard the Data, Then Move It Safely</h1>
+  <p class="lede">Sessions 9 and 10 gave you the two safety nets every enterprise application stands on.
+    <strong>Jakarta Bean Validation</strong> makes sure the data is clean and correctly shaped
+    <em>before</em> any real work begins. <strong>Advanced EJB transactions</strong> then make sure the
+    real work either finishes completely or leaves nothing behind. This page is a lab: you will build,
+    deploy and test a small money-transfer service that does both — and you will watch it refuse bad
+    input, and undo a bad transfer.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>You will build something real.</strong> By the end a browser call is answered by a validated, transactional EJB running on WildFly.</li>
+        <li><strong>Every step is written out.</strong> The exact command or code to type, and what you should see after it.</li>
+        <li><strong>Nothing is assumed.</strong> Each new word gets a plain-English box the moment it appears.</li>
+        <li><strong>You can do this alone.</strong> No teacher, no partner, no discussion group required.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Six things, in plain words — and you will actually <em>do</em> each one on this page:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is practised</th></tr></thead>
+    <tbody>
+      <tr><td>Say why validation must come <em>before</em> the transaction, not inside it</td><td>Part 1</td></tr>
+      <tr><td>Write a request object guarded by <code>@NotNull</code>, <code>@Pattern</code> and <code>@Positive</code></td><td>Part 2, first steps</td></tr>
+      <tr><td>Deploy a <code>@Stateless</code> bean that validates its parameter with <code>@Valid</code></td><td>Part 2, first steps</td></tr>
+      <tr><td>Trigger a real rollback with <code>ctx.setRollbackOnly()</code> and prove no money moved</td><td>Part 2, step 11</td></tr>
+      <tr><td>Drive a transaction yourself with <code>UserTransaction</code>, committing in chunks</td><td>Part 2, step 13</td></tr>
+      <tr><td>Diagnose the errors a beginner actually hits, and answer the exam questions</td><td>Part 3 &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small label above each block tells you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// practical lab</code> — numbered steps to do, with the exact code and commands.</li>
+        <li><code>// troubleshooting</code> — what to do when something breaks.</li>
+        <li><code>// checkpoint</code> — a quick self-test. The answers stay hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// reference</code> — dense lookup material, collapsed. Open only what you need.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Work through it top to bottom the first time. Part 2 is a real lab: keep WildFly running in one
+      window and type the commands in a second window.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — WHAT THIS LAB PROVES
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · What this lab proves, in plain words</h2>
+
+  <p>Every serious application has two guards standing between a stranger and its data:</p>
+  <ol>
+    <li>A <strong>bouncer</strong> who checks your paperwork before you get in. That is
+      <strong>Bean Validation</strong>. If the form is not filled in correctly, you never reach the vault.</li>
+    <li>A <strong>vault that only opens all-or-nothing</strong>. That is a <strong>transaction</strong>.
+      Either every change inside is written, or none of it is.</li>
+  </ol>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Bean Validation</strong> answers one question: “is this data worth acting on?” It checks
+      shapes and rules — is the account number exactly ten digits, is the amount greater than zero.</p>
+    <p><strong>A transaction</strong> answers a different question: “if the work starts, can I be sure it
+      finishes completely?” If the second half fails, the first half is undone.</p>
+    <p>Two different jobs. Validation protects the <em>entrance</em>. The transaction protects the
+      <em>journey</em>.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏦</span>
+    <div class="callout__b"><b>Analogy</b>
+      A bank teller with two rules. Rule one: <em>no transfer without a properly filled-in slip</em> — she
+      checks the slip before she touches the cash drawer. Rule two: <em>the cash drawer ends up exactly
+      as it started unless the whole transfer completes</em> — if the computer dies halfway, the cash she
+      already took out goes straight back in.</div>
+  </div>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL12)</b>
+    <div class="callout__b"><b>Your four objectives (from the Presenter's Manual, TL12)</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
         <li>Construct an integrated enterprise flow combining Bean Validation constraints with transactional EJB execution</li>
         <li>Compare how validation failures halt execution before transactions open vs. how business exceptions trigger rollbacks</li>
@@ -23,50 +101,177 @@
     </div>
   </div>
 
-  <!-- =====================================================================
-       Part 1: The Integrated Flow
-       ===================================================================== -->
-  <span class="eyebrow">consolidation</span>
-  <h2>Part 1 · The Validation &amp; Transaction Guardrail Pipeline</h2>
+  <h3>1.1 The four stages a transfer passes through</h3>
+  <p>Here is the whole journey, in order. Read the last column slowly, because that is the part
+    beginners get wrong: a failed validation stops the request <strong>before a transaction ever
+    opens</strong>, which is exactly what makes it cheap.</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Stage</th><th>Layer</th><th>Integrity Check</th><th>Failure Consequence</th></tr></thead>
+    <thead><tr><th>Stage</th><th>Layer</th><th>Integrity check</th><th>What happens if it fails</th></tr></thead>
     <tbody>
       <tr>
-        <td>1. View Submission</td>
-        <td>JSF Facelets Form</td>
+        <td>1. View submission</td>
+        <td>JSF Facelets form</td>
         <td>Validates field constraints (<code>@NotBlank</code>, <code>@Positive</code>)</td>
-        <td>Fails in Phase 3; redisplays view with errors; <strong>no EJB or DB call is made</strong>.</td>
+        <td>Fails in Phase 3; the view is redisplayed with errors; <strong>no EJB call and no database call is made at all</strong>.</td>
       </tr>
       <tr>
-        <td>2. Service Entry</td>
-        <td>Stateless EJB Method</td>
+        <td>2. Service entry</td>
+        <td>Stateless EJB method</td>
         <td>Method parameter validation (<code>@Valid TransferRequest req</code>)</td>
-        <td>Throws <code>ConstraintViolationException</code>; stops before opening transaction.</td>
+        <td>Throws <code>ConstraintViolationException</code>; execution stops <strong>before</strong> the transaction opens.</td>
       </tr>
       <tr>
         <td>3. Execution</td>
-        <td>Container-Managed Tx</td>
-        <td>ACID Transaction Boundary (<code>REQUIRED</code>)</td>
-        <td>System exception or <code>setRollbackOnly()</code> triggers complete <strong>ROLLBACK</strong>.</td>
+        <td>Container-managed transaction</td>
+        <td>ACID transaction boundary (<code>REQUIRED</code>)</td>
+        <td>A system exception or a <code>setRollbackOnly()</code> call triggers a complete <strong>ROLLBACK</strong>.</td>
       </tr>
       <tr>
         <td>4. Persistence</td>
-        <td>JPA / JDBC Layer</td>
-        <td>Entity-level constraints and DB foreign keys</td>
-        <td>JPA validates prior to SQL flush; aborts on invalid state.</td>
+        <td>JPA / JDBC layer</td>
+        <td>Entity-level constraints and database foreign keys</td>
+        <td>JPA validates before the SQL flush; it aborts on an invalid state.</td>
       </tr>
     </tbody>
   </table></div>
 
-  <!-- =====================================================================
-       Part 2: Code Walkthrough
-       ===================================================================== -->
-  <span class="eyebrow">code walkthrough</span>
-  <h2>Part 2 · The Validated Bank Transfer Service</h2>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you remember only one thing from Part 1</b>
+      Validating before the transaction is not a style preference — it is why a bad request costs a few
+      microseconds instead of holding a database connection and a set of row locks while it fails.</div>
+  </div>
 
-  <div class="code-head">1. TransferRequest.java — Validated Request DTO</div>
-  <pre><code>package com.globalbank.dto;
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud first, <em>then</em> open the answers. Do not skip this — the whole lab is built
+      on it.</p>
+    <ol>
+      <li>Which guard runs first on a bad request — validation, or the transaction? Why does that order matter?</li>
+      <li>An account number arrives as <code>"123"</code>. Which stage in the table above catches it, and does any database connection get opened?</li>
+      <li>A transfer debits account A correctly, then fails. What should account A's balance be when the dust settles?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Validation runs first.</strong> It is cheaper: a rejected request never opens a
+          transaction, so it acquires no connection and takes no locks.</li>
+        <li><strong>Stage 2, service entry.</strong> The <code>@Valid</code> parameter check throws
+          <code>ConstraintViolationException</code> before the transaction opens — so <strong>no</strong>,
+          no connection is acquired.</li>
+        <li><strong>Unchanged.</strong> The transaction rolls back, so the debit is undone.
+          All-or-nothing is the promise a transaction makes.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — THE LAB
+       ===================================================================== -->
+
+  <span class="eyebrow">practical lab</span>
+  <h2>Part 2 · Build it — the validated bank transfer service</h2>
+  <p>You are about to build a small web application called <code>globalbank</code>. It exposes a couple
+    of URLs. Depending on what you send, it will move money, refuse your request, or move nothing at all
+    and tell you why. Every one of those outcomes is a lesson from Sessions 9 and 10.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What you will have at the end</b>
+      A working web address on your own machine —
+      <code>http://localhost:8080/globalbank/transfer?from=1002948192&amp;to=5551234567&amp;amount=1500</code>
+      — answered by a real EJB that first <em>validates</em> your request and then performs it inside a
+      real <em>transaction</em>. Not a simulation.</div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">📁</span>
+    <div class="callout__b"><b>About the database</b>
+      The manual's version of this bean looks up a company datasource called
+      <code>java:/jdbc/GlobalBankDB</code>, which you would have to create and configure. So that you can
+      finish this lab today with <strong>nothing to configure</strong>, we use the H2 database that
+      WildFly already ships with — <code>java:jboss/datasources/ExampleDS</code>. It is the same bean,
+      with one lookup line changed. The manual's exact code is preserved in the Reference section at the
+      end of this page.</div>
+  </div>
+
+  <h3>Before you begin</h3>
+  <p>Three tools must already be installed. If any is missing, do <a href="01-setup.html">Set up your
+    workshop</a> first.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>What</th><th>Check it with</th><th>You want to see</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>JDK 17</td><td><code>java -version</code></td><td><code>openjdk version "17…"</code></td></tr>
+      <tr><td>2</td><td>Maven</td><td><code>mvn -v</code></td><td><code>Apache Maven 3.9…</code></td></tr>
+      <tr><td>3</td><td>WildFly 30+</td><td>the folder exists</td><td>an unzipped <code>wildfly-30…</code> folder</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Build the project</h3>
+  <ol class="steps">
+
+    <li>
+      <h4>Make the project folder and its packages</h4>
+      <p>Somewhere sensible — not inside the WildFly folder — create this shape:</p>
+      <pre><code>globalbank/
+├── pom.xml
+└── src/
+    └── main/
+        └── java/
+            └── com/
+                └── globalbank/
+                    ├── dto/      ← the request object
+                    ├── ejb/      ← the beans (the business logic)
+                    └── web/      ← the small servlets that expose URLs</code></pre>
+      <p>The three package folders map to the three <code>package</code> lines you are about to type:
+        <code>com.globalbank.dto</code>, <code>com.globalbank.ejb</code> and
+        <code>com.globalbank.web</code>.</p>
+      <p><strong>What you should see:</strong> the folder tree above, exactly.</p>
+    </li>
+
+    <li>
+      <h4>Write the build file</h4>
+      <p>Create <code>pom.xml</code> in the <code>globalbank</code> folder. Only three parts really
+        matter — the packaging, the Java version, and the one dependency:</p>
+      <div class="code-head">pom.xml</div>
+      <pre><code>&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;globalbank&lt;/artifactId&gt;
+  &lt;version&gt;1.0&lt;/version&gt;
+  &lt;packaging&gt;war&lt;/packaging&gt;
+
+  &lt;properties&gt;
+    &lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+  &lt;/properties&gt;
+
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+      &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+      &lt;version&gt;10.0.0&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;   &lt;!-- the server already has this — do not ship a copy --&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+
+&lt;/project&gt;</code></pre>
+      <p><code>packaging</code> says “build me a <code>.war</code>” — a zip the server understands.
+        <code>scope provided</code> says “I need the Jakarta EE API to compile, but the server already has
+        its own copy, so don't bundle mine.” Getting that wrong causes confusing version clashes.</p>
+      <p><strong>What you should see:</strong> nothing yet — this file is only read when you build.</p>
+    </li>
+
+    <li>
+      <h4>Write the validated request object</h4>
+      <p>This is the object the caller must fill in. The three annotations <em>are</em> the rules: they
+        are not comments describing a check, they <strong>are</strong> the check. The container enforces
+        them; you never write the <code>if</code> statement.</p>
+      <div class="code-head">src/main/java/com/globalbank/dto/TransferRequest.java</div>
+      <pre><code>package com.globalbank.dto;
 
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -97,9 +302,789 @@ public class TransferRequest implements Serializable {
     public String getToAccount() { return toAccount; }
     public double getAmount() { return amount; }
 }</code></pre>
+      <p>Read the annotations as sentences:</p>
+      <ul>
+        <li><code>@NotNull</code> — the value may not be missing.</li>
+        <li><code>@Pattern(regexp = "^\\d{10}$")</code> — exactly ten digits, nothing else.</li>
+        <li><code>@Positive</code> — strictly greater than zero. A transfer of <code>-1</code> is rejected.</li>
+      </ul>
+      <p><strong>What you should see:</strong> a file with no red underlines once Maven has downloaded the
+        API (see Part 3 if it has not).</p>
+    </li>
 
-  <div class="code-head">2. TransferManagerBean.java — Transactional EJB with Method Validation</div>
-  <pre><code>package com.globalbank.ejb;
+    <li>
+      <h4>Write the bean that sets up the ledger</h4>
+      <p>The lab needs two bank accounts to exist before anyone transfers anything. A
+        <code>@Singleton @Startup</code> bean runs once, automatically, when the application starts — you
+        never call it.</p>
+      <div class="code-head">src/main/java/com/globalbank/ejb/LedgerInitializer.java</div>
+      <pre><code>package com.globalbank.ejb;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.Resource;
+import jakarta.ejb.Singleton;
+import jakarta.ejb.Startup;
+import javax.sql.DataSource;
+import java.sql.Connection;
+
+@Singleton
+@Startup                       // the container creates this when the app deploys
+public class LedgerInitializer {
+
+    @Resource(lookup = "java:jboss/datasources/ExampleDS")
+    private DataSource dataSource;
+
+    @PostConstruct
+    public void setUp() {
+        try (Connection c = dataSource.getConnection()) {
+            c.createStatement().execute(
+                "CREATE TABLE IF NOT EXISTS account (" +
+                "  account_no VARCHAR(10) PRIMARY KEY," +
+                "  balance    DECIMAL(12,2) NOT NULL)");
+
+            // MERGE = "insert, or update if the key is already there"
+            c.createStatement().execute(
+                "MERGE INTO account (account_no, balance) KEY(account_no)" +
+                " VALUES ('1002948192', 5000.00)");
+            c.createStatement().execute(
+                "MERGE INTO account (account_no, balance) KEY(account_no)" +
+                " VALUES ('5551234567', 1000.00)");
+
+            System.out.println("[Ledger] table ready, accounts seeded");
+        } catch (Exception e) {
+            throw new RuntimeException("Could not set up the ledger", e);
+        }
+    }
+}</code></pre>
+      <p>This bean is also a safety net for <em>you</em>: every time you redeploy, the balances are reset
+        to a known starting point, so the numbers in this lab are always reproducible.</p>
+      <p><strong>What you should see:</strong> nothing yet — but when the app deploys you will see
+        <code>[Ledger] table ready, accounts seeded</code> in the server window.</p>
+    </li>
+
+    <li>
+      <h4>Write the transactional service bean</h4>
+      <p>This is the heart of Sessions 9 and 10 in about forty lines. Two annotations do all the work:
+        <code>@Valid</code> on the parameter (validation) and
+        <code>@TransactionAttribute(REQUIRED)</code> on the method (the transaction).</p>
+      <div class="code-head">src/main/java/com/globalbank/ejb/TransferManagerBean.java</div>
+      <pre><code>package com.globalbank.ejb;
+
+import com.globalbank.dto.TransferRequest;
+import jakarta.annotation.Resource;
+import jakarta.ejb.SessionContext;
+import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionAttribute;
+import jakarta.ejb.TransactionAttributeType;
+import jakarta.validation.Valid;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
+@Stateless
+public class TransferManagerBean {
+
+    @Resource
+    private SessionContext ctx;
+
+    @Resource(lookup = "java:jboss/datasources/ExampleDS")
+    private DataSource dataSource;
+
+    // @Valid triggers automatic Bean Validation on the parameter BEFORE the method runs!
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public void executeTransfer(@Valid TransferRequest request) {
+
+        try (Connection conn = dataSource.getConnection()) {
+            // 1. Debit from source
+            debit(conn, request.getFromAccount(), request.getAmount());
+
+            // 2. Simulated business check: block suspicious overseas routing
+            if ("0000000000".equals(request.getToAccount())) {
+                // Programmatic rollback in CMT
+                System.err.println("Suspicious target account! Rolling back.");
+                ctx.setRollbackOnly();
+                return;
+            }
+
+            // 3. Credit to destination
+            credit(conn, request.getToAccount(), request.getAmount());
+
+        } catch (SQLException e) {
+            // System exception automatically triggers container rollback
+            throw new RuntimeException("Database error during transfer", e);
+        }
+    }
+
+    private void debit(Connection c, String acc, double amt) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE account SET balance = balance - ? WHERE account_no = ?")) {
+            ps.setDouble(1, amt);
+            ps.setString(2, acc);
+            ps.executeUpdate();
+        }
+    }
+
+    private void credit(Connection c, String acc, double amt) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "UPDATE account SET balance = balance + ? WHERE account_no = ?")) {
+            ps.setDouble(1, amt);
+            ps.setString(2, acc);
+            ps.executeUpdate();
+        }
+    }
+}</code></pre>
+      <div class="plainwords"><b>In plain words</b>
+        <p><code>@Valid</code> tells the container: “before you let this method run, check every
+          constraint on this object.” If anything fails, the method body <strong>never executes</strong>
+          — no connection, no transaction, nothing.</p>
+        <p><code>REQUIRED</code> tells the container: “wrap this method in a transaction, or join one
+          that already exists.” The container opens it, commits it, and rolls it back. You write none of
+          that.</p>
+        <p><code>ctx.setRollbackOnly()</code> is the one decision only <em>you</em> can make: “the
+          business rule says stop — undo everything I have done so far.”</p>
+      </div>
+      <p><strong>What you should see:</strong> a class with no compile errors, and — in a moment — a
+        rollback you can prove.</p>
+    </li>
+
+    <li>
+      <h4>Write two small web endpoints</h4>
+      <p>A bean has no screen. To drive it from a browser we add two tiny servlets. A servlet is simply a
+        Java class that answers a URL.</p>
+      <div class="code-head">src/main/java/com/globalbank/web/TransferServlet.java</div>
+      <pre><code>package com.globalbank.web;
+
+import com.globalbank.dto.TransferRequest;
+import com.globalbank.ejb.TransferManagerBean;
+import jakarta.ejb.EJB;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
+import java.io.IOException;
+
+@WebServlet("/transfer")
+public class TransferServlet extends HttpServlet {
+
+    @EJB                                          // the container fills this in for us
+    private TransferManagerBean manager;
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+
+        response.setContentType("text/plain");
+
+        String from = request.getParameter("from");
+        String to   = request.getParameter("to");
+        String text = request.getParameter("amount");
+
+        try {
+            double amount = Double.parseDouble(text == null ? "0" : text);
+            TransferRequest req = new TransferRequest(from, to, amount);
+
+            manager.executeTransfer(req);     // &lt;- validation + transaction, all inside
+
+            response.getWriter().println("TRANSFER ACCEPTED: " + from + " -&gt; " + to + " $" + amount);
+
+        } catch (ConstraintViolationException e) {
+            // validation refused the request before the transaction ever opened
+            response.getWriter().println("REJECTED BY VALIDATION:");
+            for (var v : e.getConstraintViolations()) {
+                response.getWriter().println("  - " + v.getMessage());
+            }
+        } catch (Exception e) {
+            response.getWriter().println("FAILED: " + e.getClass().getSimpleName());
+            for (Throwable t = e.getCause(); t != null; t = t.getCause()) {
+                response.getWriter().println("  caused by " + t.getClass().getSimpleName()
+                                             + ": " + t.getMessage());
+            }
+        }
+    }
+}</code></pre>
+
+      <div class="code-head">src/main/java/com/globalbank/web/BalanceServlet.java</div>
+      <pre><code>package com.globalbank.web;
+
+import jakarta.annotation.Resource;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import javax.sql.DataSource;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.ResultSet;
+
+@WebServlet("/balance")
+public class BalanceServlet extends HttpServlet {
+
+    @Resource(lookup = "java:jboss/datasources/ExampleDS")
+    private DataSource dataSource;
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+
+        response.setContentType("text/plain");
+
+        try (Connection c = dataSource.getConnection();
+             ResultSet rs = c.createStatement().executeQuery(
+                 "SELECT account_no, balance FROM account ORDER BY account_no")) {
+
+            while (rs.next()) {
+                response.getWriter().println(
+                    rs.getString(1) + " = $" + rs.getBigDecimal(2));
+            }
+        } catch (Exception e) {
+            response.getWriter().println("ERROR: " + e.getMessage());
+        }
+    }
+}</code></pre>
+      <p><code>/balance</code> exists for one reason: without it you would have to <em>trust</em> that the
+        rollback happened. With it, you will <strong>see</strong> it. Every claim in this lab is checked
+        by reading these numbers back.</p>
+      <p><strong>What you should see:</strong> both classes with no compile errors.</p>
+    </li>
+
+    <li>
+      <h4>Start WildFly, then build</h4>
+      <p>Open a terminal in WildFly's <code>bin</code> folder and start the server:</p>
+      <pre><code>standalone.bat          REM  Windows
+./standalone.sh         #    macOS / Linux</code></pre>
+      <p><strong>Leave this window open.</strong> Wait until the console prints:</p>
+      <pre><code>WildFly Full 30.0.1.Final started in 3512ms</code></pre>
+      <p>Now open a <strong>second</strong> terminal in the <code>globalbank</code> folder (the one holding
+        <code>pom.xml</code>) and build:</p>
+      <pre><code>mvn clean package</code></pre>
+      <p><strong>What you should see:</strong> <code>BUILD SUCCESS</code>, and a brand-new file at
+        <code>target/globalbank.war</code>. If the build fails, jump to the troubleshooting table in
+        Part 3 before going any further.</p>
+    </li>
+
+    <li>
+      <h4>Deploy it — by copying one file</h4>
+      <p>WildFly watches a folder called <code>deployments</code>. Copy the war in, and the server deploys
+        it for you — no menus, no configuration. (Substitute the folder you unzipped WildFly into for
+        <code>C:\wildfly</code>.)</p>
+      <pre><code>copy target\globalbank.war  C:\wildfly\standalone\deployments\      REM  Windows
+cp   target/globalbank.war  ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p>Watch the <strong>first</strong> terminal (the server). Within a second or two you should see
+        <em>both</em> of these lines:</p>
+      <pre><code>[Ledger] table ready, accounts seeded
+Deployed "globalbank.war"</code></pre>
+      <p>The first line is your <code>@Startup</code> bean running. The second is your application going
+        live. <strong>If the first line is missing, the ledger was never created</strong> and every later
+        balance page will be empty — fix that now, not later.</p>
+    </li>
+
+    <li>
+      <h4>Look at the starting balances</h4>
+      <p>Open your browser at:</p>
+      <pre><code>http://localhost:8080/globalbank/balance</code></pre>
+      <p><strong>What you should see</strong>, exactly:</p>
+      <pre><code>1002948192 = $5000.00
+5551234567 = $1000.00</code></pre>
+      <p>Write these two numbers down. Everything below is proved by comparing against them.</p>
+    </li>
+
+    <li>
+      <h4>Move money — the happy path</h4>
+      <p>Now send a valid transfer of $1500 from the first account to the second. Both account numbers
+        are exactly ten digits, and the amount is positive, so every constraint passes:</p>
+      <pre><code>http://localhost:8080/globalbank/transfer?from=1002948192&amp;to=5551234567&amp;amount=1500</code></pre>
+      <p><strong>What you should see:</strong></p>
+      <pre><code>TRANSFER ACCEPTED: 1002948192 -&gt; 5551234567 $1500.0</code></pre>
+      <p>Now check <code>/balance</code> again:</p>
+      <pre><code>1002948192 = $3500.00
+5551234567 = $2500.00</code></pre>
+      <p>That is a committed transaction: the debit and the credit both happened, and both are permanent.
+        In the server console you should <em>not</em> have seen the word <code>Suspicious</code>.</p>
+    </li>
+
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 2 · predict before you continue</b>
+    <p>Do not touch the browser yet. Write your prediction down on paper — this is the moment the whole
+      session clicks into place.</p>
+    <ol>
+      <li>The next call sends the money to account <code>0000000000</code>, the blacklisted one. The
+        method debits the source account <em>before</em> it notices the target is blacklisted. Predict
+        the two balances on the <code>/balance</code> page <em>after</em> that call.</li>
+      <li>Which two things will you see in the server console during that call?</li>
+      <li>The call sends <code>to=0000000000</code>. That is a perfectly valid ten-digit number, so
+        validation passes. Explain in one sentence why validation does <em>not</em> save you here.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Exactly the same as before:</strong> <code>1002948192 = $3500.00</code> and
+          <code>5551234567 = $2500.00</code>. The debit was written, then rolled back — so the numbers
+          are unchanged.</li>
+        <li><code>Suspicious target account! Rolling back.</code> and a JTA <code>ROLLBACK</code> from the
+          container as the method exits.</li>
+        <li>Validation only checks <strong>shape</strong> — ten digits, positive amount. A blacklisted
+          account is a perfectly well-shaped number. Whether a target is <em>allowed</em> is a
+          <strong>business rule</strong>, and business rules can only be checked once the work is under
+          way — which is why the transaction exists.</li>
+      </ol>
+    </details>
+  </div>
+
+  <h3>Now break it on purpose — three more steps</h3>
+  <ol class="steps">
+
+    <li>
+      <h4>Send money to the blacklisted account — watch the rollback</h4>
+      <pre><code>http://localhost:8080/globalbank/transfer?from=1002948192&amp;to=0000000000&amp;amount=1500</code></pre>
+      <p><strong>What you should see in the browser:</strong></p>
+      <pre><code>TRANSFER ACCEPTED: 1002948192 -&gt; 0000000000 $1500.0</code></pre>
+      <p>Do not be fooled by that line. The servlet only knows the method returned; it cannot know the
+        transaction was doomed. The truth is on the balance page — refresh it:</p>
+      <pre><code>1002948192 = $3500.00
+5551234567 = $2500.00</code></pre>
+      <p><strong>Unchanged.</strong> That is the rollback. The debit really was sent to the database, and
+        the container then undid it, exactly as the replay below shows.</p>
+
+  <div class="bench" data-run="canned">
+    <div class="bench__head">
+      <span class="dot"></span>
+      <span class="kind">interactive simulation</span>
+      <span class="mode">Validated Transaction Execution Pipeline Replay</span>
+    </div>
+    <pre class="bench__code"><code>// Client submits TransferRequest: from: "1002948192", to: "0000000000", amount: 1500.00
+// 1. Parameter @Valid validation runs -> PASSED (valid 10-digit format and positive amount)
+// 2. Container opens TxId 0xdf81
+// 3. Debit account succeeds
+// 4. Compliance rule flags target "0000000000" -> ctx.setRollbackOnly() invoked</code></pre>
+    <div class="bench__controls">
+      <button class="btn-run" type="button">Run Validated Transaction</button>
+      <span class="bench__hint">Traces Bean Validation parameter inspection followed by programmatic transaction rollback.</span>
+    </div>
+    <script type="text/plain" class="bench__canned">
+[08:50:01,002] [BeanValidation] Intercepted TransferManagerBean.executeTransfer(@Valid request).
+[08:50:01,005] [BeanValidation] Checking constraints on TransferRequest -> 0 violations. VALID.
+[08:50:01,008] [CMT Interceptor] Initiating Transaction [TxId: 0xdf81] [REQUIRED].
+[08:50:01,012] [JDBC] Debited $1,500.00 from Account 1002948192.
+[08:50:01,015] [Compliance Check] Destination account '0000000000' is blacklisted!
+[08:50:01,017] [EJB Context] Programmatic rollback flagged: ctx.setRollbackOnly() called.
+[08:50:01,020] [CMT Interceptor] Method exited. Status: MarkedForRollback. Executing JTA ROLLBACK.
+[08:50:01,023] [JDBC] Debit on Account 1002948192 reversed. Account balance restored.
+    </script>
+    <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+
+      <p>Read the trace line by line — it is the four stages from Part 1 happening in order. Validation
+        passes (line 2). The transaction opens (line 3). The debit succeeds (line 4). Then the business
+        rule fires (lines 5–6) and the container reverses the debit (line 8).</p>
+    </li>
+
+    <li>
+      <h4>Send a malformed request — validation stops it before anything opens</h4>
+      <p>Now break the <em>shape</em> of the request. Account <code>123</code> is only three digits, so it
+        violates <code>@Pattern(regexp = "^\\d{10}$")</code>:</p>
+      <pre><code>http://localhost:8080/globalbank/transfer?from=123&amp;to=5551234567&amp;amount=100</code></pre>
+      <p><strong>What you should see:</strong></p>
+      <pre><code>REJECTED BY VALIDATION:
+  - Source account must be 10 digits</code></pre>
+      <p>Nothing was debited, nothing was credited, and — this is the point — <strong>no transaction was
+        ever opened</strong>. The <code>ConstraintViolationException</code> was thrown at the container's
+        interceptor boundary, before the method body ran. You can confirm it: <code>/balance</code> is
+        still unchanged, and the server console shows no transaction at all for this call.</p>
+      <p>Try one more, to see the amount rule fire on its own:</p>
+      <pre><code>http://localhost:8080/globalbank/transfer?from=1002948192&amp;to=5551234567&amp;amount=-50</code></pre>
+      <p><strong>What you should see:</strong> <code>REJECTED BY VALIDATION:</code> followed by
+        <code>- Transfer amount must be greater than zero</code>.</p>
+    </li>
+
+    <li>
+      <h4>Drive a transaction yourself — BMT with chunked commits</h4>
+      <p>So far the container has managed every transaction for you. In a
+        <strong>Bean-Managed Transaction (BMT)</strong> you take that job over with
+        <code>UserTransaction</code>. The reason you would: a batch of ten thousand transfers cannot be
+        one transaction, because a failure at the end would undo all of it. So you commit in
+        <strong>chunks</strong>.</p>
+      <div class="code-head">src/main/java/com/globalbank/ejb/BatchTransferBean.java</div>
+      <pre><code>package com.globalbank.ejb;
+
+import com.globalbank.dto.TransferRequest;
+import jakarta.annotation.Resource;
+import jakarta.ejb.Stateless;
+import jakarta.ejb.TransactionManagement;
+import jakarta.ejb.TransactionManagementType;
+import jakarta.transaction.UserTransaction;
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.util.List;
+
+@Stateless
+@TransactionManagement(TransactionManagementType.BEAN)   // &lt;- YOU manage the transaction now
+public class BatchTransferBean {
+
+    private static final int CHUNK = 3;      // publish a chunk every 3 transfers
+
+    @Resource
+    private UserTransaction utx;
+
+    @Resource(lookup = "java:jboss/datasources/ExampleDS")
+    private DataSource dataSource;
+
+    public String runBatch(List&lt;TransferRequest&gt; transfers) {
+        int done = 0;
+        int chunks = 0;
+
+        try {
+            utx.begin();                     // 1. YOU open the transaction
+
+            for (TransferRequest t : transfers) {
+                if (t.getAmount() &lt;= 0) {     // a bad entry part-way through
+                    throw new IllegalArgumentException("amount must be positive");
+                }
+                move(t);
+                done++;
+
+                if (done % CHUNK == 0) {
+                    utx.commit();            // 2. this chunk is now permanent
+                    chunks++;
+                    utx.begin();             // 3. open a fresh chunk
+                }
+            }
+
+            utx.commit();                    // 4. commit whatever is left over
+            chunks++;
+            return "BATCH OK: " + done + " transfers in " + chunks + " chunks";
+
+        } catch (Exception e) {
+            try {
+                utx.rollback();              // 5. YOU must undo the open chunk, nobody else will
+            } catch (Exception ignored) {
+            }
+            return "BATCH ROLLED BACK on transfer " + (done + 1) + ": " + e.getMessage()
+                 + "  (" + chunks + " earlier chunks stay committed)";
+        }
+    }
+
+    private void move(TransferRequest t) throws Exception {
+        try (Connection c = dataSource.getConnection()) {
+            try (PreparedStatement debit = c.prepareStatement(
+                    "UPDATE account SET balance = balance - ? WHERE account_no = ?")) {
+                debit.setDouble(1, t.getAmount());
+                debit.setString(2, t.getFromAccount());
+                debit.executeUpdate();
+            }
+            try (PreparedStatement credit = c.prepareStatement(
+                    "UPDATE account SET balance = balance + ? WHERE account_no = ?")) {
+                credit.setDouble(1, t.getAmount());
+                credit.setString(2, t.getToAccount());
+                credit.executeUpdate();
+            }
+        }
+    }
+}</code></pre>
+      <p>And a small servlet to run it with seven good transfers followed by one broken one:</p>
+      <div class="code-head">src/main/java/com/globalbank/web/BatchServlet.java</div>
+      <pre><code>package com.globalbank.web;
+
+import com.globalbank.dto.TransferRequest;
+import com.globalbank.ejb.BatchTransferBean;
+import jakarta.ejb.EJB;
+import jakarta.servlet.annotation.WebServlet;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+@WebServlet("/batch")
+public class BatchServlet extends HttpServlet {
+
+    @EJB
+    private BatchTransferBean batch;
+
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws IOException {
+
+        response.setContentType("text/plain");
+
+        List&lt;TransferRequest&gt; list = new ArrayList&lt;&gt;();
+        for (int i = 0; i &lt; 7; i++) {                        // 7 good transfers, $10 each
+            list.add(new TransferRequest("1002948192", "5551234567", 10.0));
+        }
+        list.add(new TransferRequest("1002948192", "5551234567", -1.0));   // the 8th is broken on purpose
+
+        response.getWriter().println(batch.runBatch(list));
+    }
+}</code></pre>
+      <p>Rebuild, redeploy, then call it:</p>
+      <pre><code>mvn clean package
+copy target\globalbank.war  C:\wildfly\standalone\deployments\</code></pre>
+      <pre><code>http://localhost:8080/globalbank/batch</code></pre>
+      <p><strong>What you should see:</strong></p>
+      <pre><code>BATCH ROLLED BACK on transfer 8: amount must be positive  (2 earlier chunks stay committed)</code></pre>
+      <div class="plainwords"><b>In plain words</b>
+        <p>Seven transfers were good, but the eighth broke. Transfers 1–6 were in two <em>finished</em>
+          chunks, so they are already committed and cannot be undone. Transfer 7 was still sitting in an
+          open, uncommitted chunk when the error hit, so the <code>utx.rollback()</code> you wrote threw
+          it away.</p>
+        <p>That is the whole trade of BMT: you get to decide <em>how much</em> is at risk. Small chunks
+          publish early; an open chunk is all-or-nothing.</p>
+      </div>
+      <p>Prove it with the balance page. Compared with the numbers you wrote down before calling
+        <code>/batch</code>, the first account should have dropped by <strong>$60</strong> — six
+        transfers, not seven. The seventh was rolled back with the broken chunk.</p>
+      <p><strong>Notice what you got and what you paid for.</strong> You got control over chunk
+        boundaries. You paid for it with responsibility: if you had ever forgotten
+        <code>utx.rollback()</code> in that <code>catch</code> block, the open chunk would have stayed
+        alive on the thread, holding locks, until the transaction timed out. That is Trap 2 in Part 3.</p>
+    </li>
+
+  </ol>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — TROUBLESHOOTING
+       ===================================================================== -->
+
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · The three traps — and the errors you will actually hit</h2>
+  <p>These three traps are the ones the manual singles out, and they are the three that bite in this
+    exact lab.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Trap 1: Expecting a checked exception to roll back automatically</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> a custom
+        <code>InsufficientBalanceException extends Exception</code> is thrown, but the earlier database
+        writes are committed to disk anyway!</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> by default in EJB, checked <em>application</em>
+        exceptions <strong>commit</strong>. You must annotate the exception class with
+        <code>@ApplicationException(rollback = true)</code>, or call <code>ctx.setRollbackOnly()</code>
+        before it is thrown.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Trap 2: Swallowing an exception in BMT without calling <code>utx.rollback()</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> an error occurs inside your BMT bean; you catch
+        it, log it, and return normally. The transaction stays open on the thread until it times out.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> in BMT <em>you</em> are the transaction manager. If
+        anything goes wrong between <code>utx.begin()</code> and <code>utx.commit()</code>, you
+        <strong>must</strong> call <code>utx.rollback()</code> inside the <code>catch</code> block. This
+        is exactly what step 13's bean does — look at line 5 in its <code>catch</code>.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Trap 3: Forgetting <code>@Valid</code> on a nested object or parameter</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> constraints inside a child object (say
+        <code>Address.postalCode</code>) are silently ignored during validation.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Bean Validation does not cascade into nested
+        objects on its own. Put <code>@Valid</code> on the nested field or the method parameter to tell
+        the engine to check the constraints inside it too. The lab's
+        <code>executeTransfer(@Valid TransferRequest request)</code> is the parameter half of this rule;
+        a field inside <code>TransferRequest</code> would need its own <code>@Valid</code>.</p>
+    </div>
+  </div>
+
+  <h3>When it goes wrong</h3>
+  <p>Everyone hits these. Find your symptom, apply the fix, and carry on — this is ordinary developer
+    work, not failure.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>mvn: command not found</code></td>
+        <td>Maven is not on your PATH</td>
+        <td>Use IntelliJ's bundled Maven, or add Maven's <code>bin</code> folder to PATH and reopen the terminal</td>
+      </tr>
+      <tr>
+        <td><code>BUILD FAILURE … release version 17 not supported</code></td>
+        <td>Your JDK is older than 17</td>
+        <td>Install Temurin JDK 17 and point <code>JAVA_HOME</code> at it</td>
+      </tr>
+      <tr>
+        <td><code>NoProviderFoundException</code> at deploy, or red underlines under <code>@NotNull</code></td>
+        <td>No Bean Validation provider, or Maven has not downloaded the API yet</td>
+        <td>Keep the dependency at <code>scope provided</code> and do <strong>not</strong> bundle <code>hibernate-validator</code> — the server already supplies the engine. Then right-click <code>pom.xml</code> → Maven → Reload project</td>
+      </tr>
+      <tr>
+        <td><code>REJECTED BY VALIDATION</code> when you expected <code>TRANSFER ACCEPTED</code></td>
+        <td>Your input really did fail a constraint — this is the feature working</td>
+        <td>Read the message. Account numbers must be <strong>exactly ten digits</strong>, and the amount must be positive</td>
+      </tr>
+      <tr>
+        <td><code>TRANSFER ACCEPTED</code> but the balances never change</td>
+        <td>The transaction rolled back — or the update matched no row</td>
+        <td>Check the server console for <code>Suspicious target account</code>, then confirm the account numbers exist on <code>/balance</code></td>
+      </tr>
+      <tr>
+        <td><code>WFLYJCA…: datasource not found</code>, or <code>java:/jdbc/GlobalBankDB not bound</code></td>
+        <td>The JNDI name in <code>@Resource(lookup = …)</code> does not match a configured pool</td>
+        <td>This lab uses <code>java:jboss/datasources/ExampleDS</code>, exactly as WildFly ships it. Correct the lookup back to that name</td>
+      </tr>
+      <tr>
+        <td><code>/balance</code> returns nothing at all</td>
+        <td><code>LedgerInitializer</code> failed, so the table was never created</td>
+        <td>Scroll to the <strong>first</strong> exception in the server log during deploy — the seed statement is where it will point</td>
+      </tr>
+      <tr>
+        <td><code>Transaction is not active</code> or <code>EJBTransactionRequiredException</code> in the BMT bean</td>
+        <td>In BMT you touched the database without calling <code>utx.begin()</code>, or you committed twice</td>
+        <td>Check that every database call sits between a <code>begin()</code> and exactly one <code>commit()</code> or <code>rollback()</code></td>
+      </tr>
+      <tr>
+        <td><code>404 Not Found</code> in the browser</td>
+        <td>The war has not finished deploying, or the URL is wrong</td>
+        <td>Wait for <code>Deployed "globalbank.war"</code> in the server window, then check the path is exactly <code>/globalbank/transfer</code></td>
+      </tr>
+      <tr>
+        <td><code>Connection refused</code></td>
+        <td>WildFly is not running</td>
+        <td>Start it and wait for the <code>started in …ms</code> line</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <p>You have now run the whole thing. Close the browser and answer these from memory.</p>
+    <ol>
+      <li>For the malformed request (<code>from=123</code>), which runs first — validation or the transaction? How do the balances prove your answer?</li>
+      <li>For the blacklisted target, validation passed and yet nothing changed. Which two lines of the trace explain the unchanged balances?</li>
+      <li>In the BMT batch, why did the first account drop by exactly $60 and not $70?</li>
+      <li>In BMT, nobody calls <code>rollback()</code> for you. What happens if you forget it?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Validation first.</strong> The balances are untouched because the
+          <code>ConstraintViolationException</code> was thrown at the interceptor boundary, before a
+          transaction existed — so there was nothing to roll back.</li>
+        <li><code>[EJB Context] Programmatic rollback flagged: ctx.setRollbackOnly() called.</code> and
+          <code>[CMT Interceptor] … Executing JTA ROLLBACK.</code> The debit was written, then reversed.</li>
+        <li>Transfers 1–6 formed <strong>two committed chunks</strong>. Transfer 7 was still in the open
+          chunk when the eighth item failed, so <code>utx.rollback()</code> discarded it. 6 × $10 = $60.</li>
+        <li>The open transaction stays alive on the thread, holding locks and a database connection,
+          until it reaches its transaction timeout — starving other requests. That is Trap 2.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Consolidation Assessment (Sessions 9 &amp; 10)</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "Why is placing Bean Validation on method parameters with @Valid superior to writing if-checks inside the method body?",
+        "opts": [
+          "It compiles faster",
+          "Invalid requests are rejected before the transaction opens, so no connection, no locks and no wasted work",
+          "It encrypts the parameters",
+          "It converts strings into integers automatically"
+        ],
+        "a": 1,
+        "why": "Validating at the container's interceptor boundary halts processing before any expensive resource (transaction, connection, lock) is acquired."
+      },
+      {
+        "q": "By default, what is the rollback behaviour for a checked Application Exception thrown from a CMT bean method?",
+        "opts": [
+          "It always rolls back",
+          "It COMMITS by default, unless the exception is annotated @ApplicationException(rollback = true) or ctx.setRollbackOnly() was called",
+          "The server shuts down",
+          "It retries three times"
+        ],
+        "a": 1,
+        "why": "Application exceptions represent ordinary business outcomes, so the container commits unless you explicitly ask for a rollback."
+      },
+      {
+        "q": "In a BMT bean, a developer calls utx.begin(), catches an exception, logs it and returns without calling utx.rollback(). What happens?",
+        "opts": [
+          "The transaction commits anyway",
+          "The transaction stays open and orphaned on the thread until it times out, holding locks and a connection",
+          "The database deletes the application",
+          "WildFly reboots the machine"
+        ],
+        "a": 1,
+        "why": "In BMT the developer is the transaction manager and must explicitly call commit() or rollback(). Neglecting rollback causes connection starvation and a timeout abort."
+      },
+      {
+        "q": "Which annotation tells the Bean Validation engine to also validate the constraints on a nested child object?",
+        "opts": [
+          "@Valid",
+          "@Cascade",
+          "@Inspect",
+          "@NotNull"
+        ],
+        "a": 0,
+        "why": "@Valid instructs the validator to recursively inspect constraints declared on nested member properties. Without it, validation stops at the outer object."
+      },
+      {
+        "q": "Which method on EJBContext lets a bean check whether the current transaction has already been marked for rollback?",
+        "opts": [
+          "ctx.isRollback()",
+          "ctx.getRollbackOnly()",
+          "ctx.checkStatus()",
+          "ctx.isAborted()"
+        ],
+        "a": 1,
+        "why": "getRollbackOnly() returns true if any participating component or interceptor has marked the transaction for rollback."
+      },
+      {
+        "q": "A request is rejected by @Valid on a method parameter. Has a transaction been opened?",
+        "opts": [
+          "Yes, and then rolled back",
+          "No — method validation runs at the container boundary before the transactional method body starts",
+          "Yes, and it stays open until timeout",
+          "Only if the bean is stateful"
+        ],
+        "a": 1,
+        "why": "Method parameter validation is an interceptor-level check. The failure is thrown before the transaction interceptor opens a transaction, which is why it costs almost nothing."
+      },
+      {
+        "q": "Why does this lab's BMT batch bean commit every three transfers instead of once at the very end?",
+        "opts": [
+          "Because three is the maximum a transaction can hold",
+          "So that a failure late in the batch can only undo the current open chunk, not every transfer already done",
+          "To make the code shorter",
+          "Because UserTransaction cannot commit more than three rows"
+        ],
+        "a": 1,
+        "why": "Chunked commits bound the blast radius of a failure and release locks and connections early. A single giant transaction would undo everything on the last error."
+      }
+    ]
+    </script>
+  </section>
+
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE — collapsed lookups
+       ===================================================================== -->
+
+  <span class="eyebrow">reference</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the lab. It is here because exam questions and the manual use these
+    exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📋 The manual's TransferManagerBean, exactly as printed</strong></summary>
+    <p>This is the course-material version. It looks up a company datasource,
+      <code>java:/jdbc/GlobalBankDB</code>, and shows the debit and credit methods as short placeholders.
+      The lab changed the lookup to <code>java:jboss/datasources/ExampleDS</code> and filled the two
+      methods in — everything else is identical.</p>
+    <div class="code-head">TransferManagerBean.java — as printed in the manual</div>
+    <pre><code>package com.globalbank.ejb;
 
 import com.globalbank.dto.TransferRequest;
 import jakarta.annotation.Resource;
@@ -150,134 +1135,79 @@ public class TransferManagerBean {
     private void debit(Connection c, String acc, double amt) throws SQLException { /* SQL UPDATE */ }
     private void credit(Connection c, String acc, double amt) throws SQLException { /* SQL UPDATE */ }
 }</code></pre>
+  </details>
+
+  <details>
+    <summary><strong>🔒 CMT vs BMT at a glance</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Question</th><th>Container-Managed (CMT)</th><th>Bean-Managed (BMT)</th></tr></thead>
+      <tbody>
+        <tr><td>Who opens the transaction?</td><td>The container, because of <code>@TransactionAttribute</code></td><td>You, with <code>utx.begin()</code></td></tr>
+        <tr><td>Who commits or rolls back?</td><td>The container, when the method exits</td><td>You, with <code>utx.commit()</code> / <code>utx.rollback()</code></td></tr>
+        <tr><td>How is it turned on?</td><td><code>@TransactionAttribute(TransactionAttributeType.REQUIRED)</code></td><td><code>@TransactionManagement(TransactionManagementType.BEAN)</code> plus a <code>UserTransaction</code> field</td></tr>
+        <tr><td>How does it roll back?</td><td>A system exception, or <code>ctx.setRollbackOnly()</code></td><td>You call <code>utx.rollback()</code> yourself, every time</td></tr>
+        <tr><td>What it is good for</td><td>Ordinary business methods — the default in this course</td><td>Batches where you want to publish work in chunks</td></tr>
+        <tr><td>What it costs you</td><td>Nothing; you write one annotation</td><td>You must never forget <code>commit()</code>, <code>rollback()</code>, or the matching <code>begin()</code></td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>⚠️ What rolls back, and what does not</strong></summary>
+    <p>This is the table exam questions are built from. Only <strong>system</strong> exceptions roll back
+      on their own.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>What is thrown</th><th>Default behaviour</th><th>How to make it roll back</th></tr></thead>
+      <tbody>
+        <tr><td><code>RuntimeException</code> (unchecked)</td><td>Rolls back automatically</td><td>Already does — nothing to add</td></tr>
+        <tr><td><code>Error</code></td><td>Rolls back automatically</td><td>Already does</td></tr>
+        <tr><td>Your own checked exception <code>extends Exception</code></td><td><strong>Commits</strong></td><td><code>@ApplicationException(rollback = true)</code> on the exception class, or <code>ctx.setRollbackOnly()</code> before throwing</td></tr>
+        <tr><td><code>EJBException</code></td><td>Rolls back automatically</td><td>Already does</td></tr>
+        <tr><td>Any exception while <code>setRollbackOnly()</code> is set</td><td>Rolls back</td><td>The flag survives; returning normally still rolls back</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🧾 Bean Validation constraints cheat-sheet</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>It means</th><th>Handy detail</th></tr></thead>
+      <tbody>
+        <tr><td><code>@NotNull</code></td><td>Must not be missing</td><td>An empty string still passes — use <code>@NotBlank</code> for text</td></tr>
+        <tr><td><code>@NotBlank</code></td><td>Must contain non-whitespace text</td><td>For <code>String</code> only</td></tr>
+        <tr><td><code>@Size(min, max)</code></td><td>Length must be in range</td><td>Works on strings, collections and maps</td></tr>
+        <tr><td><code>@Min(n)</code> / <code>@Max(n)</code></td><td>Numeric boundary, inclusive</td><td><code>@DecimalMin</code> / <code>@DecimalMax</code> for decimals</td></tr>
+        <tr><td><code>@Positive</code> / <code>@PositiveOrZero</code></td><td>Greater than (or at least) zero</td><td>Used in this lab for the amount</td></tr>
+        <tr><td><code>@Pattern(regexp = …)</code></td><td>Must match a regular expression</td><td>Remember to escape backslashes inside a Java string: <code>"^\\d{10}$"</code></td></tr>
+        <tr><td><code>@Digits(integer, fraction)</code></td><td>Limits the number of digits</td><td>Ideal for money columns</td></tr>
+        <tr><td><code>@Valid</code></td><td>Cascade — check the object inside this one too</td><td>Without it, nested constraints are ignored. That is Trap 3.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Every constraint accepts a <code>message = "…"</code> attribute. That message is what your
+      <code>ConstraintViolationException</code> prints — which is why the lab's error lines read like
+      plain English.</p>
+  </details>
+
+  <details>
+    <summary><strong>🧩 Which exception means what</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Exception</th><th>Where it comes from</th><th>What it is telling you</th></tr></thead>
+      <tbody>
+        <tr><td><code>ConstraintViolationException</code></td><td>Bean Validation, before the method body runs</td><td>The data failed a constraint. No transaction was opened.</td></tr>
+        <tr><td><code>EJBTransactionRolledbackException</code></td><td>The container, at the call boundary</td><td>Your bean's transaction was rolled back; the caller sees this wrapper rather than the original cause.</td></tr>
+        <tr><td><code>TransactionRolledbackException</code></td><td>JTA</td><td>A remote caller tried to continue after the transaction was already rolled back.</td></tr>
+        <tr><td><code>EJBTransactionRequiredException</code></td><td>The container</td><td>A method needed an existing transaction and none was there — common in BMT when <code>begin()</code> was missed.</td></tr>
+        <tr><td><code>RollbackException</code></td><td><code>UserTransaction.commit()</code></td><td>The commit did not happen: the transaction was marked rollback-only, or a resource failed.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr>
 
   <!-- =====================================================================
-       Part 3: Top Troubleshooting Gotchas
+       SUMMARY
        ===================================================================== -->
-  <span class="eyebrow">troubleshooting</span>
-  <h2>Part 3 · Top 3 Integration Gotchas for Sessions 9 &amp; 10</h2>
 
-  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
-    <div class="callout__b"><b>Trap 1: Expecting Checked Exceptions to Roll Back Automatically</b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> A custom <code>InsufficientBalanceException extends Exception</code> is thrown, but previous database writes are committed to disk anyway!</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> By default in EJB, checked Application Exceptions <em>commit</em>. You must annotate the exception class with:
-      <code>@ApplicationException(rollback = true)</code> or explicitly call <code>ctx.setRollbackOnly()</code>.</p>
-    </div>
-  </div>
-
-  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
-    <div class="callout__b"><b>Trap 2: Swallowing Exceptions in BMT without calling <code>utx.rollback()</code></b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> An error occurs inside a BMT bean; the developer catches it, logs it, and returns. The transaction remains open on the thread until timeout!</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> In BMT, <em>you</em> are the transaction manager. If an error occurs between <code>utx.begin()</code> and <code>utx.commit()</code>, you <strong>must</strong> call <code>utx.rollback()</code> inside the catch block.</p>
-    </div>
-  </div>
-
-  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
-    <div class="callout__b"><b>Trap 3: Forgetting <code>@Valid</code> on Nested Objects or Method Parameters</b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Constraints inside a child DTO (e.g., <code>Address.postalCode</code>) are ignored during validation.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Bean Validation does not cascade into nested objects automatically. Place <code>@Valid</code> on the nested field or method parameter to instruct the engine to validate nested constraints recursively.</p>
-    </div>
-  </div>
-
-  <!-- Interactive Simulation Bench -->
-  <div class="bench" data-run="canned">
-    <div class="bench__head">
-      <span class="dot"></span>
-      <span class="kind">interactive simulation</span>
-      <span class="mode">Validated Transaction Execution Pipeline Replay</span>
-    </div>
-    <pre class="bench__code"><code>// Client submits TransferRequest: from: "1002948192", to: "0000000000", amount: 1500.00
-// 1. Parameter @Valid validation runs -> PASSED (valid 10-digit format and positive amount)
-// 2. Container opens TxId 0xdf81
-// 3. Debit account succeeds
-// 4. Compliance rule flags target "0000000000" -> ctx.setRollbackOnly() invoked</code></pre>
-    <div class="bench__controls">
-      <button class="btn-run" type="button">Run Validated Transaction</button>
-      <span class="bench__hint">Traces Bean Validation parameter inspection followed by programmatic transaction rollback.</span>
-    </div>
-    <script type="text/plain" class="bench__canned">
-[08:50:01,002] [BeanValidation] Intercepted TransferManagerBean.executeTransfer(@Valid request).
-[08:50:01,005] [BeanValidation] Checking constraints on TransferRequest -> 0 violations. VALID.
-[08:50:01,008] [CMT Interceptor] Initiating Transaction [TxId: 0xdf81] [REQUIRED].
-[08:50:01,012] [JDBC] Debited $1,500.00 from Account 1002948192.
-[08:50:01,015] [Compliance Check] Destination account '0000000000' is blacklisted!
-[08:50:01,017] [EJB Context] Programmatic rollback flagged: ctx.setRollbackOnly() called.
-[08:50:01,020] [CMT Interceptor] Method exited. Status: MarkedForRollback. Executing JTA ROLLBACK.
-[08:50:01,023] [JDBC] Debit on Account 1002948192 reversed. Account balance restored.
-    </script>
-    <pre class="bench__out" aria-live="polite"></pre>
-  </div>
-
-  <!-- =====================================================================
-       Assessment Quiz
-       ===================================================================== -->
-  <span class="eyebrow">check yourself</span>
-  <section class="quiz" data-quiz>
-    <h3>Consolidation Assessment (Sessions 9 &amp; 10)</h3>
-    <script type="application/json">
-    [
-      {
-        "q": "Why is placing Bean Validation on method parameters with @Valid superior to writing if-checks inside the method body?",
-        "opts": [
-          "It compiles faster",
-          "Invalid requests are rejected before transactions open, preventing wasted database connections and locks",
-          "It encrypts the parameters",
-          "It converts strings into integers automatically"
-        ],
-        "a": 1,
-        "why": "Validating parameters at the container interceptor boundary halts processing before resources (transactions, connections) are acquired."
-      },
-      {
-        "q": "By default, what is the rollback behavior for a checked Application Exception in EJB CMT?",
-        "opts": [
-          "It always rolls back",
-          "It COMMITS by default, unless annotated with @ApplicationException(rollback = true) or ctx.setRollbackOnly() is called",
-          "The server shuts down",
-          "It retries 3 times"
-        ],
-        "a": 1,
-        "why": "Application exceptions are considered standard business outcomes and do not trigger a rollback unless explicitly configured."
-      },
-      {
-        "q": "What happens if a developer starts a transaction with utx.begin() in BMT, catches an exception, but fails to call utx.rollback()?",
-        "opts": [
-          "The transaction commits anyway",
-          "The transaction remains open and orphan on the thread until it reaches its transaction timeout, holding locks",
-          "The database deletes the application",
-          "WildFly reboots the machine"
-        ],
-        "a": 1,
-        "why": "In BMT, the developer must explicitly call commit() or rollback(); neglecting rollback causes connection starvation and timeout aborts."
-      },
-      {
-        "q": "Which annotation tells the Bean Validation engine to validate constraints on a nested child object?",
-        "opts": [
-          "@Valid",
-          "@Cascade",
-          "@Inspect",
-          "@NotNull"
-        ],
-        "a": 0,
-        "why": "@Valid instructs the validator to recursively inspect constraints declared on nested member properties."
-      },
-      {
-        "q": "Which method on EJBContext is used to inspect whether the current transaction has been marked for rollback?",
-        "opts": [
-          "ctx.isRollback()",
-          "ctx.getRollbackOnly()",
-          "ctx.checkStatus()",
-          "ctx.isAborted()"
-        ],
-        "a": 1,
-        "why": "getRollbackOnly() returns true if any participating component or interceptor has marked the transaction for rollback."
-      }
-    ]
-    </script>
-  </section>
-
-  <!-- =====================================================================
-       Summary
-       ===================================================================== -->
   <span class="eyebrow">recap</span>
   <h2>One-Line Summary</h2>
   <div class="tablewrap summary"><table><tbody>
@@ -286,7 +1216,56 @@ public class TransferManagerBean {
     <tr><td><strong>Rollback Rules</strong></td><td>System exceptions rollback automatically; Application exceptions commit unless flagged with <code>rollback=true</code>.</td></tr>
     <tr><td><strong><code>setRollbackOnly()</code></strong></td><td>Programmatic signal to container that current CMT transaction must be rolled back.</td></tr>
     <tr><td><strong>Recursive Validation</strong></td><td>Use <code>@Valid</code> on parameters and nested objects to cascade constraint verification.</td></tr>
+    <tr><td><strong>Chunked commits</strong></td><td>In BMT, committing every N items bounds how much a late failure can undo and releases locks early.</td></tr>
+    <tr><td><strong>Order matters</strong></td><td>Validation runs at the boundary, before the transaction — so a bad request never costs a connection or a lock.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Writing <code>if (value == null) throw …</code> instead of a constraint annotation</td><td>Declare it: <code>@NotNull(message = "…")</code>. The container enforces it before the method runs, and the message comes back for free.</td></tr>
+      <tr><td>Expecting a checked exception to roll back on its own</td><td>Checked exceptions <strong>commit</strong> by default. Add <code>@ApplicationException(rollback = true)</code> or call <code>ctx.setRollbackOnly()</code>.</td></tr>
+      <tr><td>Catching an exception in a BMT method and returning without <code>utx.rollback()</code></td><td>Always roll back in the <code>catch</code>. Uncommitted work plus an open transaction means locks held until timeout.</td></tr>
+      <tr><td>Forgetting <code>@Valid</code> on a nested field or a method parameter</td><td>Validation does not cascade by itself. Put <code>@Valid</code> on the parameter and on every nested object you want checked.</td></tr>
+      <tr><td>Assuming the method returning normally means the data was committed</td><td>A method can return with the transaction marked rollback-only. Verify with a read — that is why this lab has a <code>/balance</code> page.</td></tr>
+      <tr><td>Making one enormous transaction for a whole batch</td><td>In BMT commit in chunks, so a late failure only discards the open chunk.</td></tr>
+      <tr><td>Bundling a Bean Validation implementation into the war</td><td>Keep the API at <code>scope provided</code>. WildFly already ships the engine; bundling your own causes version clashes at deploy time.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything you did in this lab turns up again in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this lab</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Constraint annotations, <code>@Valid</code>, custom messages</td><td><a href="session-09-bean-validation.html">Session 9 — Bean Validation</a></td></tr>
+      <tr><td>CMT, <code>@TransactionAttribute</code>, rollback rules</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td><code>UserTransaction</code> and BMT chunking</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>Entities, transactions and the persistence context</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+      <tr><td>Serving the same service over HTTP as JSON</td><td><a href="15-rest-jaxrs.html">Bonus — REST with JAX-RS</a></td></tr>
+      <tr><td>Testing a transaction rollback automatically</td><td><a href="16-testing.html">Bonus — Testing Enterprise Applications</a></td></tr>
+      <tr><td>Wiring beans together with CDI instead of <code>@EJB</code></td><td><a href="session-11-cdi-part1.html">Session 11 — CDI, Part 1</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/bean-validation/" target="_blank" rel="noopener">Jakarta Bean Validation Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/transactions/" target="_blank" rel="noopener">Jakarta Transactions (JTA) Specification</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

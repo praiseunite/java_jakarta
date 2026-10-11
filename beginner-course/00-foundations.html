@@ -1,298 +1,1019 @@
-<title>Programming From Zero</title>
-<meta name="description" content="Every word you need before the Jakarta EE course starts — programs, Java, classes, objects, methods, and more.">
+<title>Foundations · Programming From Zero</title>
+<meta name="description" content="Every word you need before the Jakarta EE course starts — programs, Java, the JVM, classes, objects, methods, annotations and more, each explained in plain English.">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "00-foundations";</script>
 
 <main class="page">
 
-  <h1>Unit 00 · Programming from absolute zero</h1>
-  <p class="lede">The original course assumes you already know Java classes, objects, interfaces
-    and annotations. If you don’t — this unit gives you every term you’ll meet, each with a
-    one-line picture. Skim it now; come back whenever a word stops making sense.</p>
+  <h1>Foundations · Programming from absolute zero</h1>
+  <p class="lede">This unit is the ground floor. You may have written a little Java already, but you
+    have probably never been told how any of it works underneath. Every word the rest of the course
+    leans on is explained here, in plain English, with a picture. Read it once now; come back whenever
+    a word stops making sense. After this page, a sentence like “an <em>enterprise bean</em> is a
+    <em>class</em> with an <em>annotation</em>, managed by a <em>container</em> on a <em>server</em>”
+    should feel readable — even if you cannot write one yet.</p>
 
-  <div class="callout callout--key">
-    <span class="callout__i">🎯</span>
-    <div class="callout__b">
-      <b>Goal of this unit</b>
-      After this page, sentences like “an <em>enterprise bean</em> is a <em>class</em> with an
-      <em>annotation</em>, managed by a <em>container</em> on a <em>server</em>” should feel readable —
-      even if you can’t yet write one.
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Every new word gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> If a word matters, it is explained the moment it appears.</li>
+        <li><strong>You can try things here.</strong> Press <em>Run</em>, or drive the pretend terminal.</li>
+        <li><strong>None of it is memorising.</strong> Read the pictures, not the definitions. Come back to any word that stops making sense.</li>
+      </ol>
     </div>
   </div>
 
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a wall of vocabulary — six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Read “a bean is a class with an annotation, managed by a container on a server” without panic</td><td>Sections 4, 6 &amp; 13</td></tr>
+      <tr><td>Explain what a program, a class, an object and a method actually are</td><td>Section 4</td></tr>
+      <tr><td>Say why the same Java file runs on any computer, and what the JVM does</td><td>Section 2</td></tr>
+      <tr><td>Read a build file (<code>pom.xml</code>) and a stack trace without fear</td><td>Sections 8 &amp; 10</td></tr>
+      <tr><td>Follow a request from a browser, to a server, to a database</td><td>Sections 11 &amp; 12</td></tr>
+      <tr><td>Answer the questions at the end of this unit</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and experiment in the live bench.</li>
+        <li><code>// terminal</code> — a pretend command line. Nothing touches your computer.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz at the end.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       1 — WHAT IS A PROGRAM?
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
   <h2>1. What is a program?</h2>
-  <p>A <strong>program</strong> is a list of precise instructions a computer follows, top to bottom.
-    A computer never guesses. If you don’t say it, it doesn’t happen.</p>
-  <div class="callout callout--analogy">
-    <span class="callout__i">🍳</span>
+  <p>A <strong>program</strong> is a list of exact instructions a computer follows, one after another,
+    top to bottom.</p>
+  <p>Here is the part that surprises beginners: a computer never guesses and never fills in a gap. If
+    you did not say it, it does not happen. Ten steps that are almost right produce an almost-right
+    result — or none at all.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍳</span>
     <div class="callout__b"><b>Analogy</b>
-      A recipe. “Heat pan. Add oil. Wait 30 seconds. Add egg.” Swap two steps and breakfast is ruined.
-      Code is a recipe with zero tolerance for vague steps.</div>
+      A recipe. “Heat the pan. Add the oil. Wait 30 seconds. Add the egg.” The <em>cook</em> is the
+      computer: they follow the recipe exactly, in order, and never improvise. Swap two steps, or leave
+      one out, and breakfast is ruined. Code is a recipe with zero tolerance for vague steps.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A program is a recipe. The computer is a cook with no imagination — it does exactly what the
+      recipe says, and nothing you forgot to write.</p>
   </div>
 
   <span class="eyebrow">concept</span>
   <h2>2. What is Java? What is the JVM?</h2>
   <p><strong>Java</strong> is a programming language — a fixed vocabulary and grammar for writing those
-    instructions. You write Java in plain text files ending in <code>.java</code>.</p>
-  <p>The computer can’t run <code>.java</code> text directly. Two steps turn it into something that runs:</p>
+    instructions. You write Java as plain text in files ending in <code>.java</code>.</p>
+  <p>The computer cannot run that text directly. Two steps turn it into something that runs:</p>
   <ol>
-    <li><strong>Compile</strong> — a tool called <code>javac</code> (the <em>Java compiler</em>) reads your
-      <code>.java</code> file and produces a <code>.class</code> file full of <strong>bytecode</strong>
-      (a compact instruction format).</li>
-    <li><strong>Run</strong> — a program called the <strong>JVM</strong> (Java Virtual Machine), launched
-      with the <code>java</code> command, reads the bytecode and actually does the work.</li>
+    <li><strong>Compile.</strong> A tool called <code>javac</code> (the <em>Java compiler</em>) reads
+      your <code>.java</code> file and produces a <code>.class</code> file full of
+      <strong>bytecode</strong> — a compact instruction format halfway between your text and the
+      machine.</li>
+    <li><strong>Run.</strong> A program called the <strong>JVM</strong> (Java Virtual Machine),
+      launched with the <code>java</code> command, reads that bytecode and actually does the work.</li>
   </ol>
-  <div class="callout callout--analogy">
-    <span class="callout__i">🌍</span>
-    <div class="callout__b"><b>Why a “virtual machine”?</b>
-      The JVM is a pretend computer that behaves identically on Windows, macOS and Linux. Write once,
-      the same <code>.class</code> file runs everywhere there’s a JVM. That portability is a big reason
-      banks picked Java decades ago and still use it.</div>
+  <p>So there are three things, and beginners mix them up constantly: <strong>Java</strong> is the
+    language, <strong>javac</strong> is the translator that compiles it, and the <strong>JVM</strong> is
+    the machine that runs the result.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🔌</span>
+    <div class="callout__b"><b>Analogy</b>
+      A travel power adapter. Bytecode is a plug with one standard shape. Every country (Windows, macOS,
+      Linux) has a different socket, but every one of them ships its own adapter — the JVM. Write the
+      plug once, and it fits any socket. That is why Java was adopted by banks decades ago and is still
+      used today.</div>
   </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Two traps worth naming now</b>
+      <code>.java</code> files do not run. They are text, and the computer does not read them. Only the
+      compiled <code>.class</code> file runs. And “virtual machine” does not mean a fake or slow
+      computer — it means a real program that behaves identically on every operating system.</div>
+  </div>
+
+  <p>Here are the two commands, and what each one does:</p>
+  <pre><code>javac Demo.java      // the compiler reads your text and writes Demo.class
+java  Demo           // the JVM reads Demo.class and runs it</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      You compile <strong>once</strong>, but the same <code>.class</code> file runs anywhere a JVM
+      exists. The JVM is what makes “write once, run anywhere” true.</div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       3 — YOUR FIRST "IT WORKS" MOMENT  (steps)
+       ===================================================================== -->
 
   <span class="eyebrow">try it</span>
   <h2>3. Your first “it works” moment</h2>
-  <p>Here is a complete Java program. <code>System.out.println(...)</code> prints a line of text.
-    Press <strong>Run</strong> — the panel shows what the JVM would print. Then change the numbers and run again.</p>
+  <p>A complete Java program is short. Here is the smallest one that does something, and the three
+    commands that turn the text into a working program. Follow along — the order matters.</p>
 
-  <div class="bench" data-run="calc">
-    <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">live — edit the numbers</span></div>
-    <pre class="bench__code" contenteditable="true" spellcheck="false"><code>public class Demo {
+  <ol class="steps">
+
+    <li>
+      <h4>Write the file</h4>
+      <p>Save this as <code>Demo.java</code>. The file name must match the class name exactly —
+        <code>Demo</code>, capital D.</p>
+      <pre><code>public class Demo {
+    public static void main(String[] args) {   // the JVM always starts here
+        System.out.println("Hello from the JVM");
+    }
+}</code></pre>
+      <p>Every Java program you run starts at <code>main</code>. Do not worry about the rest of the
+        words yet; they all get explained later on this page.</p>
+    </li>
+
+    <li>
+      <h4>Compile it</h4>
+      <p>The compiler reads your text and writes the bytecode file next to it.</p>
+      <pre><code>javac Demo.java      // creates Demo.class</code></pre>
+      <p>If it prints nothing, it worked — silence is success. If it prints an error, the error names
+        the file and the line number. Start at that line, not at the bottom of the message.</p>
+    </li>
+
+    <li>
+      <h4>Run it</h4>
+      <p>The <code>java</code> command starts the JVM, which reads the bytecode and runs it.</p>
+      <pre><code>java Demo            // prints: Hello from the JVM</code></pre>
+      <p>That line of text on your screen <em>is</em> the program working. You have now compiled and
+        run Java.</p>
+    </li>
+
+    <li>
+      <h4>Try it right here, without installing anything</h4>
+      <p>Below is a program like the one you just wrote. Press <strong>Run</strong> and watch the
+        output, then change the numbers and run it again — the panel recomputes, so you are the one
+        driving.</p>
+
+      <div class="bench" data-run="calc">
+        <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">live — edit the numbers</span></div>
+        <pre class="bench__code" contenteditable="true" spellcheck="false"><code>public class Demo {
     public static void main(String[] args) {
         int a = 10;
         int b = 4;
         // this course's calculator: add, subtract, multiply, divide
-        System.out.println("see the output below");
+        System.out.println(a + " + " + b + " = " + (a + b));
+        System.out.println(a + " - " + b + " = " + (a - b));
+        System.out.println(a + " * " + b + " = " + (a * b));
+        System.out.println(a + " / " + b + " = " + (a / b));
     }
 }</code></pre>
-    <div class="bench__controls">
-      <button class="btn-run" type="button">Run</button>
-      <button class="btn-ghost" type="button" data-reset>Reset</button>
-      <span class="bench__hint">Set <code>b = 0</code> and run — watch the divide fail on purpose. (Ctrl+Enter also runs.)</span>
-    </div>
-    <pre class="bench__out" aria-live="polite"></pre>
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Run</button>
+          <button class="btn-ghost" type="button" data-reset>Reset</button>
+          <span class="bench__hint">Set <code>b = 0</code> and run — watch the divide fail on purpose. (Ctrl+Enter also runs.)</span>
+        </div>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+      <p style="font-size:.9rem;color:var(--ink-faint)">This panel runs a JavaScript twin of the logic
+        so your edits really recompute. It is not a real JVM — the behaviour matches, but it also prints
+        a service banner and a couple of <code>[server]</code> log lines, which a real Jakarta EE server
+        would wrap around your code.</p>
+    </li>
+  </ol>
+
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Everything on the output comes from the two lines <code>int a = 10;</code> and
+      <code>int b = 4;</code>. Change either number and every line recomputes. And when you set
+      <code>b = 0</code>, the divide refuses to run — a rule the program follows, exactly as the recipe
+      said.</div>
   </div>
-  <p style="font-size:.9rem;color:var(--ink-faint)">This panel runs a JavaScript twin of the logic so
-    your edits really recompute. It is not a real JVM — but the behaviour matches.</p>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What are the two steps that turn a <code>.java</code> file into something that runs?</li>
+      <li>Why can the same <code>.class</code> file run on Windows, macOS and Linux?</li>
+      <li>In the panel, what happened when you set <code>b = 0</code>, and why?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Compile</strong> with <code>javac</code> to produce a <code>.class</code> file of
+          bytecode, then <strong>run</strong> it with the <code>java</code> command, which starts the
+          JVM.</li>
+        <li>Because a <strong>JVM</strong> exists on each of those systems, and every JVM runs the same
+          bytecode. The JVM is the adapter between one bytecode and many machines.</li>
+        <li>The division <strong>failed instead of producing an answer</strong> — dividing by zero is not
+          allowed. The program reported the error rather than guessing a value, just as an exact recipe
+          would.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       4 — THE BUILDING BLOCKS
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>4. The building blocks, smallest to largest</h2>
+  <p>Java is built from a handful of pieces. Learn these and the rest of the course reads like English.
+    We go from the smallest piece to the largest.</p>
 
-  <h3>Variable</h3>
-  <p>A named box that holds one value. <code>int score = 5;</code> makes a box called <code>score</code>
-    holding the number 5. Later <code>score = 6;</code> replaces what’s in the box.</p>
+  <h3>Variable — a labelled box</h3>
+  <p>A <strong>variable</strong> is a named box that holds one value. <code>int score = 5;</code> makes
+    a box called <code>score</code> holding the number 5. Later, <code>score = 6;</code> replaces what
+    is in the box.</p>
 
-  <h3>Type</h3>
-  <p>What kind of value a box may hold. Common ones: <code>int</code> (whole number),
-    <code>double</code> (decimal number), <code>boolean</code> (<code>true</code>/<code>false</code>),
-    <code>String</code> (text, always in double quotes: <code>"hello"</code>).
-    Java checks types before running, so <code>int x = "hello";</code> won’t even compile.</p>
+  <h3>Type — the shape of the box</h3>
+  <p>A <strong>type</strong> says what kind of value a box may hold. Common ones: <code>int</code>
+    (whole number), <code>double</code> (decimal number), <code>boolean</code>
+    (<code>true</code>/<code>false</code>), and <code>String</code> (text, always in double quotes:
+    <code>"hello"</code>). Java checks types <em>before</em> it runs, so <code>int x = "hello";</code>
+    will not even compile.</p>
 
-  <h3>Method</h3>
-  <p>A named, reusable block of steps — often taking some input and giving back a result.</p>
+  <div class="callout callout--analogy"><span class="callout__i">📦</span>
+    <div class="callout__b"><b>Analogy</b>
+      A variable is a labelled box; the type is the shape of its opening. A round hole takes round
+      pegs. Try to push a piece of text into a box built for whole numbers, and Java stops you at the
+      lid.</div>
+  </div>
+
+  <h3>Method — a named, reusable block of steps</h3>
+  <p>A <strong>method</strong> is a named block of steps, often taking some input and giving back a
+    result. You <em>call</em> it by name: <code>add(2, 3)</code> produces <code>5</code>.</p>
+
   <pre><code>// name: add   inputs: two ints   gives back: an int
 int add(int a, int b) {
     return a + b;      // "return" hands the answer back to whoever called add(...)
 }</code></pre>
-  <p>You <em>call</em> it by name: <code>add(2, 3)</code> produces <code>5</code>.</p>
 
-  <h3>Class</h3>
-  <p>A blueprint that groups related data and methods under one name. A <code>BankAccount</code> class
-    might hold a <code>balance</code> and offer <code>deposit(...)</code> and <code>withdraw(...)</code> methods.</p>
-
-  <h3>Object (a.k.a. instance)</h3>
-  <p>An actual thing built from a class blueprint, created with the <code>new</code> keyword:
-    <code>BankAccount acc = new BankAccount();</code>. One class, many objects — like one cookie
-    cutter, many cookies. Each object has its own copy of the data.</p>
-  <div class="callout">
-    <span class="callout__i">🔑</span>
-    <div class="callout__b"><b>Remember this pair</b>
-      <strong>Class</strong> = the plan. <strong>Object</strong> = a real item made from the plan.
-      Almost everything in Java is an object created from some class.</div>
+  <div class="callout callout--analogy"><span class="callout__i">🥤</span>
+    <div class="callout__b"><b>Analogy</b>
+      A vending machine. You press a button (call the method), feed it a coin (pass an input), and a
+      drink comes out (a result is returned). You do not need to know the wiring inside — only the
+      button and what comes out.</div>
   </div>
 
-  <h3>Interface</h3>
-  <p>A promise about <em>what</em> methods exist, with no code for <em>how</em> they work. It’s a contract.</p>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>return</code> is how a method gives its answer back. Without it, a method can still do work
+      — but it hands nothing to whoever asked.</div>
+  </div>
+
+  <h3>Class — a blueprint</h3>
+  <p>A <strong>class</strong> is a blueprint that groups related data and methods under one name. A
+    <code>BankAccount</code> class might hold a <code>balance</code> and offer <code>deposit(...)</code>
+    and <code>withdraw(...)</code> methods.</p>
+
+  <h3>Object — a real item built from the blueprint</h3>
+  <p>An <strong>object</strong> (also called an <strong>instance</strong>) is an actual thing built
+    from a class, created with the <code>new</code> keyword. Each object has its own copy of the data.</p>
+
+  <pre><code>BankAccount acc = new BankAccount();   // one real object, built from the class blueprint</code></pre>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍪</span>
+    <div class="callout__b"><b>Analogy</b>
+      A class is a cookie cutter; an object is a cookie. One cutter, many cookies — and each cookie is
+      its own thing, even though they all share the same shape.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Class</strong> = the plan. <strong>Object</strong> = a real item made from the plan with
+      <code>new</code>. Almost everything in Java is an object created from some class.</p>
+  </div>
+
+  <h3>Interface — a promise about method names</h3>
+  <p>An <strong>interface</strong> lists what methods exist, with no code for how they work. It is a
+    contract: any class that claims to implement it must supply those methods.</p>
+
   <pre><code>interface Greeter {
     String greet(String name);   // any Greeter MUST provide this method
 }</code></pre>
-  <p>A class then <em>implements</em> the interface and supplies the real code:
-    <code>class FriendlyGreeter implements Greeter { ... }</code>. Other code can say “give me any
-    <code>Greeter</code>” without caring which one. This is how Jakarta EE lets your code talk to a
-    bean without knowing the bean’s real class.</p>
 
-  <h3>Inheritance (lightly)</h3>
+  <p>A class then <em>implements</em> the interface and supplies the real code:
+    <code>class FriendlyGreeter implements Greeter { ... }</code>. Other code can then ask for “any
+    <code>Greeter</code>” without caring which one it gets. This is exactly how Jakarta EE lets your
+    code talk to a bean without knowing the bean's real class.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📋</span>
+    <div class="callout__b"><b>Analogy</b>
+      A job description. It lists the duties (“must be able to greet customers”) but not how any one
+      person does them. Anyone who can do those duties fits the role — and you can hire a replacement
+      without rewriting the advert.</div>
+  </div>
+
+  <h3>Inheritance — taking after a parent</h3>
   <p><code>class Cat extends Animal</code> means <code>Cat</code> gets everything <code>Animal</code>
-    has, plus its own extras. You’ll mostly see this as <code>extends HttpServlet</code> — “my class
+    has, plus its own extras. You will meet this mostly as <code>extends HttpServlet</code> — “my class
     is a kind of servlet”.</p>
+
+  <pre><code>class Cat extends Animal { ... }   // Cat inherits Animal's members, then adds its own</code></pre>
+
+  <div class="callout callout--analogy"><span class="callout__i">👪</span>
+    <div class="callout__b"><b>Analogy</b>
+      Family resemblance. A child inherits traits from a parent, then develops their own on top. The
+      child does not have to be taught the family's traits again — they come included.</div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       5 — PACKAGES & IMPORTS
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>5. Packages &amp; imports</h2>
-  <p>Real projects have thousands of classes, so they’re filed into <strong>packages</strong> — like
-    folders, written with dots: <code>com.globalbank.accounts</code>. The first line of a file declares
-    its package. To use a class from another package you <code>import</code> it:</p>
+  <p>Real projects have thousands of classes. They are filed into <strong>packages</strong> — folders
+    for classes, written with dots, such as <code>com.globalbank.accounts</code>. The first line of a
+    file declares which package it lives in.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🗄️</span>
+    <div class="callout__b"><b>Analogy</b>
+      A filing cabinet. Each drawer is a package, and each class is a file inside a drawer. To use a
+      file from another drawer, you have to say which drawer it came from — that is what an
+      <code>import</code> does.</div>
+  </div>
+
+  <p>To use a class from another package, you <code>import</code> it, so the compiler knows where to
+    look:</p>
+
   <pre><code>package com.globalbank.web;
 
 import jakarta.ejb.Stateless;   // "let me use the Stateless class from jakarta.ejb"</code></pre>
-  <div class="callout callout--mistake">
-    <span class="callout__i">⚠️</span>
-    <div class="callout__b"><b>You will meet <code>jakarta.*</code> and <code>javax.*</code></b>
-      Years ago these packages were named <code>javax.*</code>. Most were renamed to
-      <code>jakarta.*</code>. A few kept the old name on purpose — <code>javax.sql</code>,
-      <code>javax.naming</code>. So <code>import javax.naming.InitialContext;</code> is <em>correct</em>,
-      but <code>import jakarta.naming.InitialContext;</code> does <em>not exist</em>. Unit 05 flags this.</div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The <code>package</code> line comes first and says where <em>this</em> file lives. The
+      <code>import</code> lines come after and say which <em>other</em> drawers you are borrowing from.
+      They are opposite directions.</div>
   </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>You will meet <code>jakarta.*</code> and <code>javax.*</code> together</b>
+      Years ago these packages were named <code>javax.*</code>. Most were renamed to
+      <code>jakarta.*</code>, but a few deliberately kept the old name — <code>javax.sql</code> and
+      <code>javax.naming</code>. So <code>import javax.naming.InitialContext;</code> is
+      <em>correct</em>, while <code>import jakarta.naming.InitialContext;</code> does <em>not exist</em>.
+      Session 3 covers this trap properly. For now, just know both spellings are the same technology.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A package is a folder for classes. An import is a note at the top of your file saying “I will be
+      using a class from that folder.” Without it, the compiler cannot find the class.</p>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       6 — ANNOTATIONS
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>6. Annotations — the <code>@</code> things</h2>
-  <p>An <strong>annotation</strong> is a label you stick on a class or method that some tool reads later
-    to change how the code is treated. It’s not instructions that “run”; it’s a sticky note with meaning.</p>
+  <p>An <strong>annotation</strong> is a label you stick on a class or a method that some tool reads
+    later to change how the code is treated. It is not a step that “runs” by itself; it is a sticky note
+    with meaning.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📝</span>
+    <div class="callout__b"><b>Analogy</b>
+      A sticky note on a box. The box still holds whatever it holds, but the note tells whoever opens
+      it how to treat the contents: “fragile”, “this way up”, “staff only”. The note changes nothing
+      inside the box — it changes how the box is handled.</div>
+  </div>
+
+  <p>Here is an annotation telling the server how to treat a whole class, and another telling the
+    compiler something about a method:</p>
+
   <pre><code>@Stateless                 // sticky note: "server, treat this as a stateless bean"
 public class CalculatorBean implements CalculatorRemote {
-    @Override               // sticky note to the compiler: "this replaces a method from the interface"
+    @Override               // sticky note to the compiler: "this replaces an interface method"
     public int add(int a, int b) { return a + b; }
 }</code></pre>
-  <p>The whole of Jakarta EE is basically: <em>write a normal class, add a few annotations, and the
-    server does the heavy lifting the annotations describe</em> (transactions, security, pooling…).</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The annotation changes how the class is <em>treated</em>, not what the class <em>does</em>. Every
+      annotation in Jakarta EE works the same way: you write an ordinary class, add a few
+      <code>@</code> labels, and the server does the heavy lifting the labels describe — transactions,
+      security, pooling. That is the whole course in one sentence.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An annotation is a sticky note that only tools read. <code>@Stateless</code> means nothing at all
+      to a plain Java program — but it means everything to the server, which reads it and says “I will
+      manage this class for you.”</p>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What is an annotation, in your own words?</li>
+      <li>What does the <code>@Stateless</code> label tell the server?</li>
+      <li>Why does an annotation on a class change nothing until a tool reads it?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A <strong>label</strong> stuck on a class or method that a tool reads later to change how the
+          code is treated. It is not code that runs on its own.</li>
+        <li>“<strong>Manage this class for me</strong>” — create it, look after it, and give it out as a
+          stateless bean.</li>
+        <li>Because an annotation is just meaning, not instruction. A plain Java program ignores it; the
+          server is the tool that reads it and acts on it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       7 — COLLECTIONS & GENERICS
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>7. Collections &amp; generics</h2>
-  <p>You rarely have exactly one of something. A <strong>collection</strong> holds many values.</p>
+  <p>You rarely have exactly one of something. A <strong>collection</strong> holds many values at once.
+    Two of them appear constantly in this course:</p>
   <ul>
-    <li><code>List&lt;String&gt;</code> — an ordered sequence of Strings. <code>list.add("a")</code>,
-      <code>list.get(0)</code>.</li>
-    <li><code>Map&lt;String, Integer&gt;</code> — lookup by key. <code>map.get("apples")</code> → the count.</li>
+    <li><code>List&lt;String&gt;</code> — an ordered sequence of text values. <code>list.add("a")</code>
+      adds one; <code>list.get(0)</code> fetches the first.</li>
+    <li><code>Map&lt;String, Integer&gt;</code> — a lookup by key. <code>map.get("apples")</code> gives
+      you back the count stored under <code>"apples"</code>.</li>
   </ul>
-  <p>The <code>&lt; &gt;</code> part is <strong>generics</strong>: it tells Java what’s inside, so
-    <code>List&lt;String&gt;</code> only accepts Strings and you never have to guess the type coming out.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧰</span>
+    <div class="callout__b"><b>Analogy</b>
+      A toolbox with labelled compartments. A <code>List</code> is a shelf where things sit in the order
+      you placed them; a <code>Map</code> is a set of labelled drawers you open by name. The
+      <code>&lt; &gt;</code> part is the label on the toolbox telling you what belongs inside.</div>
+  </div>
+
+  <p>The <code>&lt; &gt;</code> part is called <strong>generics</strong>: it tells Java what is inside,
+    so <code>List&lt;String&gt;</code> accepts only text, and you never have to guess the type coming
+    back out.</p>
+
+  <pre><code>List&lt;String&gt; names = new ArrayList&lt;&gt;();
+names.add("Ada");
+names.add("Grace");
+
+Map&lt;String, Integer&gt; stock = new HashMap&lt;&gt;();
+stock.put("apples", 12);
+int apples = stock.get("apples");   // look up by key — returns 12</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>List&lt;String&gt;</code> and <code>Map&lt;String, Integer&gt;</code> put the type in
+      <em>once</em>, and Java then keeps the promise for you everywhere. <code>stock.get("apples")</code>
+      comes back as an <code>int</code> with no casting and no guessing.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A collection is a container for many values. Generics is the label on the container that says
+      what kind of values go in — so Java can stop you putting the wrong thing in, and tell you exactly
+      what comes out.</p>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       8 — EXCEPTIONS & STACK TRACES
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>8. Exceptions &amp; stack traces</h2>
-  <p>When something goes wrong at runtime, Java <strong>throws an exception</strong> — it stops the
-    current work and reports an error object (e.g. <code>NullPointerException</code>,
-    <code>ArithmeticException</code>). You can <code>try { ... } catch (Exception e) { ... }</code> to
-    handle it instead of crashing.</p>
-  <p>The printout that follows an error is a <strong>stack trace</strong>: the chain of method calls that
-    led to the failure, most recent first. Reading skill you’ll use forever:</p>
+  <p>When something goes wrong while a program runs, Java <strong>throws an exception</strong>: it stops
+    the current work and hands you an error object. Two you will see early are
+    <code>NullPointerException</code> (you used something that was empty) and
+    <code>ArithmeticException</code> (like dividing by zero).</p>
+  <p>You can catch that error instead of letting it crash the program:</p>
+
+  <pre><code>try {
+    int result = 10 / 0;                       // this blows up at run time
+} catch (ArithmeticException e) {
+    System.out.println("Not allowed: " + e.getMessage());
+}</code></pre>
+
+  <p>If you do not catch it, Java prints a <strong>stack trace</strong>: the chain of method calls that
+    led to the failure, most recent first. Reading a stack trace is a skill you will use forever, and
+    it comes down to two places in the printout:</p>
+
   <pre><code>java.lang.ArithmeticException: / by zero
     at com.example.CalculatorBean.divide(CalculatorBean.java:42)   &lt;-- the real culprit line
     at com.example.Main.main(Main.java:11)
 Caused by: ...                                                     &lt;-- look here for the ROOT cause</code></pre>
-  <p>Rule: scroll to the <strong>first line of your own code</strong> in the trace, and read any
-    <strong>“Caused by:”</strong> at the bottom. Unit 16 practises this.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📦</span>
+    <div class="callout__b"><b>Analogy</b>
+      A delivery tracking log. A parcel changed hands several times; the log lists every handoff, most
+      recent first, all the way back to where it started. The stack trace is that log for a failure —
+      and the <em>bottom</em> line is where the trouble really began.</div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Do not read a stack trace top to bottom like a paragraph. Scroll to the <strong>first line that
+      mentions your own code</strong>, and read any <strong>“Caused by:”</strong> at the bottom. Those
+      two spots hold almost all the answer.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Do not fix the last line</b>
+      Beginners panic at the length of the trace and start editing the bottom of it. The last line is
+      usually a symptom. The cause sits in your own code — the first line in the trace that names a file
+      you wrote.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An exception is Java refusing to carry on with something impossible. A stack trace is the
+      receipt: it lists the calls that led to the crash. Read the first line that mentions your code,
+      and any “Caused by” at the bottom.</p>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       9 — LIBRARIES, JARS & "AN API"
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>9. Libraries, JARs &amp; “an API”</h2>
-  <p>A <strong>library</strong> is someone else’s prewritten code you reuse. Java libraries ship as
-    <strong>JAR</strong> files (a <code>.jar</code> is just a zip of <code>.class</code> files).</p>
+  <p>A <strong>library</strong> is someone else's prewritten code that you reuse instead of writing
+    your own. Java libraries ship as <strong>JAR</strong> files — a <code>.jar</code> is simply a zip
+    full of compiled <code>.class</code> files.</p>
   <p>An <strong>API</strong> (Application Programming Interface) is the set of classes and methods a
     library offers you to call — its “control panel”. “The JMS API” means “the classes you use to do
-    messaging”. You’ll hear *API* constantly; it just means *the callable surface of some component*.</p>
+    messaging”. You will hear the word <em>API</em> constantly; it just means <em>the callable surface
+    of some component</em>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🪑</span>
+    <div class="callout__b"><b>Analogy</b>
+      A flat-pack furniture kit. The <strong>JAR</strong> is the box of parts — everything you need,
+      packed up. The <strong>API</strong> is the instruction sheet and the labelled handles: the
+      specific places you are meant to grip and turn. You do not need to know how the factory cut the
+      wood; you only need the handles it gives you.</div>
+  </div>
+
+  <pre><code>// a library arrives as a .jar: a zip of .class files you add to your project
+import jakarta.persistence.Entity;   // one class an API hands you to use</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      A JAR is the <em>file</em>; an API is the <em>set of ways you use it</em>. When someone says “the
+      Jakarta Mail API”, they mean the classes and methods you call — not a file you download.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What is a library, and what file does it usually arrive in?</li>
+      <li>In one sentence, what is an API?</li>
+      <li>If a method returns <code>List&lt;String&gt;</code>, what does the part inside
+        <code>&lt; &gt;</code> tell you?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Someone else's <strong>prewritten code you reuse</strong>. It arrives as a
+          <strong>JAR</strong> — a zip of compiled <code>.class</code> files.</li>
+        <li>The <strong>set of classes and methods a library gives you to call</strong> — its control
+          panel.</li>
+        <li>That every item is a <strong><code>String</code></strong> — so Java stops you putting
+          anything else in, and hands you a <code>String</code> back out.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       10 — BUILD TOOLS & pom.xml  (steps)
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>10. Build tools &amp; <code>pom.xml</code></h2>
-  <p>Typing <code>javac</code> by hand for hundreds of files, downloading every JAR manually — no.
-    A <strong>build tool</strong> does it. This course uses <strong>Maven</strong>.</p>
-  <p>You describe the project once in a file called <code>pom.xml</code>:</p>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Tag</th><th>Meaning</th></tr></thead>
-    <tbody>
-      <tr><td><code>groupId</code></td><td>Your organisation, e.g. <code>com.globalbank</code>.</td></tr>
-      <tr><td><code>artifactId</code></td><td>This project’s name, e.g. <code>accounts-ejb</code>.</td></tr>
-      <tr><td><code>version</code></td><td>e.g. <code>1.0.0</code>.</td></tr>
-      <tr><td><code>packaging</code></td><td>What to build: <code>jar</code>, <code>war</code> (web app), or <code>ear</code> (enterprise bundle).</td></tr>
-      <tr><td><code>dependency</code></td><td>A library you need. Maven downloads it for you.</td></tr>
-      <tr><td><code>&lt;scope&gt;provided&lt;/scope&gt;</code></td><td>“Don’t bundle this — the server already has it.” Used for the Jakarta EE API.</td></tr>
-    </tbody>
-  </table></div>
-  <p>Then <code>mvn clean package</code> builds everything into a <code>target/</code> folder. Try it:</p>
+  <p>Typing <code>javac</code> by hand for hundreds of files and downloading every JAR yourself is not
+    how real projects work. A <strong>build tool</strong> does it for you. This course uses
+    <strong>Maven</strong>.</p>
+  <p>You describe the project once, in a file called <code>pom.xml</code>, and then the tool takes over.
+    Here is the whole idea as four steps.</p>
 
-  <div class="terminal" data-terminal="setup">
-    <div class="terminal__bar"></div>
-    <div class="terminal__screen"></div>
-    <div class="terminal__inputline"></div>
+  <ol class="steps">
+
+    <li>
+      <h4>Describe the project</h4>
+      <p>The <code>pom.xml</code> names your project and says what to build. The most important tags are
+        <code>groupId</code>, <code>artifactId</code>, <code>version</code> and
+        <code>packaging</code>. The full anatomy is in the <a href="#reference">reference section</a>.</p>
+      <pre><code>&lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+&lt;artifactId&gt;accounts-ejb&lt;/artifactId&gt;
+&lt;version&gt;1.0.0&lt;/version&gt;
+&lt;packaging&gt;war&lt;/packaging&gt;      &lt;!-- build me a web app --&gt;</code></pre>
+    </li>
+
+    <li>
+      <h4>Declare the libraries you need</h4>
+      <p>Instead of hunting down JAR files, you list them. Maven finds and downloads them.</p>
+      <pre><code>&lt;dependency&gt;
+  &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+  &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+  &lt;version&gt;10.0.0&lt;/version&gt;
+  &lt;scope&gt;provided&lt;/scope&gt;      &lt;!-- the server already has it — do not bundle a copy --&gt;
+&lt;/dependency&gt;</code></pre>
+      <p><code>scope provided</code> means “I need this to compile, but the server already ships its
+        own copy — do not include mine.” Getting that wrong causes confusing version clashes.</p>
+    </li>
+
+    <li>
+      <h4>Build it with one command</h4>
+      <p>Maven compiles everything and packages it into a <code>target/</code> folder.</p>
+      <pre><code>mvn clean package      // → BUILD SUCCESS → target/accounts-ejb.war</code></pre>
+      <p>That <code>.war</code> file is what you hand to the server later. A build tool turns a folder
+        of source files into one deployable file.</p>
+    </li>
+
+    <li>
+      <h4>Try it in the pretend terminal</h4>
+      <p>Below is a simulated command line. It is safe — nothing touches your computer. Type
+        <code>help</code> to see what is available.</p>
+      <div class="terminal" data-terminal="setup">
+        <div class="terminal__bar"></div>
+        <div class="terminal__screen"></div>
+        <div class="terminal__inputline"></div>
+      </div>
+      <p style="font-size:.9rem;color:var(--ink-faint)">Try: <code>help</code>, then
+        <code>java -version</code>, <code>cat pom.xml</code>, <code>mvn clean package</code>. Use ↑ to
+        repeat a command.</p>
+    </li>
+  </ol>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏗️</span>
+    <div class="callout__b"><b>Analogy</b>
+      A general contractor. You hand over a job spec (the <code>pom.xml</code>) and walk away. The
+      contractor orders the materials (dependencies), assembles the building (compile), and leaves one
+      finished package on the site (<code>target/</code>). You never fetch a single brick yourself.</div>
   </div>
-  <p style="font-size:.9rem;color:var(--ink-faint)">Try: <code>help</code>, then <code>java -version</code>,
-    <code>cat pom.xml</code>, <code>mvn clean package</code>. Use ↑ to repeat a command.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      You describe the project <strong>once</strong>; the tool does the same work every time, on every
+      machine. That repeatability is the whole reason build tools exist — not speed, but the fact that
+      everyone gets the identical result.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A build tool is a robot assistant for turning many source files into one ready-to-ship file. The
+      <code>pom.xml</code> is the brief you give it: what the project is called, what it should become,
+      and which libraries it needs.</p>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       11 — SERVERS, CLIENTS, HTTP
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>11. Servers, clients, HTTP</h2>
   <p>A <strong>server</strong> is a program that stays running and waits for requests. A
-    <strong>client</strong> is whatever sends a request (a browser, a phone app, another program).</p>
-  <p><strong>HTTP</strong> is the request/response language of the web. A client sends a
-    <em>request</em> (“GET me the page at <code>/accounts/123</code>”); the server sends back a
-    <em>response</em> (some HTML or data, plus a status code like <code>200 OK</code> or
-    <code>404 Not Found</code>). Web addresses starting <code>http://localhost:8080</code> mean
-    “a server on this same machine, listening on port 8080” — which is exactly where WildFly runs.</p>
-  <div class="callout callout--analogy">
-    <span class="callout__i">🏪</span>
+    <strong>client</strong> is whatever sends a request — a browser, a phone app, or another program.</p>
+  <p><strong>HTTP</strong> is the request-and-response language of the web. A client sends a
+    <em>request</em> (“GET me the data at <code>/accounts/123</code>”); the server sends back a
+    <em>response</em> (the data, plus a <strong>status code</strong> like <code>200 OK</code> or
+    <code>404 Not Found</code>).</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📮</span>
     <div class="callout__b"><b>Analogy</b>
-      Server = a shop that’s always open. Client = a customer. HTTP = the language they order in.
-      Port = which counter you walk up to.</div>
+      A post office. The <strong>server</strong> is the sorting office, open all day, waiting for mail.
+      The <strong>client</strong> is you posting a letter. <strong>HTTP</strong> is the standard envelope
+      format and the addressing rules both sides agreed on. The <strong>status code</strong> on the
+      reply is the stamp: delivered, or address unknown.</div>
   </div>
+
+  <p>A request and its response look like this:</p>
+
+  <pre><code>GET /accounts/123 HTTP/1.1
+Host: localhost:8080
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{ "account_id": 123, "balance": 500 }</code></pre>
+
+  <p>An address starting <code>http://localhost:8080</code> means “a server on this same machine,
+    listening on port <strong>8080</strong>” — which is exactly where WildFly runs in this course.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The status code on the first line of the response tells you instantly whether it worked.
+      <code>200</code> means success; <code>404</code> means the server answered but had nothing at that
+      address. You will meet the full list in the reference section.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b><code>localhost</code> is not the internet</b>
+      <code>localhost</code> always means <em>this same machine</em>. A server at
+      <code>localhost:8080</code> is only reachable from your own computer — nobody else can open it.
+      That is deliberate: it is your private practice server.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A server waits; a client asks; HTTP is the language they use; a status code is the one-word
+      reply that says whether the asking worked. A <em>port</em> is which counter at the post office you
+      walk up to.</p>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       12 — DATABASES & SQL
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>12. Databases &amp; SQL</h2>
   <p>A <strong>database</strong> stores data that must survive after the program stops — accounts,
-    orders, users. A <strong>relational database</strong> (PostgreSQL, MySQL, H2…) stores it in
+    orders, users. A <strong>relational database</strong> (PostgreSQL, MySQL, H2…) stores that data in
     <strong>tables</strong>: rows and named columns, like a spreadsheet with rules.</p>
-  <p><strong>SQL</strong> is the language for talking to it:</p>
-  <pre><code>SELECT balance FROM accounts WHERE account_id = 123;   -- read one value
-INSERT INTO accounts (account_id, balance) VALUES (124, 0);   -- add a row
-UPDATE accounts SET balance = 500 WHERE account_id = 124;     -- change a row</code></pre>
-  <p>Your Java code sends SQL to the database and gets rows back. Units 12–13 show two ways to do that
-    (raw JDBC, and JPA which hides most of the SQL).</p>
+  <p><strong>SQL</strong> is the language for talking to it. Three commands cover most of what you will
+    do — read, add, and change:</p>
+
+  <pre><code>SELECT balance FROM accounts WHERE account_id = 123;            -- read one value
+INSERT INTO accounts (account_id, balance) VALUES (124, 0);     -- add a row
+UPDATE accounts SET balance = 500 WHERE account_id = 124;       -- change a row</code></pre>
+
+  <p>Your Java code sends SQL to the database and gets rows back. Later units show two ways to do that:
+    raw JDBC, and JPA, which hides most of the SQL behind ordinary Java objects.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📚</span>
+    <div class="callout__b"><b>Analogy</b>
+      A library. The shelves are the <strong>tables</strong>; each book is a <strong>row</strong>; the
+      call number on the spine is the <strong>primary key</strong> that identifies it uniquely. SQL is
+      the request slip you fill in at the desk — and the librarian fetches exactly the books you asked
+      for.</div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The data is not inside your program. Your program asks the database a question in SQL and gets
+      rows back. That is why the data survives when the program stops — it was never the program's to
+      begin with.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A database is a permanent store of data, kept in tables. SQL is how your program asks it
+      questions — “read this”, “add that”, “change that”. The data outlives the program that wrote it.</p>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Name the three SQL commands you just saw, and what each one does.</li>
+      <li>What does it mean that a database is <em>relational</em>?</li>
+      <li>Where does your Java code send SQL, and what does it get back?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>SELECT</code> <strong>reads</strong>, <code>INSERT</code> <strong>adds a row</strong>,
+          <code>UPDATE</code> <strong>changes a row</strong>.</li>
+        <li>It stores data in <strong>tables</strong> — rows and named columns — with rules about what
+          each column may hold.</li>
+        <li>To the <strong>database</strong>; it gets <strong>rows of data</strong> back.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       13 — THE WORDS THIS COURSE LEANS ON
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
   <h2>13. The words this course leans on</h2>
+  <p>These seven words appear constantly from here on. You do not need to memorise them — just recognise
+    them, and come back when one feels slippery.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>Word</th><th>Plain meaning</th></tr></thead>
     <tbody>
-      <tr><td><strong>Container</strong></td><td>The part of the server that creates, manages and destroys your objects, and wraps them with services (security, transactions). You don’t call <code>new</code> — the container does.</td></tr>
-      <tr><td><strong>Bean</strong></td><td>Just “a class the container manages for you.” An <em>enterprise bean</em> is one with EJB annotations like <code>@Stateless</code>.</td></tr>
+      <tr><td><strong>Container</strong></td><td>The part of the server that creates, manages and destroys your objects, and wraps them with services (security, transactions). You do not call <code>new</code> — the container does.</td></tr>
+      <tr><td><strong>Bean</strong></td><td>Just “a class the container manages for you”. An <em>enterprise bean</em> is one carrying EJB annotations such as <code>@Stateless</code>.</td></tr>
       <tr><td><strong>Deploy</strong></td><td>Hand your built <code>.war</code>/<code>.ear</code> to the server so it starts running it.</td></tr>
       <tr><td><strong>Inject</strong></td><td>“The container fills this field in for me.” You declare <code>@Inject SomeService s;</code> and the container hands you a ready object.</td></tr>
       <tr><td><strong>Instance</strong></td><td>Same thing as an object — one concrete item made from a class.</td></tr>
-      <tr><td><strong>Transaction</strong></td><td>A group of steps that must <em>all</em> succeed or <em>all</em> be undone. Unit 06.</td></tr>
-      <tr><td><strong>Asynchronous</strong></td><td>“Send it and carry on; the result comes later.” The opposite of waiting (synchronous). Unit 11.</td></tr>
+      <tr><td><strong>Transaction</strong></td><td>A group of steps that must <em>all</em> succeed or <em>all</em> be undone. You meet these in <a href="session-10-ejb-transactions.html">Session 10</a>.</td></tr>
+      <tr><td><strong>Asynchronous</strong></td><td>“Send it and carry on; the result comes later.” The opposite of waiting (synchronous).</td></tr>
     </tbody>
   </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Container</strong> is the manager, <strong>bean</strong> is a class it manages,
+      <strong>deploy</strong> is handing it the finished app, and <strong>inject</strong> is the manager
+      filling in your field with a ready object. Those four sentences get you through most of the
+      course.</p>
+  </div>
   <p>The full A–Z is in the <a href="glossary.html">glossary</a>, linked from every unit.</p>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
 
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Check yourself</h3>
+    <h3>Check yourself — Foundations</h3>
     <script type="application/json">
     [
-      {"q":"You wrote Calculator.java. What turns it into something the JVM can run?","opts":["The java command","The javac compiler, producing a .class file","Maven's pom.xml","The web browser"],"a":1,"why":"javac compiles .java text into .class bytecode; then the java command starts the JVM to run that bytecode."},
-      {"q":"A class vs an object:","opts":["They are the same thing","A class is the blueprint; an object is a real item built from it with new","An object is the blueprint; a class is the copy","Only servers have objects"],"a":1,"why":"One class (blueprint) can produce many objects (instances), each with its own data."},
-      {"q":"What is an interface?","opts":["A screen the user sees","A promise of what methods exist, with no implementation","A type of database","Another word for a JAR file"],"a":1,"why":"An interface is a contract: it lists method signatures. A class implements it and supplies the real code."},
-      {"q":"Which import is valid?","opts":["import jakarta.naming.InitialContext;","import javax.naming.InitialContext;","Both","Neither"],"a":1,"why":"JNDI stayed under javax.naming. There is no jakarta.naming package — a real bug to watch for in Unit 05."},
-      {"q":"An annotation like @Stateless...","opts":["Runs a block of code immediately","Is a label a tool reads later to change how the class is treated","Is a comment the computer ignores","Creates a new database table"],"a":1,"why":"Annotations carry meaning for tools/servers. @Stateless tells the container to manage the class as a stateless bean."}
+      {"q":"You wrote Demo.java. What turns it into something the JVM can run?","opts":["The java command, directly","The javac compiler, producing a .class file of bytecode","Maven's pom.xml","The web browser"],"a":1,"why":"javac compiles .java text into .class bytecode; then the java command starts the JVM to run that bytecode."},
+      {"q":"Why does the same .class file run on Windows, macOS and Linux?","opts":["Because Java is faster than other languages","Because a JVM exists on each system, and every JVM runs the same bytecode","Because the file is rewritten for each machine","Because Windows emulates Linux"],"a":1,"why":"The JVM is the adapter: one bytecode, many machines. That is what 'write once, run anywhere' means."},
+      {"q":"A class vs an object:","opts":["They are the same thing","A class is the blueprint; an object is a real item built from it with new","An object is the blueprint; a class is a copy of it","Only servers have objects"],"a":1,"why":"One class (cutter) can produce many objects (cookies), each with its own data."},
+      {"q":"What is an interface?","opts":["A screen the user sees","A promise about which methods exist, with no code for how they work","A type of database","Another word for a JAR file"],"a":1,"why":"An interface is a contract: it lists method signatures, and a class that implements it supplies the real code."},
+      {"q":"Which import is valid?","opts":["import jakarta.naming.InitialContext;","import javax.naming.InitialContext;","Both are valid","Neither is valid"],"a":1,"why":"JNDI kept the old name under javax.naming. There is no jakarta.naming package — a real trap to watch for in Session 3."},
+      {"q":"An annotation like @Stateless...","opts":["Runs a block of code immediately","Is a label a tool reads later to change how the class is treated","Is a comment the computer ignores","Creates a new database table"],"a":1,"why":"Annotations carry meaning for tools and servers. @Stateless tells the container to manage the class as a stateless bean."},
+      {"q":"Why write List&lt;String> instead of just List?","opts":["To make it run faster","To tell Java what is inside, so it only accepts Strings and you never guess the type coming out","To sort the list automatically","To make the list permanent"],"a":1,"why":"Generics put the type in once so Java keeps the promise everywhere — this is called generics."},
+      {"q":"What should you read first in a stack trace?","opts":["The last line only","The first line that mentions your own code, plus any 'Caused by:' at the bottom","The file size","The timestamp"],"a":1,"why":"The last line is usually a symptom. The real cause sits in your own code, with the root cause under 'Caused by:'."},
+      {"q":"A JAR is...","opts":["A relational database","A zip of compiled .class files you reuse as a library","A kind of application server","An annotation"],"a":1,"why":"A .jar is simply a zip of .class files. The API is the set of classes and methods you call from it."}
     ]
     </script>
   </section>
 
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE — optional depth, collapsed by default
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2 id="reference">Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the unit. It is here because the textbook and later sessions use
+    these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>🔢 Java's primitive types and their wrapper classes</strong></summary>
+    <p>A <strong>primitive</strong> is a raw value — fast, but not an object. A <strong>wrapper</strong>
+      is the object version of the same value, needed whenever Java wants an object (for example, inside
+      a collection: you write <code>List&lt;Integer&gt;</code>, never <code>List&lt;int&gt;</code>).</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Primitive</th><th>Wrapper class</th><th>What it holds</th></tr></thead>
+      <tbody>
+        <tr><td><code>int</code></td><td><code>Integer</code></td><td>A whole number, e.g. <code>42</code>.</td></tr>
+        <tr><td><code>long</code></td><td><code>Long</code></td><td>A whole number, for very large values.</td></tr>
+        <tr><td><code>double</code></td><td><code>Double</code></td><td>A decimal number, e.g. <code>3.14</code>.</td></tr>
+        <tr><td><code>boolean</code></td><td><code>Boolean</code></td><td><code>true</code> or <code>false</code>.</td></tr>
+        <tr><td><code>char</code></td><td><code>Character</code></td><td>A single character, e.g. <code>'A'</code>.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Java converts between them automatically in most cases, so you rarely see the wrapper name
+      written — except in generics, where only the wrapper is allowed.</p>
+  </details>
+
+  <details>
+    <summary><strong>🧺 Which collection should I use?</strong></summary>
+    <p>Most of the time the answer is the first or second row. Reach for the others only when you need
+      what they offer.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>You need to…</th><th>Use</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>Keep values in order, duplicates allowed</td><td><code>List&lt;T&gt;</code></td><td>Order is preserved; you fetch by position with <code>get(0)</code>.</td></tr>
+        <tr><td>Look a value up by a key</td><td><code>Map&lt;K,V&gt;</code></td><td>Store with <code>put(key, value)</code>, fetch with <code>get(key)</code>.</td></tr>
+        <tr><td>Keep values with no duplicates</td><td><code>Set&lt;T&gt;</code></td><td><code>add(...)</code> silently ignores a value already present.</td></tr>
+        <tr><td>Hold a fixed number of slots</td><td><code>T[]</code> (an array)</td><td>Fastest and simplest, but the size is fixed at creation.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>📄 The anatomy of a <code>pom.xml</code></strong></summary>
+    <p>Every tag you will actually read in this course, and what it means.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Tag</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>groupId</code></td><td>Your organisation, e.g. <code>com.globalbank</code>.</td></tr>
+        <tr><td><code>artifactId</code></td><td>This project's name, e.g. <code>accounts-ejb</code>.</td></tr>
+        <tr><td><code>version</code></td><td>This project's version, e.g. <code>1.0.0</code>.</td></tr>
+        <tr><td><code>packaging</code></td><td>What to build: <code>jar</code>, <code>war</code> (web app), or <code>ear</code> (enterprise bundle).</td></tr>
+        <tr><td><code>dependency</code></td><td>A library you need. Maven downloads it for you.</td></tr>
+        <tr><td><code>&lt;scope&gt;provided&lt;/scope&gt;</code></td><td>“Do not bundle this — the server already has it.” Used for the Jakarta EE API.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🚦 HTTP status codes you will meet</strong></summary>
+    <p>The first number of the code is the family: <code>2xx</code> worked, <code>4xx</code> the client
+      asked for something wrong, <code>5xx</code> the server broke.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Code</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>200</code> OK</td><td>It worked. The response contains what you asked for.</td></tr>
+        <tr><td><code>201</code> Created</td><td>It worked, and something new was created.</td></tr>
+        <tr><td><code>400</code> Bad Request</td><td>The client sent something the server could not understand.</td></tr>
+        <tr><td><code>401</code> Unauthorized</td><td>You are not logged in.</td></tr>
+        <tr><td><code>403</code> Forbidden</td><td>You are logged in, but not allowed to do this.</td></tr>
+        <tr><td><code>404</code> Not Found</td><td>The server answered, but there is nothing at that address.</td></tr>
+        <tr><td><code>500</code> Internal Server Error</td><td>The server itself failed while handling the request.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-line summary</h2>
+  <h2>One-line summary of everything</h2>
+  <p>One line per word. If a line here pulls you up short, jump back to its section.</p>
   <div class="tablewrap summary"><table><tbody>
     <tr><td>Program</td><td>Exact instructions, run top to bottom.</td></tr>
-    <tr><td>Java / JVM</td><td>Language; the pretend machine that runs compiled bytecode anywhere.</td></tr>
+    <tr><td>Java / JVM</td><td>The language; the pretend machine that runs compiled bytecode anywhere.</td></tr>
     <tr><td>Variable / type</td><td>A named box; the kind of value it may hold.</td></tr>
-    <tr><td>Method</td><td>A named reusable block, often input → result.</td></tr>
-    <tr><td>Class / object</td><td>Blueprint / a real item made from it with <code>new</code>.</td></tr>
-    <tr><td>Interface</td><td>A contract of methods; classes implement it.</td></tr>
+    <tr><td>Method</td><td>A named reusable block of steps, often input → result.</td></tr>
+    <tr><td>Class / object</td><td>The blueprint; a real item made from it with <code>new</code>.</td></tr>
+    <tr><td>Interface</td><td>A contract of method names; a class implements it.</td></tr>
     <tr><td>Package / import</td><td>Folders for classes; permission to use one from elsewhere.</td></tr>
     <tr><td>Annotation</td><td>A meaningful sticky note (<code>@Stateless</code>) a tool reads.</td></tr>
     <tr><td>Exception / stack trace</td><td>A runtime error; the call chain that caused it.</td></tr>
     <tr><td>Library / JAR / API</td><td>Reused code; its zip file; its callable surface.</td></tr>
-    <tr><td>Maven / pom.xml</td><td>Build tool; the file describing the project + its libraries.</td></tr>
-    <tr><td>Server / client / HTTP</td><td>Always-on program; requester; their request/response language.</td></tr>
-    <tr><td>Database / SQL</td><td>Where data survives; the language to read/write it.</td></tr>
-    <tr><td>Container / bean / deploy / inject</td><td>Manager of your objects / a managed class / hand it to the server / let the container fill a field.</td></tr>
+    <tr><td>Maven / pom.xml</td><td>Build tool; the file describing the project and its libraries.</td></tr>
+    <tr><td>Server / client / HTTP</td><td>Always-on program; requester; their request-and-response language.</td></tr>
+    <tr><td>Database / SQL</td><td>Where data survives; the language to read and write it.</td></tr>
+    <tr><td>Container / bean / deploy / inject</td><td>Manager of your objects; a managed class; hand it to the server; let the container fill a field.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Expecting a <code>.java</code> file to run on its own</td><td>Compile it first with <code>javac</code>, then run the <code>.class</code> with <code>java</code>.</td></tr>
+      <tr><td>Thinking the JVM is the Java language</td><td>They are three things: <strong>Java</strong> the language, <strong>javac</strong> the compiler, <strong>JVM</strong> the runner.</td></tr>
+      <tr><td>Confusing a class with an object</td><td>A class is the blueprint; an object is one real item made with <code>new</code>.</td></tr>
+      <tr><td>Writing <code>import jakarta.naming.InitialContext;</code></td><td>JNDI kept its old name: <code>import javax.naming.InitialContext;</code>.</td></tr>
+      <tr><td>Using <code>List&lt;int&gt;</code></td><td>Generics need the wrapper: <code>List&lt;Integer&gt;</code>.</td></tr>
+      <tr><td>Reading a stack trace bottom-line-first</td><td>Read the first line that names <em>your</em> code, and any “Caused by:” at the bottom.</td></tr>
+      <tr><td>Treating a JAR and an API as the same thing</td><td>A JAR is the file; an API is the set of classes and methods you call from it.</td></tr>
+      <tr><td>Believing <code>localhost:8080</code> is a public address</td><td>It is your own machine only. Nobody else can reach it.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Every word in this unit turns up in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this unit</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Classes, objects, methods, annotations</td><td><a href="session-01-02-intro-and-beans.html">Session 1 &amp; 2 — Enterprise Beans, Explained Slowly</a></td></tr>
+      <tr><td>Interfaces and “talking to a bean without knowing its class”</td><td><a href="session-06-local-remote.html">Session 6 — Local &amp; Remote Clients</a></td></tr>
+      <tr><td>Packages, and the <code>javax</code> vs <code>jakarta</code> trap</td><td><a href="session-03-resource-creation.html">Session 3 — Resource Creation</a></td></tr>
+      <tr><td>Collections &amp; generics</td><td><a href="session-04-working-with-ejb.html">Session 4 — Working with EJB</a> · <a href="13-jpa-persistence.html">Bonus — JPA</a></td></tr>
+      <tr><td>Exceptions &amp; stack traces</td><td><a href="16-testing.html">Bonus — Testing &amp; Reading Errors</a></td></tr>
+      <tr><td>Libraries, JARs &amp; APIs</td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a> · <a href="session-14-packaging.html">Session 14 — Packaging</a></td></tr>
+      <tr><td>Build tools &amp; <code>pom.xml</code></td><td><a href="01-setup.html">Set up your workshop</a> · <a href="session-14-packaging.html">Session 14 — Packaging</a></td></tr>
+      <tr><td>Servers, clients, HTTP &amp; status codes</td><td><a href="15-rest-jaxrs.html">Bonus — REST APIs with JAX-RS</a> · <a href="session-06-local-remote.html">Session 6 — Local &amp; Remote Clients</a></td></tr>
+      <tr><td>Databases &amp; SQL</td><td><a href="13-jpa-persistence.html">Bonus — JPA</a> · <a href="session-08-connectors.html">Session 8 — Connectors</a></td></tr>
+      <tr><td>Container, bean, deploy, inject</td><td><a href="session-01-02-intro-and-beans.html">Session 1 &amp; 2 — Enterprise Beans, Explained Slowly</a></td></tr>
+      <tr><td>Every term on this page</td><td><a href="glossary.html">Glossary — every term, in plain words</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://dev.java/learn/" target="_blank" rel="noopener">Dev.java — the official Java tutorials</a></li>
+          <li><a href="https://docs.oracle.com/javase/tutorial/java/index.html" target="_blank" rel="noopener">Oracle Java Tutorials — Learning the Java Language</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

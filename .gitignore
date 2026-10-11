@@ -1,0 +1,13 @@
+# Maven build output. Every project under beginner-course/lab/ is a real Maven
+# project, so running "mvn clean package" produces target/ next to each pom.xml.
+# It is generated, never edited, and should never be committed.
+target/
+
+# Compiled Java, wherever it ends up.
+*.class
+
+# IDE folders (the checked-in .vscode/settings.json is deliberate, so it is not
+# listed here).
+.idea/
+*.iml
+nbproject/

@@ -1,48 +1,277 @@
-<title>REST APIs with JAX-RS</title>
-<meta name="description" content="The modern way clients talk to a Jakarta EE backend: HTTP endpoints that return JSON, built with JAX-RS annotations.">
+<title>REST APIs with JAX-RS, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Written for people who have never seen REST before. What a resource is, what the HTTP verbs do, how a status code answers you, and how JAX-RS turns one Java method into an HTTP endpoint.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "15-rest-jaxrs";</script>
 
 <main class="page">
 
-  <h1>Unit 15 · REST APIs with JAX-RS</h1>
-  <p class="lede">The original course never covered this, yet it’s how most Jakarta EE backends talk to
-    the world today. <strong>JAX-RS</strong> (Jakarta RESTful Web Services) turns Java methods into
-    HTTP endpoints that usually speak JSON.</p>
+  <h1>REST APIs with JAX-RS, Explained Slowly</h1>
+  <p class="lede">This page teaches you how a Jakarta EE backend talks to the outside world. A client
+    sends an <strong>HTTP request</strong> to a web address, and one of your Java methods answers it.
+    You do not need to know REST, HTTP verbs or JAX-RS already — every difficult word is explained the
+    moment it appears, and everything runs in your browser.</p>
 
-  <div class="callout"><span class="callout__i">↩︎</span>
-    <div class="callout__b"><b>Recap</b> HTTP = request/response; a client sends
-      <code>GET /accounts/123</code>, the server answers with data and a status code (Unit 00). JAX-RS
-      maps those requests to your methods.</div>
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Each new word gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> You have never heard of REST, and that is fine.</li>
+        <li><strong>You can try everything here.</strong> Press <em>Run</em> and watch a recorded request-and-response exchange.</li>
+        <li><strong>By the end you will know where REST fits.</strong> A resource is a thin front desk; the real work lives in a bean.</li>
+      </ol>
+    </div>
   </div>
 
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a wall of acronyms — six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what REST means and what a <em>resource</em> is</td><td>Part 1</td></tr>
+      <tr><td>Read the four HTTP verbs and pick the right one for a job</td><td>Part 1</td></tr>
+      <tr><td>Choose the status code that matches what happened</td><td>Part 1</td></tr>
+      <tr><td>Switch JAX-RS on and give your endpoints one shared prefix</td><td>Part 2</td></tr>
+      <tr><td>Turn a Java method into an URL with <code>@Path</code> and <code>@GET</code>/<code>@POST</code></td><td>Part 3</td></tr>
+      <tr><td>Keep a resource thin and let an injected bean do the real work</td><td>Part 3</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press <strong>Run</strong> and watch a recorded HTTP exchange.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — REST IN PLAIN ENGLISH
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
-  <h2>REST in one paragraph</h2>
-  <p>Model your system as <strong>resources</strong> (things: an account, an order) each at a
-    <strong>URL</strong>, and act on them with HTTP <strong>verbs</strong>:</p>
+  <h2>Part 1 · REST in plain English</h2>
+  <p>REST is a way of designing the conversation between a client and a server. That is genuinely all
+    it is — a set of habits for <em>naming things</em> and <em>asking for them</em>. There are three
+    habits, and you can learn them in the next few minutes.</p>
+
+  <h3>1.1 A resource is just a thing, with its own web address</h3>
+  <p>In REST you model your system as <strong>resources</strong>. A <strong>resource</strong> is simply
+    <strong>a thing your system knows about</strong>: an account, an order, a customer, a book.</p>
+  <p>Every resource gets its own <strong>URL</strong> — its own web address. The account numbered 123
+    lives at <code>/accounts/123</code>. The collection of all accounts lives at
+    <code>/accounts</code>. The <code>123</code> part is the resource's own identity.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A resource is <strong>a thing</strong>, and every thing gets its own address. You do not send
+      the server a list of instructions like “go into the database and…” — you point at a thing and
+      say what you want done to it.</p>
+  </div>
+
+  <h3>1.2 The verb is the action you want</h3>
+  <p>If the URL says <em>which thing</em>, the HTTP <strong>verb</strong> says <em>what to do to it</em>.
+    There are four you will use every day:</p>
+
   <div class="tablewrap"><table>
     <thead><tr><th>Verb</th><th>Means</th><th>Example</th></tr></thead>
     <tbody>
       <tr><td><code>GET</code></td><td>read</td><td><code>GET /accounts/123</code></td></tr>
       <tr><td><code>POST</code></td><td>create</td><td><code>POST /accounts</code></td></tr>
-      <tr><td><code>PUT</code></td><td>replace/update</td><td><code>PUT /accounts/123</code></td></tr>
+      <tr><td><code>PUT</code></td><td>replace / update</td><td><code>PUT /accounts/123</code></td></tr>
       <tr><td><code>DELETE</code></td><td>remove</td><td><code>DELETE /accounts/123</code></td></tr>
     </tbody>
   </table></div>
-  <p>Common status codes: <code>200 OK</code>, <code>201 Created</code>, <code>204 No Content</code>,
-    <code>400 Bad Request</code>, <code>404 Not Found</code>, <code>500 Server Error</code>.</p>
+
+  <p>Notice the pattern. The <code>GET</code> and <code>DELETE</code> examples point at <em>one</em>
+    account (<code>/accounts/123</code>). The <code>POST</code> example points at the
+    <em>collection</em> (<code>/accounts</code>), because the new thing does not exist yet and has no
+    number.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍽️</span>
+    <div class="callout__b"><b>Analogy</b>
+      Think of a restaurant menu. Each dish on the menu is a <em>thing</em> with a name — that is your
+      URL. The <em>verb</em> is what you want done: look at it (<code>GET</code>), order a new one
+      (<code>POST</code>), send it back to be remade (<code>PUT</code>), cancel it
+      (<code>DELETE</code>). You never say “rearrange the kitchen” — you point at the dish and say what
+      you want.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Never change data with a <code>GET</code></b>
+      A <code>GET</code> means “read this and change nothing.” Browsers, proxies and search engines all
+      assume that, and they may repeat a <code>GET</code> on their own. If a link can delete an
+      account, you have used the wrong verb — that action belongs on <code>DELETE</code> or
+      <code>POST</code>.</div>
+  </div>
+
+  <h3>1.3 The status code is the answer</h3>
+  <p>Every HTTP response carries a <strong>status code</strong>: a three-digit number saying whether
+    the request worked, and if not, what went wrong. The source material lists the six you will meet
+    constantly: <code>200 OK</code>, <code>201 Created</code>, <code>204 No Content</code>,
+    <code>400 Bad Request</code>, <code>404 Not Found</code>, <code>500 Server Error</code>. Each one
+    gets a full explanation in the Reference section at the end.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>The status code is the server answering one question in a single number: <em>did it work?</em>
+      Numbers starting with <strong>2</strong> mean yes; <strong>4</strong> means you (the client)
+      asked for something wrong; <strong>5</strong> means the server itself broke while trying.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧾</span>
+    <div class="callout__b"><b>Analogy</b>
+      A shop counter stamps your receipt before handing it back. “Done” (<code>200</code>). “We made
+      you a new one” (<code>201</code>). “Done, nothing to give you” (<code>204</code>). “Your form
+      makes no sense” (<code>400</code>). “We have no such item” (<code>404</code>). “Our till has
+      crashed” (<code>500</code>). One stamp, and you know exactly where you stand.</div>
+  </div>
+
+  <h3>1.4 Putting it together</h3>
+  <p>That is the whole of REST. Every request is three decisions:</p>
+  <ol>
+    <li>Which <strong>resource</strong>? → the URL, such as <code>/accounts/123</code></li>
+    <li>Which <strong>verb</strong>? → <code>GET</code>, <code>POST</code>, <code>PUT</code> or <code>DELETE</code></li>
+    <li>What came back? → the <strong>status code</strong>, plus a body (usually JSON — plain text
+      describing an object, such as <code>{"balance":42}</code>)</li>
+  </ol>
+  <p>Everything else on this page is about how Java answers steps 2 and 3.</p>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>In REST, what is a <em>resource</em>?</li>
+      <li>You want to change the details of account 123. Which verb, and why not <code>GET</code>?</li>
+      <li>The server has no account numbered 999. Which status code should it return?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Any thing your system knows about — an account, an order, a customer — with its own URL.</li>
+        <li><code>PUT</code> (or <code>POST</code>) — not <code>GET</code>, because a <code>GET</code>
+          means “read and change nothing,” and caches or browsers may repeat one on their own.</li>
+        <li><code>404 Not Found</code> — the URL was valid, but no resource lives there.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — TURNING IT ON
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
-  <h2>Turn it on</h2>
+  <h2>Part 2 · Turning it on</h2>
+  <p>REST is a set of rules; <strong>JAX-RS</strong> is the part of Jakarta EE that lets your Java
+    methods follow those rules. JAX-RS stands for <em>Jakarta RESTful Web Services</em> — the modern
+    name you will also see is simply <em>Jakarta REST</em>.</p>
+  <p>Switching it on takes one tiny class. It contains no logic at all.</p>
+
+  <div class="code-head">RestConfig.java — switch JAX-RS on</div>
   <pre><code>import jakarta.ws.rs.ApplicationPath;
 import jakarta.ws.rs.core.Application;
 
 @ApplicationPath("/api")          // all endpoints live under /api
 public class RestConfig extends Application { }</code></pre>
 
+  <p>Three things are happening, and only three:</p>
+  <ul>
+    <li><code>extends Application</code> — you are telling the server “this class is my REST
+      configuration.” That is the signal that makes the server start looking for endpoints.</li>
+    <li><code>@ApplicationPath("/api")</code> — you are choosing the <strong>shared prefix</strong>
+      every endpoint will begin with. An endpoint written as <code>/accounts</code> is really served at
+      <code>/api/accounts</code>.</li>
+    <li>The class body is <strong>empty</strong> — <code>{ }</code>. It holds no code because it has no
+      job other than to exist and carry that one label.</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>This class is a <strong>signpost</strong>, not a worker. It does nothing by itself. It tells the
+      server two facts: “turn REST on for this application,” and “put everything under
+      <code>/api</code>.”</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚪</span>
+    <div class="callout__b"><b>Analogy</b>
+      An office building with one front door. <code>@ApplicationPath("/api")</code> is that door —
+      every visitor comes in through it. Inside, each <code>@Path</code> is a different office. Nobody
+      needs to know the room numbers from the street; everyone starts at the same entrance.</div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The class is <strong>empty</strong>. All of the meaning sits in the two lines above it. That is
+      the pattern for this whole unit: you rarely write logic to get enterprise features — you declare
+      what you want with a label, and the container does the work.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Changing the prefix changes every URL</b>
+      Rename <code>@ApplicationPath("/api")</code> to <code>"/bank"</code> and every client that called
+      <code>/api/accounts</code> now gets a <code>404</code>. Choose the prefix once and treat it as
+      part of your public address. And do not forget <code>extends Application</code> — without it,
+      JAX-RS is simply never switched on and every endpoint disappears.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>What does <code>@ApplicationPath("/api")</code> actually decide?</li>
+      <li>Which class must a JAX-RS configuration extend, and why?</li>
+      <li>An endpoint is written <code>@Path("/accounts")</code>. Given the code above, what is its full
+        URL?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The <strong>shared prefix</strong> every endpoint begins with, so clients reach it under
+          <code>/api</code>.</li>
+        <li><code>Application</code> (from <code>jakarta.ws.rs.core</code>). Extending it is the signal
+          that this class switches REST on.</li>
+        <li><code>/api/accounts</code> — the class prefix plus the path.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — A RESOURCE CLASS
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
-  <h2>A resource class</h2>
+  <h2>Part 3 · Turning a Java method into a URL</h2>
+  <p>Now the payoff. A <strong>resource class</strong> is an ordinary Java class that the server maps
+    to URLs. Each method on it answers one combination of a URL and a verb. You mark the class and its
+    methods with annotations, and JAX-RS does the wiring for you.</p>
+
+  <h3>3.1 The annotations you will always use</h3>
+  <p>These six labels do almost all of the work. Do not memorise them now — recognise them, and come
+    back after you have seen the code.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>Job</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Path</code></td><td>URL this class / method answers on</td></tr>
+      <tr><td><code>@GET</code> <code>@POST</code> <code>@PUT</code> <code>@DELETE</code></td><td>Which HTTP verb triggers the method</td></tr>
+      <tr><td><code>@PathParam</code></td><td>Pull a value out of the URL (<code>/{id}</code>)</td></tr>
+      <tr><td><code>@QueryParam</code></td><td>Pull a value from <code>?name=…</code></td></tr>
+      <tr><td><code>@Produces</code> / <code>@Consumes</code></td><td>Response / request body format (usually JSON)</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>3.2 The resource class, line by line</h3>
+  <p>Here is a complete resource for accounts. Read the comments on the right first; the explanation
+    follows underneath.</p>
+
+  <div class="code-head">AccountResource.java — one URL per method</div>
   <pre><code>import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -53,7 +282,7 @@ import jakarta.inject.Inject;
 @Consumes(MediaType.APPLICATION_JSON)                // methods accept JSON
 public class AccountResource {
 
-    @Inject AccountService accounts;                 // your EJB / CDI bean (Unit 13/14)
+    @Inject AccountService accounts;                 // your EJB / CDI bean (see the CDI sessions)
 
     @GET
     public List&lt;Account&gt; list() {
@@ -69,7 +298,7 @@ public class AccountResource {
     }
 
     @POST
-    public Response create(Account incoming) {       // JSON body -> Account, automatically
+    public Response create(Account incoming) {       // JSON body -&gt; Account, automatically
         Account saved = accounts.open(incoming.getHolder());
         return Response.status(Response.Status.CREATED).entity(saved).build();
     }
@@ -79,18 +308,56 @@ public class AccountResource {
         accounts.remove(id);
     }
 }</code></pre>
-  <div class="tablewrap"><table>
-    <thead><tr><th>Annotation</th><th>Job</th></tr></thead>
-    <tbody>
-      <tr><td><code>@Path</code></td><td>URL this class / method answers on</td></tr>
-      <tr><td><code>@GET</code> <code>@POST</code> <code>@PUT</code> <code>@DELETE</code></td><td>Which HTTP verb triggers the method</td></tr>
-      <tr><td><code>@PathParam</code></td><td>Pull a value out of the URL (<code>/{id}</code>)</td></tr>
-      <tr><td><code>@QueryParam</code></td><td>Pull a value from <code>?name=…</code></td></tr>
-      <tr><td><code>@Produces</code> / <code>@Consumes</code></td><td>Response / request body format (usually JSON)</td></tr>
-    </tbody>
-  </table></div>
-  <p>JSON ↔ Java conversion is automatic via <strong>JSON-B</strong> — a public field or getter
-    becomes a JSON property, and an incoming JSON body is bound to your method parameter.</p>
+
+  <p>Four methods, four endpoints. Under the <code>@ApplicationPath("/api")</code> from Part 2, they
+    are:</p>
+  <ul>
+    <li><code>@GET list()</code> → answers <code>GET /api/accounts</code>. It returns the whole
+      collection as JSON.</li>
+    <li><code>@GET @Path("/{id}") getOne(...)</code> → answers <code>GET /api/accounts/123</code>. The
+      <code>{id}</code> is a placeholder in the URL; <code>@PathParam("id")</code> hands that segment
+      to the method as a <code>Long</code>. Found → <code>Response.ok(a)</code> is a
+      <code>200</code>; missing → <code>Response.Status.NOT_FOUND</code> is a <code>404</code>.</li>
+    <li><code>@POST create(...)</code> → answers <code>POST /api/accounts</code>. The JSON body arrives
+      as the <code>Account incoming</code> parameter; the method saves it and returns
+      <code>201 Created</code> with the saved account in the body.</li>
+    <li><code>@DELETE delete(...)</code> → answers <code>DELETE /api/accounts/123</code>. It removes
+      the account. Returning <code>void</code> is enough — the server sends a <code>204</code>.</li>
+  </ul>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Look at what each method does <em>not</em> do. It never opens a database connection, never checks
+      a user's role, never starts a transaction. It collects a value from the URL, calls
+      <code>accounts</code>, and shapes the answer. The real work is in the injected
+      <code>AccountService</code> bean.</div>
+  </div>
+
+  <h3>3.3 JSON comes and goes by itself</h3>
+  <p>Clients usually send and receive <strong>JSON</strong> — plain text describing an object, such as
+    <code>{"holder":"Ada Lovelace","balance":0.0}</code>. You never parse or build that text by
+    hand.</p>
+  <p>The conversion is automatic through <strong>JSON-B</strong>: a public field or a getter becomes a
+    JSON property, and an incoming JSON body is bound straight to your method parameter.
+    <code>@Produces</code> declares the response format and <code>@Consumes</code> declares the request
+    format — and <code>MediaType.APPLICATION_JSON</code> is the name for JSON.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>You write a method that takes an <code>Account</code> and returns a
+      <code>List&lt;Account&gt;</code>. JSON-B looks at those types, sees JSON on the wire, and converts
+      in both directions for you. You never touch the text.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🛎️</span>
+    <div class="callout__b"><b>Analogy</b>
+      The resource class is a hotel <strong>front desk</strong>. The receptionist does not fix the
+      plumbing or cook the meals. They take your request, hand it to the right department (the injected
+      bean), and hand you back the answer. That is why a resource is called a <em>thin</em> layer.</div>
+  </div>
+
+  <h3>3.4 Watch the endpoints answer</h3>
+  <p>Below is a recording of those exact endpoints being used: create one, read it, ask for one that
+    does not exist, then delete it. Press <strong>Run</strong> and follow the status codes.</p>
 
   <div class="bench" data-run="canned">
     <div class="bench__head"><span class="dot"></span><span class="kind">try it</span><span class="mode">replay — HTTP calls &amp; responses</span></div>
@@ -120,29 +387,134 @@ DELETE /api/accounts/1</code></pre>
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
-  <div class="callout callout--tip"><span class="callout__i">💡</span>
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
     <div class="callout__b"><b>Where JAX-RS sits</b>
-      A JAX-RS resource is a thin edge. It parses the request, calls your session bean / CDI service
-      for the real work (transactions, security, persistence all still apply there), and shapes the
-      response. Keep business logic out of the resource class.</div>
+      A JAX-RS resource is a <strong>thin edge</strong>. It parses the request, calls your session bean
+      / CDI service for the real work (transactions, security and persistence all still apply there),
+      and shapes the response. Keep business logic out of the resource class.</div>
   </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Do not let the resource grow</b>
+      It is tempting to put the database code and the rules straight into the resource method “just
+      this once.” Do not. The moment logic lives there, you lose <code>@TransactionAttribute</code>,
+      declarative security and clean testing. The resource asks <code>accounts</code> to do things — it
+      does not do them itself.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <ol>
+      <li>What is the difference between <code>@Path</code> and <code>@PathParam</code>?</li>
+      <li>How does a JSON body arrive as an <code>Account</code> object without you parsing it?</li>
+      <li>Where should the transaction and database code live — in the resource, or elsewhere? Why?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>@Path</code> <em>defines</em> the URL a class or method answers on (for example
+          <code>/{id}</code>). <code>@PathParam</code> <em>pulls a value out</em> of that template and
+          hands it to a method parameter.</li>
+        <li>Automatically, through <strong>JSON-B</strong>, when <code>@Consumes</code> declares
+          <code>APPLICATION_JSON</code>. It is bound straight to the method parameter.</li>
+        <li>Elsewhere — in the injected session bean / CDI service. The resource is a thin edge; the
+          bean is where transactions, security and persistence apply.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
 
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Check yourself</h3>
+    <h3>Check yourself — REST &amp; JAX-RS</h3>
     <script type="application/json">
     [
       {"q":"Which HTTP verb reads a resource without changing it?","opts":["POST","GET","DELETE","PUT"],"a":1,"why":"GET retrieves. POST creates, PUT replaces, DELETE removes."},
-      {"q":"@Path(\"/{id}\") with @PathParam(\"id\") Long id does what?","opts":["Reads a cookie","Captures the {id} segment of the URL into the method parameter","Sets the response format","Injects a database row"],"a":1,"why":"Path templates capture URL segments; @PathParam binds them to parameters."},
+      {"q":"In `GET /accounts/123`, what is `/accounts/123`?","opts":["The verb","The resource's URL","The status code","A JSON property"],"a":1,"why":"The URL names the resource; the verb (GET) says what to do with it."},
+      {"q":"`@Path(\"/{id}\")` together with `@PathParam(\"id\") Long id` does what?","opts":["Reads a cookie","Captures the {id} segment of the URL into the method parameter","Sets the response format","Injects a database row"],"a":1,"why":"Path templates capture URL segments; @PathParam binds them to parameters."},
       {"q":"How does a JSON request body become an Account object?","opts":["You parse the string yourself","Automatically, via JSON-B, into the method parameter","It doesn't — REST is text only","Through JNDI"],"a":1,"why":"With @Consumes(APPLICATION_JSON), JSON-B binds the body to your parameter; @Produces does the reverse."},
       {"q":"Status code for a successful resource creation?","opts":["200 OK","201 Created","404 Not Found","500 Server Error"],"a":1,"why":"201 Created signals a new resource was made (often with its representation in the body)."},
-      {"q":"Where should the transaction + persistence logic live?","opts":["Inside the JAX-RS resource method","In an injected session bean / CDI service the resource calls","In the browser","In persistence.xml"],"a":1,"why":"The resource is a thin edge; delegate real work to a bean where @TransactionAttribute, security and JPA apply."}
+      {"q":"Where should the transaction and persistence logic live?","opts":["Inside the JAX-RS resource method","In an injected session bean / CDI service the resource calls","In the browser","In persistence.xml"],"a":1,"why":"The resource is a thin edge; delegate real work to a bean where @TransactionAttribute, security and JPA apply."}
     ]
     </script>
   </section>
 
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE — optional depth, collapsed by default
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the unit. It is here because exams and the textbook use these
+    exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>🔤 The four HTTP verbs, in full</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Verb</th><th>Means</th><th>Example</th><th>Changes data?</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET</code></td><td>read a resource</td><td><code>GET /accounts/123</code></td><td>No — it only reads</td></tr>
+        <tr><td><code>POST</code></td><td>create a new resource</td><td><code>POST /accounts</code></td><td>Yes — it makes a new thing</td></tr>
+        <tr><td><code>PUT</code></td><td>replace / update a resource</td><td><code>PUT /accounts/123</code></td><td>Yes — it overwrites the thing</td></tr>
+        <tr><td><code>DELETE</code></td><td>remove a resource</td><td><code>DELETE /accounts/123</code></td><td>Yes — it removes the thing</td></tr>
+      </tbody>
+    </table></div>
+    <p>The verb and the URL are chosen independently. The same URL, <code>/accounts/123</code>, means
+      “read it” with <code>GET</code>, “replace it” with <code>PUT</code>, and “remove it” with
+      <code>DELETE</code>.</p>
+  </details>
+
+  <details>
+    <summary><strong>🏷️ JAX-RS annotation reference</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>Job</th><th>Goes on</th></tr></thead>
+      <tbody>
+        <tr><td><code>@ApplicationPath</code></td><td>Sets the shared URL prefix for every endpoint</td><td>the <code>Application</code> subclass</td></tr>
+        <tr><td><code>@Path</code></td><td>URL this class or method answers on</td><td>class or method</td></tr>
+        <tr><td><code>@GET</code> <code>@POST</code> <code>@PUT</code> <code>@DELETE</code></td><td>Which HTTP verb triggers the method</td><td>method</td></tr>
+        <tr><td><code>@PathParam</code></td><td>Pull a value out of the URL (<code>/{id}</code>)</td><td>method parameter</td></tr>
+        <tr><td><code>@QueryParam</code></td><td>Pull a value from <code>?name=…</code></td><td>method parameter</td></tr>
+        <tr><td><code>@Produces</code></td><td>Response body format (usually JSON)</td><td>class or method</td></tr>
+        <tr><td><code>@Consumes</code></td><td>Request body format (usually JSON)</td><td>class or method</td></tr>
+        <tr><td><code>@Inject</code></td><td>Ask the container for a bean (your service)</td><td>field</td></tr>
+      </tbody>
+    </table></div>
+    <p>The imports come from two packages: annotations such as <code>@Path</code> and
+      <code>@GET</code> live in <code>jakarta.ws.rs.*</code>, while <code>Application</code>,
+      <code>Response</code> and <code>MediaType</code> live in <code>jakarta.ws.rs.core.*</code>.</p>
+  </details>
+
+  <details>
+    <summary><strong>🔢 Status codes you will use most</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Code</th><th>What it means</th></tr></thead>
+      <tbody>
+        <tr><td><code>200 OK</code></td><td>The request worked; the answer is in the body.</td></tr>
+        <tr><td><code>201 Created</code></td><td>A new resource was made — usually returned in the body.</td></tr>
+        <tr><td><code>204 No Content</code></td><td>It worked, but there is nothing to send back.</td></tr>
+        <tr><td><code>400 Bad Request</code></td><td>The client sent something the server could not use.</td></tr>
+        <tr><td><code>404 Not Found</code></td><td>No resource lives at that URL.</td></tr>
+        <tr><td><code>500 Server Error</code></td><td>Your code failed while handling the request.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Read the first digit: <strong>2</strong> is success, <strong>4</strong> is a client mistake,
+      <strong>5</strong> is a server fault.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-line summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
     <tr><td>JAX-RS</td><td>Java methods → HTTP/JSON endpoints via annotations.</td></tr>
     <tr><td>Turn on</td><td><code>@ApplicationPath</code> class extending <code>Application</code>.</td></tr>
@@ -150,6 +522,52 @@ DELETE /api/accounts/1</code></pre>
     <tr><td>JSON</td><td>Automatic both ways via JSON-B with <code>@Produces/@Consumes</code>.</td></tr>
     <tr><td>Layering</td><td>Resource = thin edge; call a bean for logic, transactions, persistence.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Using <code>GET</code> to create or change data</td><td>Use <code>POST</code> to create, <code>PUT</code> to update, <code>DELETE</code> to remove. <code>GET</code> only ever reads.</td></tr>
+      <tr><td>Putting business logic in the resource method</td><td>Keep the resource thin; call an injected session bean / CDI service where <code>@TransactionAttribute</code>, security and JPA apply.</td></tr>
+      <tr><td>Parsing the JSON body by hand</td><td>Declare <code>@Consumes(MediaType.APPLICATION_JSON)</code> and let JSON-B bind the body to your parameter.</td></tr>
+      <tr><td>Returning an object but forgetting <code>@Produces</code></td><td>Add <code>@Produces(MediaType.APPLICATION_JSON)</code> so the response is declared as JSON.</td></tr>
+      <tr><td>Hard-coding the base path into every <code>@Path</code></td><td>Set one shared prefix with <code>@ApplicationPath</code>, and let each <code>@Path</code> be relative to it.</td></tr>
+      <tr><td>Confusing <code>@Path</code> with <code>@PathParam</code></td><td><code>@Path</code> defines the URL template; <code>@PathParam</code> pulls a value out of that template into a parameter.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this unit turns up in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this unit</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>The injected <code>AccountService</code> bean (<code>@Inject</code>)</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI, Part 1</a></td></tr>
+      <tr><td>Transactions inside the bean the resource calls</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>Persistence the bean uses to save your object</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+      <tr><td>Packaging the WAR that carries the resource</td><td><a href="session-14-packaging.html">Session 14 — Packaging</a></td></tr>
+      <tr><td>Securing the beans behind the endpoint</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+      <tr><td>Testing an endpoint end to end</td><td><a href="16-testing.html">Bonus — Testing Enterprise Components</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/restful-ws/" target="_blank" rel="noopener">Jakarta RESTful Web Services Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/jsonb/" target="_blank" rel="noopener">Jakarta JSON Binding Specification</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

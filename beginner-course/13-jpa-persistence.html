@@ -1,55 +1,226 @@
-<title>JPA: Storing Objects</title>
-<meta name="description" content="The modern way to save and load data in Jakarta EE: entities, the EntityManager, a persistence unit, and JPQL.">
+<title>JPA, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="JPA written for people who have never heard of an ORM, an entity, a persistence unit or JPQL. What JPA is, the three things it needs, the four things you do with an object, JPQL, and relationships.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "13-jpa-persistence";</script>
 
 <main class="page">
 
-  <h1>Unit 13 · JPA — storing objects properly</h1>
-  <p class="lede">Unit 04 showed the <em>shape</em> of an entity. This is the part the original course
-    barely covered: actually saving, loading and querying entities with the
-    <strong>EntityManager</strong>. JPA lets you work with objects and (mostly) forget the SQL.</p>
+  <h1>JPA — storing objects properly</h1>
+  <p class="lede">This page teaches you how Jakarta EE saves Java <em>objects</em> into a database and
+    reads them back, without writing SQL by hand. You do not need to have heard of JPA, an entity, an
+    ORM, a persistence unit or JPQL before. Every difficult word gets explained the moment it appears.
+    If you have already seen the <em>shape</em> of an entity, this is where you finally use one.</p>
 
-  <div class="callout"><span class="callout__i">↩︎</span>
-    <div class="callout__b"><b>Recap</b> An entity is a plain class with <code>@Entity</code> and an
-      <code>@Id</code>, mapped to a database table (Unit 04). JDBC (Unit 12) is the low-level
-      alternative where you write every SQL string yourself.</div>
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Each new word gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> Every annotation gets explained the moment it appears.</li>
+        <li><strong>Every example is small enough to read in one sitting.</strong> No giant listings.</li>
+        <li><strong>By the end you will store real objects.</strong> Save, load, change, delete and
+          query — all five, explained.</li>
+      </ol>
+    </div>
   </div>
 
-  <span class="eyebrow">concept</span>
-  <h2>What JPA is</h2>
-  <p><strong>JPA</strong> (Jakarta Persistence API) is an <em>object-relational mapper</em>: it
-    translates between Java objects and database rows. You call <code>em.persist(account)</code>;
-    JPA writes the <code>INSERT</code>. You call <code>em.find(Account.class, 42)</code>; JPA runs the
-    <code>SELECT</code> and hands you an <code>Account</code> object. A <strong>provider</strong>
-    (Hibernate, on WildFly) does the actual work.</p>
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a wall of bullet points from a manual — just six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what JPA is, in one sentence, without looking it up</td><td>Part 1</td></tr>
+      <tr><td>Name the three things every JPA application needs</td><td>Part 2</td></tr>
+      <tr><td>Save, load, change and delete an object with the <code>EntityManager</code></td><td>Part 3</td></tr>
+      <tr><td>Write a simple JPQL query — and explain why it is not SQL</td><td>Part 4</td></tr>
+      <tr><td>Link two entities together with <code>@OneToMany</code> and <code>@ManyToOne</code></td><td>Part 5</td></tr>
+      <tr><td>Answer the exam-style questions on this topic</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use. The small labels tell you what kind of block you are reading:
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// tip</code> — the one thing worth noticing in the code above it.</li>
+        <li><code>// mistake</code> — a trap that catches almost everybody.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you open them.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — WHAT JPA ACTUALLY IS
+       ===================================================================== -->
 
   <span class="eyebrow">concept</span>
-  <h2>Three things you need</h2>
-  <h3>1 · An entity with real mappings</h3>
-  <pre><code>import jakarta.persistence.*;
+  <h2>Part 1 · What JPA actually is</h2>
+
+  <h3>1.1 Two worlds that do not speak the same language</h3>
+  <p>Your Java program lives in a world of <strong>objects</strong>. An <code>Account</code>, a
+    <code>Customer</code>, a <code>List</code> of orders. Each object has fields, and each field holds
+    a value.</p>
+  <p>The database lives in a completely different world: <strong>tables</strong>,
+    <strong>rows</strong> and <strong>columns</strong>. No objects, no fields, no methods — just rows
+    of plain values.</p>
+  <p>Both worlds describe the same information. Neither one understands the other. Something has to
+    translate.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🗣️</span>
+    <div class="callout__b"><b>Analogy</b>
+      Picture two people who speak different languages, sitting at a table to do business. The person
+      on the left speaks <em>Java objects</em>. The person on the right speaks <em>database rows</em>.
+      They agree on everything — but neither can say a word the other understands. In the middle sits
+      a <strong>translator</strong>, who listens to one and says it again in the other's language.</div>
+  </div>
+
+  <p>Before this unit, you were the translator. <strong>JDBC</strong> is the low-level way: you write
+    every SQL string yourself, send it to the database, then copy each column out of the result into
+    an object. It works, but it is repetitive, and every hand-typed column name is a chance to make a
+    mistake.</p>
+  <p><strong>JPA</strong> — the Jakarta Persistence API — is the translator. Its formal name for what
+    it does is an <strong>object-relational mapper</strong>, usually shortened to <strong>ORM</strong>:
+    software that maps objects to relational tables, and rows back to objects.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>You work with Java objects. The database works with rows. <strong>JPA is the translator in the
+      middle</strong>, so you rarely have to speak SQL yourself.</p>
+  </div>
+
+  <h3>1.2 What it looks like when you use it</h3>
+  <p>You almost never see the SQL. You talk to the objects, and JPA writes the SQL behind your
+    back:</p>
+  <ul>
+    <li>You call <code>em.persist(account)</code> → JPA writes the <code>INSERT</code>.</li>
+    <li>You call <code>em.find(Account.class, 42)</code> → JPA runs the <code>SELECT</code> and hands
+      you a ready <code>Account</code> object.</li>
+  </ul>
+  <p><code>em</code> is the <strong>EntityManager</strong> — the object you do all of this through.
+    It gets its own section in Part 2; for now, read it as “the thing that talks to the database for
+    me.”</p>
+
+  <div class="code-head">the whole idea, in two lines</div>
+  <pre><code>em.persist(account);                          // INSERT — save this object
+
+Account a = em.find(Account.class, 42);      // SELECT … WHERE id = 42</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Nowhere in that code is there an <code>INSERT</code> or a <code>SELECT</code> written by you.
+      You called a method on an object and mentioned an <em>object class</em>. Turning that into SQL
+      is the whole job of JPA.</div>
+  </div>
+
+  <p>One more word you will hear: a <strong>provider</strong>. JPA is only a <em>specification</em> —
+    a written set of rules. Something concrete has to actually do the work. On WildFly that something
+    is <strong>Hibernate</strong>.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>JPA is not a database</b>
+      JPA stores nothing on its own. There is always a real database underneath (PostgreSQL, MySQL,
+      H2…) and a real <em>connection</em> to it. JPA just saves you from writing the SQL that travels
+      over that connection.</div>
+  </div>
+
+  <div class="callout"><span class="callout__i">↩︎</span>
+    <div class="callout__b"><b>Where this sits</b>
+      An <strong>entity</strong> is a plain Java class carrying <code>@Entity</code> and an
+      <code>@Id</code>, mapped to a database table (<a href="session-04-working-with-ejb.html">Session 4</a> introduced the shape). <strong>JDBC</strong>
+      (<a href="session-08-connectors.html">Session 8</a>) is the low-level alternative where you write every SQL string yourself. JPA sits on
+      top of JDBC and hides almost all of it.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What two “worlds” does JPA sit between?</li>
+      <li>What does <em>ORM</em> stand for, and what does the mapper actually map?</li>
+      <li>What is the provider, and which one does WildFly use?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The world of <strong>Java objects</strong> (classes with fields) and the world of
+          <strong>database rows</strong> (tables with columns).</li>
+        <li><strong>Object-relational mapper</strong> — it maps objects to relational tables, and
+          rows back to objects.</li>
+        <li>The piece of software that does the actual mapping work. JPA is only a specification; on
+          WildFly the provider is <strong>Hibernate</strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — THREE THINGS YOU NEED
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · The three things every JPA application needs</h2>
+  <p>Storing an object is a three-part deal. Miss any one part and nothing works. Here they are, in
+    the order you set them up.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>An entity that tells JPA how to map it</h4>
+      <p>An <strong>entity</strong> is an ordinary Java class with a handful of annotations that say
+        which table it belongs to and which field is its identity. It is not a special kind of class —
+        it is a normal class wearing labels.</p>
+      <div class="code-head">Account.java — a properly mapped entity</div>
+      <pre><code>import jakarta.persistence.*;
 
 @Entity
 @Table(name = "accounts")
 public class Account {
 
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;                       // DB assigns it
+    private Long id;                       // the database assigns it
 
     @Column(name = "account_holder", nullable = false)
     private String holder;
 
     private double balance;
 
-    @Version                              // optimistic locking (Unit 07)
+    @Version                              // optimistic locking (<a href="session-04-working-with-ejb.html">Session 4</a>)
     private int version;
 
     // getters / setters
 }</code></pre>
+      <ul>
+        <li><code>@Entity</code> — “this class is stored in the database.”</li>
+        <li><code>@Table(name = "accounts")</code> — the table it maps to. Without it, the class name
+          is used.</li>
+        <li><code>@Id</code> — the field that uniquely identifies each row. <strong>Every entity must
+          have one.</strong></li>
+        <li><code>@GeneratedValue(IDENTITY)</code> — the database fills the id in for you.</li>
+        <li><code>@Column(name = "account_holder", nullable = false)</code> — the column name, and
+          that it may not be empty.</li>
+        <li><code>@Version</code> — a counter JPA uses for optimistic locking (<a href="session-04-working-with-ejb.html">Session 4</a>): if two users
+          edit the same row at once, one of them is told to retry.</li>
+      </ul>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          The class name <code>Account</code> and the table name <code>accounts</code> are not the
+          same — and that is the point of <code>@Table</code>. The Java side and the database side can
+          use whatever names they like, because the annotations are the bridge between them.</div>
+      </div>
+    </li>
 
-  <h3>2 · A persistence unit — <code>src/main/resources/META-INF/persistence.xml</code></h3>
-  <pre><code>&lt;persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.0"&gt;
+    <li>
+      <h4>A persistence unit that tells JPA where the database is</h4>
+      <p>A <strong>persistence unit</strong> is a named bundle of settings: which data source to use,
+        which transaction style, and any provider options. It lives in one small XML file inside your
+        project.</p>
+      <div class="code-head">src/main/resources/META-INF/persistence.xml</div>
+      <pre><code>&lt;persistence xmlns="https://jakarta.ee/xml/ns/persistence" version="3.0"&gt;
   &lt;persistence-unit name="globalbankPU" transaction-type="JTA"&gt;
     &lt;jta-data-source&gt;java:/jdbc/GlobalBankDB&lt;/jta-data-source&gt;
     &lt;properties&gt;
@@ -58,11 +229,29 @@ public class Account {
     &lt;/properties&gt;
   &lt;/persistence-unit&gt;
 &lt;/persistence&gt;</code></pre>
-  <p>It names the unit, points at the DataSource from Unit 05, and (optionally) lets JPA build the
-    tables from your entities.</p>
+      <p>It does three jobs: it <strong>names</strong> the unit (<code>globalbankPU</code>, the name
+        you will refer to from Java), it <strong>points at a DataSource</strong> (the connection pool
+        from <a href="session-03-resource-creation.html">Session 3</a>, here <code>java:/jdbc/GlobalBankDB</code>), and it can optionally let JPA
+        <strong>build the tables</strong> from your entities via
+        <code>schema-generation.database.action</code>.</p>
 
-  <h3>3 · An <code>EntityManager</code>, injected into a bean</h3>
-  <pre><code>@Stateless
+      <div class="callout callout--analogy"><span class="callout__i">🗄️</span>
+        <div class="callout__b"><b>Analogy</b>
+          Think of a filing cabinet full of labelled folders. Each entity is one labelled folder —
+          <em>“Accounts.”</em> The persistence unit is the index card taped inside the cabinet door:
+          it says <em>where this cabinet stands</em>, <em>which key opens it</em>, and <em>whether new
+          folders may be created automatically</em>. The card holds no files itself; it tells you how
+          to reach them.</div>
+      </div>
+    </li>
+
+    <li>
+      <h4>An <code>EntityManager</code>, injected into a bean</h4>
+      <p>The <strong>EntityManager</strong> is the object you actually talk to. You never create it
+        with <code>new</code> — you declare a field and let the container inject it, exactly as you
+        would a session bean.</p>
+      <div class="code-head">AccountService.java — one bean, three useful methods</div>
+      <pre><code>@Stateless
 public class AccountService {
 
     @PersistenceContext(unitName = "globalbankPU")
@@ -82,21 +271,68 @@ public class AccountService {
     public void deposit(Long id, double amount) {
         Account a = em.find(Account.class, id);
         a.setBalance(a.getBalance() + amount);
-        // no save() call needed: a managed entity is flushed at commit (Unit 06)
+        // no save() call needed: a managed entity is flushed at commit (<a href="session-04-working-with-ejb.html">Session 4</a>)
     }
 }</code></pre>
+      <ul>
+        <li><code>@PersistenceContext(unitName = "globalbankPU")</code> — “inject the EntityManager
+          for the persistence unit called <code>globalbankPU</code>.”</li>
+        <li><code>open()</code> calls <code>persist()</code>, which runs the <code>INSERT</code>
+          inside the method's transaction. Afterwards the id is filled in for you.</li>
+        <li><code>get()</code> calls <code>find()</code>, which looks a row up by primary key and
+          returns the object — or <code>null</code> if there is no such row.</li>
+        <li><code>deposit()</code> loads an object, changes a field, and calls nothing else. Still the
+          change is saved. That is the trick explained in Part 3.</li>
+      </ul>
+      <div class="callout callout--tip"><span class="callout__i">💡</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          There is no <code>new EntityManager()</code> anywhere. The container hands you one that is
+          already wired to the right database and to the current transaction — just like
+          <code>@EJB</code> hands you a bean.</div>
+      </div>
+    </li>
 
-  <div class="callout callout--key"><span class="callout__i">✦</span>
-    <div class="callout__b"><b>The “managed entity” trick</b>
-      An entity returned by <code>find()</code> or <code>persist()</code> is <em>managed</em>: JPA
-      watches it. Change a field, and at transaction commit JPA writes the <code>UPDATE</code>
-      automatically. No explicit save.</div>
+  </ol>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Forgetting <code>@Id</code> stops the whole application</b>
+      An entity with no <code>@Id</code> is rejected with <code>No identifier specified for
+      entity</code>. JPA cannot map a row it cannot identify, so it refuses to start. Every entity
+      needs exactly one <code>@Id</code>.</div>
   </div>
 
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>Name the three things every JPA application needs.</li>
+      <li>What is the persistence unit, and what file holds it?</li>
+      <li>How does a bean get its <code>EntityManager</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A mapped <strong>entity</strong>, a <strong>persistence unit</strong>, and an injected
+          <strong>EntityManager</strong>.</li>
+        <li>A named set of settings — data source, transaction type, provider options — declared in
+          <code>META-INF/persistence.xml</code>.</li>
+        <li>The container <strong>injects</strong> it into a field marked
+          <code>@PersistenceContext(unitName = "…")</code>. You never call <code>new</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — THE FOUR OPERATIONS
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
-  <h2>The four operations</h2>
+  <h2>Part 3 · The four things you do with an object</h2>
+  <p>Nearly everything in JPA is one of four verbs. Learn these four and you can already store and
+    retrieve real data.</p>
+
   <div class="tablewrap"><table>
-    <thead><tr><th>Call</th><th>SQL it runs</th></tr></thead>
+    <thead><tr><th>Call</th><th>The SQL it runs</th></tr></thead>
     <tbody>
       <tr><td><code>em.persist(obj)</code></td><td><code>INSERT</code></td></tr>
       <tr><td><code>em.find(Class, id)</code></td><td><code>SELECT … WHERE id = ?</code></td></tr>
@@ -105,17 +341,181 @@ public class AccountService {
     </tbody>
   </table></div>
 
+  <p>Here are all four, side by side, in the order you would normally meet them:</p>
+
+  <div class="code-head">the four verbs, in one place</div>
+  <pre><code>@PersistenceContext(unitName = "globalbankPU")
+private EntityManager em;
+
+Account a = new Account();                      // 1. a brand-new object
+a.setHolder("Ada");
+em.persist(a);                                  // 1. INSERT — a row now exists
+
+Account found = em.find(Account.class, 42L);    // 2. SELECT … WHERE id = 42
+
+found.setBalance(found.getBalance() + 100.0);   // 3. UPDATE at commit — no save() needed
+
+em.remove(found);                               // 4. DELETE at commit</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Verb 3 is the strange one: you do not <em>call</em> anything. You simply change a field on an
+      object you loaded with <code>find()</code>, and the change is saved when the transaction
+      commits. There is no <code>save()</code> method in JPA.</div>
+  </div>
+
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>The “managed entity” trick</b>
+      An entity returned by <code>find()</code> or passed to <code>persist()</code> is
+      <strong>managed</strong>: JPA is watching it. Change a field, and at transaction commit JPA
+      writes the <code>UPDATE</code> automatically. No explicit save, ever.</div>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🗂️</span>
+    <div class="callout__b"><b>Analogy</b>
+      An <code>EntityManager</code> is like a personal assistant who remembers where every one of your
+      papers went. You never say <em>“please refile this.”</em> You hand them a document, and it is
+      now <em>on their desk</em> — being watched. If you later scribble a correction on a document the
+      assistant is holding, they notice, and at the end of the day they update the filing cabinet to
+      match. You only speak up for two things: <em>“here is a brand-new document”</em>
+      (<code>persist</code>) and <em>“throw this one away”</em> (<code>remove</code>).</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Load an object with <code>find()</code>, change it, and it saves itself. <strong>There is no
+      <code>save()</code> method.</strong> If you are looking for one, that is the whole reason why.</p>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b><code>find()</code> does not throw — it returns <code>null</code></b>
+      If no row matches the id, <code>em.find()</code> gives you back <code>null</code>. It does not
+      raise an exception. Check for <code>null</code> before you use the result, or the very next
+      line will throw a <code>NullPointerException</code> instead.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>Which four SQL statements do the four operations run?</li>
+      <li>You loaded an object and changed a field, and called nothing else. Why is it still saved?</li>
+      <li>What does <code>find()</code> return when the row does not exist?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>INSERT</code> (<code>persist</code>), <code>SELECT</code> (<code>find</code>),
+          <code>UPDATE</code> (mutate a managed entity), <code>DELETE</code> (<code>remove</code>).</li>
+        <li>Because a loaded entity is <strong>managed</strong>. JPA watches it and flushes the
+          <code>UPDATE</code> at commit. There is no <code>save()</code>.</li>
+        <li><code>null</code> — not an exception.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4 — JPQL
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
-  <h2>JPQL — querying by object, not table</h2>
-  <p>JPQL looks like SQL but names <em>entities and fields</em>, not tables and columns:</p>
+  <h2>Part 4 · JPQL — asking for objects, not rows</h2>
+  <p><code>find()</code> has one big limitation: it only looks up <em>one</em> row, by its primary
+    key. It cannot answer “give me every account with a balance over 10,000.” For that you need a
+    query language.</p>
+  <p>JPA's language is called <strong>JPQL</strong> — the Jakarta Persistence Query Language. It looks
+    a lot like SQL, and that is deliberate — but it is <strong>not</strong> SQL.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>JPQL is a query language that asks for <strong>objects and their fields</strong>, not tables and
+      columns. You write <code>Account</code> and <code>a.balance</code> — the names you use in Java —
+      and JPA translates that into the real SQL for whichever database you are on.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">📇</span>
+    <div class="callout__b"><b>Analogy</b>
+      Imagine a records clerk surrounded by shelves of physical folders. You could give them exact
+      shelf coordinates — <em>“row 3, folder 12, line 4”</em> — which is what SQL feels like. Or you
+      could simply ask for <em>“every account with a balance over ten thousand.”</em> JPQL is the
+      second style: you describe the records you want in the language of the records themselves, and
+      the clerk works out which shelf to walk to.</div>
+  </div>
+
+  <h3>4.1 A JPQL query</h3>
+  <p>Here is the “rich accounts” query written in JPQL:</p>
+
+  <div class="code-head">a JPQL query, run through the EntityManager</div>
   <pre><code>List&lt;Account&gt; rich = em.createQuery(
         "SELECT a FROM Account a WHERE a.balance &gt; :min ORDER BY a.balance DESC",
         Account.class)
     .setParameter("min", 10_000.0)
     .getResultList();</code></pre>
 
+  <p>Read it clause by clause — every piece names something from the <em>Java</em> side:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Part</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><code>SELECT a</code></td><td>Return whole <strong>Account objects</strong>, given the alias <code>a</code>.</td></tr>
+      <tr><td><code>FROM Account a</code></td><td>From the <strong>entity</strong> <code>Account</code> — the Java class — aliased as <code>a</code>.</td></tr>
+      <tr><td><code>WHERE a.balance &gt; :min</code></td><td>Compare the entity's <strong>field</strong> <code>balance</code> against a value.</td></tr>
+      <tr><td><code>ORDER BY a.balance DESC</code></td><td>Sort by that field, highest first.</td></tr>
+      <tr><td><code>:min</code></td><td>A <strong>named parameter</strong> — a placeholder you fill in safely.</td></tr>
+      <tr><td><code>.setParameter("min", 10_000.0)</code></td><td>Bind <code>min</code> to <code>10000.0</code>. Safer than gluing strings together.</td></tr>
+      <tr><td><code>.getResultList()</code></td><td>Run the query and return the matching objects as a <code>List</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The query says <code>FROM Account</code> — the <em>class</em> — not <code>FROM accounts</code>,
+      the table. And it says <code>a.balance</code> — the <em>field</em> — not the
+      <code>balance</code> column. That single difference is the whole point of JPQL, and the exact
+      thing beginners get wrong.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>JPQL is not SQL</b>
+      If you write <code>SELECT * FROM accounts</code>, or use a column name like
+      <code>account_holder</code>, it fails. JPQL knows nothing about your table names or column
+      names — only about your <strong>entities and their fields</strong>. Use
+      <code>Account</code> and <code>holder</code>, never <code>accounts</code> and
+      <code>account_holder</code>.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before you move on</b>
+    <ol>
+      <li>What can <code>find()</code> not do that JPQL can?</li>
+      <li>In <code>FROM Account a</code>, what is <code>Account</code> — a table or a class?</li>
+      <li>What is <code>:min</code>, and what fills it in?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>find()</code> only retrieves <strong>one row by primary key</strong>. JPQL can
+          filter, sort and return <strong>many</strong> objects.</li>
+        <li>The <strong>entity class</strong> <code>Account</code> — not the <code>accounts</code>
+          table.</li>
+        <li>A <strong>named parameter</strong> (a placeholder). <code>.setParameter("min", …)</code>
+          binds a value to it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 5 — RELATIONSHIPS
+       ===================================================================== -->
+
   <span class="eyebrow">concept</span>
-  <h2>Relationships</h2>
+  <h2>Part 5 · Relationships — linking objects together</h2>
+  <p>Real data is connected. A customer has accounts. An order has lines. In the database, two tables
+    are joined by a <strong>foreign key</strong>: a column in one table that holds the id of a row in
+    another.</p>
+  <p>In Java there are no foreign keys — only fields. So JPA lets you link objects the Java way: one
+    field holds <strong>another entity</strong>, or a <strong>list</strong> of them. Annotations tell
+    JPA how that link maps onto the foreign key.</p>
+
+  <div class="code-head">Customer.java and Account.java — two entities, linked</div>
   <pre><code>@Entity
 public class Customer {
     @Id @GeneratedValue private Long id;
@@ -132,39 +532,259 @@ public class Account {
     @JoinColumn(name = "customer_id")
     private Customer customer;
 }</code></pre>
+
+  <div class="callout callout--analogy"><span class="callout__i">📒</span>
+    <div class="callout__b"><b>Analogy</b>
+      Picture two binders on a shelf. The <strong>Customer</strong> binder has a page listing all their
+      account slips. Each <strong>Account</strong> slip, for its part, has the customer's number
+      written at the top. The two sides describe the same connection from opposite ends — and only one
+      of them actually carries the number. That is exactly what <code>mappedBy</code> records.</div>
+  </div>
+
+  <h3>5.1 The four annotations you need</h3>
   <div class="tablewrap"><table>
     <thead><tr><th>Annotation</th><th>Meaning</th></tr></thead>
     <tbody>
       <tr><td><code>@OneToMany</code> / <code>@ManyToOne</code></td><td>One customer has many accounts; each account has one customer.</td></tr>
-      <tr><td><code>@JoinColumn</code></td><td>The foreign-key column that stores the link.</td></tr>
-      <tr><td><code>cascade = ALL</code></td><td>Persisting/removing the customer cascades to its accounts.</td></tr>
-      <tr><td><code>mappedBy</code></td><td>“The other side owns the foreign key” — avoids a duplicate column.</td></tr>
+      <tr><td><code>@JoinColumn</code></td><td>The foreign-key column that stores the link — here <code>customer_id</code>.</td></tr>
+      <tr><td><code>cascade = ALL</code></td><td>Persisting or removing the customer cascades to its accounts: they are saved or deleted along with it.</td></tr>
+      <tr><td><code>mappedBy</code></td><td>“The other side owns the foreign key.” It stops JPA creating a second, duplicate column.</td></tr>
     </tbody>
   </table></div>
 
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>Customer</code> holds a <code>List</code> of accounts; <code>Account</code> holds one
+      customer. Both describe the same link, but the <strong>foreign-key column lives on the
+      Account side</strong> — the <code>@JoinColumn</code> side. The <code>@OneToMany</code> side just
+      points at it with <code>mappedBy</code>.</p>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Only <em>one</em> side carries the <code>@JoinColumn</code> — the “many” side. The “one” side
+      says <code>mappedBy = "customer"</code>, which means “that other field owns the column.” Put
+      <code>@JoinColumn</code> on both and JPA creates two foreign-key columns for a single
+      relationship.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b><code>LazyInitializationException</code> — the trap that catches
+      everyone</b>
+      Load one <code>Customer</code> and JPA does <strong>not</strong> immediately load all of its
+      accounts. Related lists are loaded <em>lazily</em> — only when you first touch them. If you touch
+      them after the transaction has ended and the <code>EntityManager</code> has closed, JPA has no
+      open connection to fetch them, and you get <code>LazyInitializationException</code>.</div>
+  </div>
+
+  <p>The fix is to <strong>use the related list while the transaction is still open</strong> — inside
+    the bean method, before you return. Fetch what you need there, not later in the web page.</p>
+
+  <div class="checkpoint"><b>Checkpoint 5 · before you move on</b>
+    <ol>
+      <li>In the database, what links two related tables?</li>
+      <li>On the <code>Account</code> side, which annotation holds the foreign-key column?</li>
+      <li>What does <code>mappedBy</code> prevent, and what error happens if you load a lazy list too
+        late?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A <strong>foreign key</strong> — a column holding the id of a row in the other table.
+          <code>@JoinColumn</code> maps it.</li>
+        <li><code>@ManyToOne</code> together with <code>@JoinColumn(name = "customer_id")</code>.</li>
+        <li><code>mappedBy</code> prevents JPA creating a <strong>duplicate foreign-key column</strong>.
+          Loading a lazy list after the transaction closes throws
+          <code>LazyInitializationException</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Check yourself</h3>
+    <h3>Check yourself — JPA</h3>
     <script type="application/json">
     [
-      {"q":"What does JPA do for you?","opts":["Runs the app server","Translates between Java objects and database rows so you rarely write SQL","Replaces WildFly","Encrypts the database"],"a":1,"why":"JPA is an object-relational mapper. em.persist() writes the INSERT; em.find() runs the SELECT."},
-      {"q":"You loaded an Account with em.find(), changed its balance, and did nothing else. At commit...","opts":["Nothing is saved — you forgot em.save()","JPA writes an UPDATE automatically because the entity is 'managed'","It throws an exception","A new row is inserted"],"a":1,"why":"Managed entities are dirty-checked and flushed on commit. There is no save() method."},
-      {"q":"Where is the persistence unit declared?","opts":["pom.xml","META-INF/persistence.xml","web.xml","The entity class"],"a":1,"why":"persistence.xml names the unit, its data source, and provider properties."},
-      {"q":"JPQL 'SELECT a FROM Account a WHERE a.balance > :min' refers to...","opts":["The accounts table and balance column","The Account entity and its balance field","A stored procedure","A JNDI name"],"a":1,"why":"JPQL is expressed in terms of entities and their fields, not tables and columns."},
-      {"q":"An Account has one Customer; a Customer has many Accounts. On Account you put...","opts":["@OneToMany","@ManyToOne with @JoinColumn","@Version","@Entity only"],"a":1,"why":"Many accounts to one customer -> @ManyToOne on the Account side, with the foreign-key @JoinColumn."}
+      {"q":"In one sentence, what does JPA do for you?","opts":["Runs the application server","Translates between Java objects and database rows, so you rarely write SQL","Replaces the database engine","Encrypts your data"],"a":1,"why":"JPA is an object-relational mapper. persist() writes the INSERT; find() runs the SELECT."},
+      {"q":"Which provider actually does the mapping work on WildFly?","opts":["GlassFish","Hibernate","PostgreSQL","JDBC"],"a":1,"why":"JPA is only a specification. On WildFly the provider that implements it is Hibernate."},
+      {"q":"You loaded an Account with em.find(), changed its balance, and called nothing else. At commit...","opts":["Nothing is saved, because you forgot em.save()","JPA writes an UPDATE automatically, because the entity is managed","It throws an exception","It inserts a new row"],"a":1,"why":"There is no save() method. A managed entity is watched, and its changes flush automatically at commit."},
+      {"q":"Where is the persistence unit declared?","opts":["pom.xml","META-INF/persistence.xml","web.xml","Inside the entity class"],"a":1,"why":"persistence.xml names the unit, its data source and the provider properties."},
+      {"q":"JPQL SELECT a FROM Account a WHERE a.balance > :min refers to...","opts":["The accounts table and the balance column","The Account entity and its balance field","A stored procedure","A JNDI name"],"a":1,"why":"JPQL is written in terms of entities and their fields, never tables and columns."},
+      {"q":"An Account has one Customer; a Customer has many Accounts. On the Account side you put...","opts":["@OneToMany","@ManyToOne with @JoinColumn","@Version","@Entity only"],"a":1,"why":"Many accounts point to one customer, so @ManyToOne goes on Account, with the foreign-key @JoinColumn."},
+      {"q":"Why can a related entity list throw LazyInitializationException?","opts":["The database is offline","The list is loaded only when first used, and by then the EntityManager may already be closed","The field was not annotated","The table has no primary key"],"a":1,"why":"Related collections load lazily. Touch them after the transaction ends and there is no open persistence context left to fetch them."}
     ]
     </script>
   </section>
 
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE — optional depth, collapsed by default
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the unit. It is here because exam questions and the textbook
+    use these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📋 The full JPQL clause reference</strong></summary>
+    <p>JPQL supports more than the small query in Part 4. These are the clauses you will meet:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Clause</th><th>What it does</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><code>SELECT</code></td><td>Which entity (or field) to return.</td><td><code>SELECT a</code></td></tr>
+        <tr><td><code>FROM</code></td><td>The entity to query, with an alias.</td><td><code>FROM Account a</code></td></tr>
+        <tr><td><code>WHERE</code></td><td>Filter rows by a condition.</td><td><code>WHERE a.balance &gt; :min</code></td></tr>
+        <tr><td><code>ORDER BY</code></td><td>Sort the results.</td><td><code>ORDER BY a.balance DESC</code></td></tr>
+        <tr><td><code>GROUP BY</code></td><td>Group rows before aggregating.</td><td><code>GROUP BY a.holder</code></td></tr>
+        <tr><td><code>HAVING</code></td><td>Filter the grouped results.</td><td><code>HAVING SUM(a.balance) &gt; 5000</code></td></tr>
+        <tr><td><code>JOIN</code></td><td>Follow a relationship to another entity.</td><td><code>JOIN a.customer c</code></td></tr>
+        <tr><td><code>UPDATE</code> / <code>DELETE</code></td><td>Bulk change or remove (used far less often).</td><td><code>DELETE FROM Account a WHERE a.balance = 0</code></td></tr>
+      </tbody>
+    </table></div>
+    <p>Named parameters (<code>:min</code>) are bound with <code>setParameter("min", value)</code>.
+      Positional parameters (<code>?1</code>) are bound with <code>setParameter(1, value)</code>.
+      Use <code>getResultList()</code> when you expect many objects, and
+      <code>getSingleResult()</code> when you expect exactly one.</p>
+  </details>
+
+  <details>
+    <summary><strong>🔗 The full relationship-annotation table</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>When to use it</th></tr></thead>
+      <tbody>
+        <tr><td><code>@OneToOne</code></td><td>One row in each table is paired with exactly one in the other (a person and their passport).</td></tr>
+        <tr><td><code>@OneToMany</code></td><td>One row on this side owns many on the other (a customer and their accounts). Placed on the “one” side, on a <code>Collection</code> field.</td></tr>
+        <tr><td><code>@ManyToOne</code></td><td>The reverse — many rows point to one. Placed on the “many” side, on a single-entity field.</td></tr>
+        <tr><td><code>@ManyToMany</code></td><td>Many on both sides (a student and their courses). Needs a <code>@JoinTable</code> to hold the links.</td></tr>
+        <tr><td><code>@JoinColumn</code></td><td>Names the foreign-key column. Sits on the side that owns the link.</td></tr>
+        <tr><td><code>@JoinTable</code></td><td>Names the intermediate table used by <code>@ManyToMany</code>.</td></tr>
+        <tr><td><code>mappedBy</code></td><td>“The other side owns the foreign key” — set on the non-owning side to avoid a duplicate column.</td></tr>
+        <tr><td><code>cascade = CascadeType.ALL</code></td><td>Operations on the parent propagate to the child (save together, delete together).</td></tr>
+        <tr><td><code>fetch = FetchType.LAZY / EAGER</code></td><td>Whether the related object loads immediately or only when first used. Collections default to <code>LAZY</code>; single references often default to <code>EAGER</code>.</td></tr>
+        <tr><td><code>orphanRemoval = true</code></td><td>When a child is removed from the parent's collection, delete its row too.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>⚙️ persistence.xml options</strong></summary>
+    <p>The two attributes that matter most on the <code>&lt;persistence-unit&gt;</code> element:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Attribute</th><th>Value</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>transaction-type</code></td><td><code>JTA</code></td><td>The container manages transactions — the normal choice inside WildFly, and what our example uses.</td></tr>
+        <tr><td><code>transaction-type</code></td><td><code>RESOURCE_LOCAL</code></td><td>Your code manages transactions itself — used in plain Java programs outside a server.</td></tr>
+        <tr><td><code>&lt;jta-data-source&gt;</code></td><td><code>java:/jdbc/…</code></td><td>The JNDI name of the connection pool the unit should use.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Common provider properties, set inside <code>&lt;properties&gt;</code>:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Property</th><th>Useful values</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>jakarta.persistence.schema-generation.database.action</code></td><td><code>none</code> / <code>create</code> / <code>drop-and-create</code> / <code>update</code> / <code>drop</code></td><td>Whether JPA builds or updates the tables from your entities. <code>update</code> is handy while learning; production normally uses <code>none</code> and a real migration tool.</td></tr>
+        <tr><td><code>hibernate.show_sql</code></td><td><code>true</code> / <code>false</code></td><td>Prints the SQL Hibernate generates — the best way to see what JPA is doing behind your back.</td></tr>
+        <tr><td><code>hibernate.format_sql</code></td><td><code>true</code> / <code>false</code></td><td>Pretty-prints that SQL so it is actually readable.</td></tr>
+        <tr><td><code>hibernate.dialect</code></td><td>e.g. a PostgreSQL or H2 dialect</td><td>Tells Hibernate which flavour of SQL your database speaks.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔄 The entity lifecycle, in one picture</strong></summary>
+    <p>An entity is always in one of four states. The four operations move it between them:</p>
+    <pre><code>   new Account()          em.persist()        transaction commits
+        │                       │                       │
+        ▼                       ▼                       ▼
+   ┌──────────┐          ┌──────────┐  em.close()  ┌──────────┐
+   │TRANSIENT │─────────►│ MANAGED  │─────────────►│ DETACHED │
+   │(unknown) │          │(watched) │              │(forgotten)│
+   └──────────┘          └────┬─────┘              └──────────┘
+                              │ em.remove()
+                              ▼
+                        ┌──────────┐
+                        │ REMOVED  │   DELETE at commit
+                        └──────────┘</code></pre>
+    <p><strong>Transient</strong> — a plain object JPA has never seen. <strong>Managed</strong> — JPA is
+      watching it; changes flush at commit. <strong>Detached</strong> — it was managed, but the
+      <code>EntityManager</code> that watched it closed. <strong>Removed</strong> — scheduled for
+      deletion.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-line summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td>JPA</td><td>Object ↔ row mapper; provider is Hibernate on WildFly.</td></tr>
-    <tr><td>Need</td><td>Mapped <code>@Entity</code> + <code>persistence.xml</code> + injected <code>EntityManager</code>.</td></tr>
+    <tr><td>JPA</td><td>An object-to-row mapper. It translates between Java objects and database rows, so you rarely write SQL.</td></tr>
+    <tr><td>Provider</td><td>The software that does the actual mapping. On WildFly it is <strong>Hibernate</strong>.</td></tr>
+    <tr><td>Entity</td><td>A normal class with <code>@Entity</code> and an <code>@Id</code>, mapped to a table. <code>@Table</code>, <code>@Column</code> and <code>@Version</code> refine the mapping.</td></tr>
+    <tr><td>Persistence unit</td><td>A named set of settings in <code>META-INF/persistence.xml</code>: the data source, the transaction type, provider options.</td></tr>
+    <tr><td><code>EntityManager</code></td><td>Injected with <code>@PersistenceContext</code>. The object you do all database work through.</td></tr>
     <tr><td>CRUD</td><td><code>persist</code> / <code>find</code> / mutate-then-commit / <code>remove</code>.</td></tr>
-    <tr><td>Managed entity</td><td>Changes flush automatically at commit — no <code>save()</code>.</td></tr>
-    <tr><td>JPQL</td><td>SQL-like, but over entities and fields; <code>@OneToMany</code>/<code>@ManyToOne</code> for links.</td></tr>
+    <tr><td>Managed entity</td><td>Changes flush automatically at commit — there is no <code>save()</code>.</td></tr>
+    <tr><td>JPQL</td><td>A query language over <strong>entities and fields</strong>, not tables and columns.</td></tr>
+    <tr><td>Relationships</td><td><code>@OneToMany</code> / <code>@ManyToOne</code> on opposite sides, with <code>@JoinColumn</code> holding the foreign key.</td></tr>
+    <tr><td>The classic trap</td><td><code>LazyInitializationException</code> — a related list touched after the transaction has ended.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Forgetting <code>@Id</code> on an entity</td><td>Every entity needs exactly one <code>@Id</code>. Without it JPA refuses to start the application.</td></tr>
+      <tr><td>Looking for <code>em.save()</code></td><td>There is no save method. Load with <code>find()</code>, change the field, and the <code>UPDATE</code> flushes at commit.</td></tr>
+      <tr><td>Writing SQL names in JPQL</td><td>Use the <strong>entity</strong> <code>Account</code> and the <strong>field</strong> <code>balance</code> — never the table <code>accounts</code> or column <code>account_holder</code>.</td></tr>
+      <tr><td>Creating the EntityManager with <code>new</code></td><td>Inject it with <code>@PersistenceContext(unitName = "…")</code>. The container gives you one bound to the open transaction.</td></tr>
+      <tr><td>Touching a lazy list after the transaction closes</td><td>Use (or fetch) the related collection inside the open transaction, before you return from the bean method.</td></tr>
+      <tr><td>Putting <code>@JoinColumn</code> on both sides of a relationship</td><td>Only the owning (“many”) side carries it. The other side uses <code>mappedBy</code>.</td></tr>
+      <tr><td>Expecting <code>find()</code> to throw when the row is missing</td><td>It returns <code>null</code>. Check for it before using the result.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this unit turns up elsewhere in the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this unit</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>The <code>java:/jdbc/…</code> DataSource the persistence unit points at</td><td><a href="session-03-resource-creation.html">Session 3 — Resource Creation</a></td></tr>
+      <tr><td>Transactions and the commit that flushes an <code>UPDATE</code></td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td>Putting the <code>@Stateless</code> service and <code>persistence.xml</code> into a deployable unit</td><td><a href="session-14-packaging.html">Session 14 — Packaging &amp; Deploying</a></td></tr>
+      <tr><td>Validating an entity's fields before they reach the database</td><td><a href="session-09-bean-validation.html">Session 9 — Bean Validation</a></td></tr>
+      <tr><td>Injecting a service or an <code>EntityManager</code> with CDI</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI, Part 1</a></td></tr>
+      <tr><td>Exposing entities to the outside world</td><td><a href="15-rest-jaxrs.html">the REST unit</a></td></tr>
+      <tr><td>Testing a service that persists entities</td><td><a href="16-testing.html">the testing unit</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/persistence/" target="_blank" rel="noopener">Jakarta Persistence Specification</a></li>
+          <li><a href="https://hibernate.org/orm/documentation/" target="_blank" rel="noopener">Hibernate ORM — documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

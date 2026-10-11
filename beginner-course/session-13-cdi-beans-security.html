@@ -1,77 +1,239 @@
-<title>Session 13 — CDI Beans &amp; Jakarta Security</title>
+<title>Session 13 — Jakarta Security, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 13: CDI Beans and Jakarta Security, HttpAuthenticationMechanism, IdentityStore (@DatabaseIdentityStoreDefinition), injectable SecurityContext, and role-based access control.">
+<meta name="description" content="Session 13, written for people who have never configured security. The difference between authentication and authorization, the three pillars of Jakarta Security, declaring a login form and a database identity store with annotations, checking the caller with SecurityContext, and locking down methods with @RolesAllowed.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s13";</script>
 
 <main class="page">
 
-  <h1>Session 13 · CDI Beans &amp; Jakarta Security</h1>
-  <p class="lede">Before Jakarta EE 8, configuring security meant wrestling with proprietary, server-specific XML files
-    and complex JAAS login modules. <strong>Jakarta Security</strong> modernizes this entirely: it provides a portable,
-    CDI-driven, annotation-based security framework with three elegant pillars: <strong>HttpAuthenticationMechanism</strong>,
-    <strong>IdentityStore</strong>, and the injectable <strong>SecurityContext</strong>.</p>
+  <h1>Session 13 · Jakarta Security, Explained Slowly</h1>
+  <p class="lede">Every application you have built so far lets <em>anyone</em> do <em>everything</em>. The moment
+    real money or real customer records are involved, that is not acceptable — some people may look, some may
+    act, and some may do neither. This page shows you how Jakarta EE answers the question <em>“who are you, and
+    what are you allowed to do?”</em> with a handful of annotations instead of pages of server configuration
+    files. You do not need to know any security words yet. Every one of them is explained the moment it appears.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Explain the Jakarta Security specification and its integration with CDI</li>
-        <li>Differentiate between Authentication (identifying who you are) and Authorization (determining what you can do)</li>
-        <li>Configure portable authentication mechanisms using <code>@FormAuthenticationMechanismDefinition</code> and <code>@CustomFormAuthenticationMechanismDefinition</code></li>
-        <li>Connect user repositories declaratively using <code>@DatabaseIdentityStoreDefinition</code> or custom <code>IdentityStore</code> beans</li>
-        <li>Perform programmatic security checks using the CDI-injectable <code>SecurityContext</code></li>
-        <li>Apply role-based access control (<code>@RolesAllowed</code>) on CDI managed beans</li>
+        <li><strong>No jargon without a translation.</strong> Each new word — <em>authentication</em>,
+          <em>principal</em>, <em>identity store</em> — gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> You do not need to have configured a login before, on any
+          server, ever.</li>
+        <li><strong>Every idea gets a picture first.</strong> You meet a real building with a front desk before
+          any annotation.</li>
+        <li><strong>You will watch it happen.</strong> A runnable simulation shows a login being checked and a
+          manager-only method being refused.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       13.1 The Three Pillars of Jakarta Security
-       ===================================================================== -->
-  <span class="eyebrow">session 13.1</span>
-  <h2>Part 1 · The Three Pillars of Modern Jakarta Security</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>These are the six things the manual asks for, written in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what Jakarta Security is, and why it replaced proprietary server XML</td><td>Part 1</td></tr>
+      <tr><td>Tell <strong>authentication</strong> and <strong>authorization</strong> apart without hesitating</td><td>Part 1</td></tr>
+      <tr><td>Name the three pillars and say what each one is responsible for</td><td>Part 1 &amp; the Reference</td></tr>
+      <tr><td>Declare a login form and a database-backed user store using only annotations</td><td>Part 2</td></tr>
+      <tr><td>Ask, from inside your own code, “who is calling, and what role do they hold?”</td><td>Part 3</td></tr>
+      <tr><td>Restrict a method to certain roles — and lock one out entirely — without writing an <code>if</code></td><td>Part 4</td></tr>
+    </tbody>
+  </table></div>
 
-  <div class="callout callout--analogy"><span class="callout__i">🏦</span>
-    <div class="callout__b"><b>The Bank Vault &amp; Guard Analogy</b>
-      <ul style="margin:.3rem 0 0;padding-left:1.2rem">
-        <li><strong>HttpAuthenticationMechanism (The Front Gate Guard):</strong> Asks you for your passport or password badge at the door. Decides if you are allowed into the building.</li>
-        <li><strong>IdentityStore (The Central HR Database):</strong> The verified database where passwords, hashes, and employee roles are stored and queried.</li>
-        <li><strong>SecurityContext (The Security Keycard):</strong> Carried by the user at all times. As you walk through the building, electronic locks read your keycard (<code>isCallerInRole("MANAGER")</code>) to decide if you can enter the vault.</li>
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press the button and watch a login be checked.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
       </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the order a
+      textbook would use.
     </div>
   </div>
 
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — WHAT SECURITY IS, AND THE THREE PILLARS
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · Who are you, and what may you do?</h2>
+
+  <h3>1.1 The problem Jakarta Security was invented to fix</h3>
+  <p>Long before Jakarta EE 8, adding a login to a Java web application meant writing a
+    <strong>server-specific</strong> configuration file. If you used one application server you edited one kind
+    of XML; if you moved to a different server, you rewrote it. The rules lived in a file the compiler never
+    checked, so a typo was discovered only when a user could not log in.</p>
+  <p><strong>Jakarta Security</strong> changed that. It moved security out of server files and into
+    <strong>Java annotations</strong> — the <code>@</code> labels you already know from the rest of this course.
+    Your security setup now travels with your code, compiles with your code, and works the same on every
+    server that supports the standard.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Old way: security rules written in a configuration file that only <em>one</em> server understood.</p>
+    <p>Jakarta Security: security rules written as annotations in your Java, understood by <em>every</em>
+      compliant server. Same code, different server, still works.</p>
+  </div>
+
+  <h3>1.2 The two words everyone mixes up</h3>
+  <p>Before anything else, separate these two. People use them as if they were the same thing, and almost every
+    beginner mistake in security comes from confusing them:</p>
+
   <div class="tablewrap"><table>
-    <thead><tr><th>Pillar</th><th>Core Interface / Annotation</th><th>Responsibility</th></tr></thead>
+    <thead><tr><th>Word</th><th>The question it answers</th><th>Bank example</th></tr></thead>
     <tbody>
       <tr>
-        <td><strong>1. Authentication Mechanism</strong></td>
-        <td><code>HttpAuthenticationMechanism</code><br><code>@FormAuthenticationMechanismDefinition</code></td>
-        <td>Intercepts HTTP requests, handles login credentials, redirects to login pages, and initiates challenge protocols.</td>
+        <td><strong>Authentication</strong></td>
+        <td>“<em>Who</em> are you?” — proving you are who you claim to be.</td>
+        <td>You show your ID at the door and the guard confirms it is really you.</td>
       </tr>
       <tr>
-        <td><strong>2. Identity Store</strong></td>
-        <td><code>IdentityStore</code><br><code>@DatabaseIdentityStoreDefinition</code></td>
-        <td>Validates username/password credentials against databases or LDAP directories and loads caller group/role memberships.</td>
-      </tr>
-      <tr>
-        <td><strong>3. Security Context</strong></td>
-        <td><code>jakarta.security.enterprise.SecurityContext</code></td>
-        <td>CDI-injectable API used by application beans to inspect caller principal, check role memberships, and invoke programmatic authentication.</td>
+        <td><strong>Authorization</strong></td>
+        <td>“What are you <em>allowed</em> to do?” — deciding which actions your identity permits.</td>
+        <td>You are allowed to withdraw from your own account, but not to open the vault.</td>
       </tr>
     </tbody>
   </table></div>
 
+  <p>Authentication always comes first — you cannot decide what someone may do until you know who they are. But
+    passing authentication does <strong>not</strong> mean you may do everything. That is the whole point of the
+    second word.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏢</span>
+    <div class="callout__b"><b>Analogy — a bank building with three people in it</b>
+      Picture a bank. There is a <strong>guard at the front desk</strong> who checks your ID before you go any
+      further. There is an <strong>HR database in the back office</strong> holding every employee's record and
+      job title. And every person who gets past the desk carries a <strong>keycard on a lanyard</strong>, which
+      electronic locks all over the building read to decide whether <em>this</em> door opens for <em>you</em>.
+      <br><br>
+      Hold on to those three: <strong>the guard</strong>, <strong>the HR database</strong>, and <strong>the
+      keycard</strong>. They are the three pillars of Jakarta Security, and the rest of this page is just naming
+      them properly.
+    </div>
+  </div>
+
+  <h3>1.3 The three pillars</h3>
+  <p>Jakarta Security is built from exactly three pieces. Learn them once and the annotations in Parts 2–4 will
+    feel obvious:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Pillar</th><th>Interface / annotation</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>1 · The guard</strong><br><em>Authentication mechanism</em></td>
+        <td><code>HttpAuthenticationMechanism</code><br><code>@FormAuthenticationMechanismDefinition</code></td>
+        <td>Stands at the door. Catches the incoming request, asks for credentials, shows the login page, and turns
+          unauthenticated visitors away.</td>
+      </tr>
+      <tr>
+        <td><strong>2 · The HR database</strong><br><em>Identity store</em></td>
+        <td><code>IdentityStore</code><br><code>@DatabaseIdentityStoreDefinition</code></td>
+        <td>Holds the real records. Checks whether the supplied password is correct, and looks up which roles
+          belong to that user.</td>
+      </tr>
+      <tr>
+        <td><strong>3 · The keycard</strong><br><em>Security context</em></td>
+        <td><code>jakarta.security.enterprise.SecurityContext</code></td>
+        <td>The identity of the person currently inside. Your own code can read it to ask “who is this?” and
+          “may they do this?” while the request is being handled.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>The <strong>mechanism</strong> collects the password. The <strong>identity store</strong> checks it and
+      says which roles you hold. The <strong>security context</strong> is what your code can ask, mid-request,
+      about whoever is logged in.</p>
+    <p>Three jobs, three pillars. Do not blur them together.</p>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The word <em>pillar</em> is not decoration — it tells you where a problem lives. “The password is never
+      checked” is a <strong>pillar 2</strong> problem. “The login page never appears” is a <strong>pillar
+      1</strong> problem. “My code always sees an anonymous user” is a <strong>pillar 3</strong> problem. Naming
+      the pillar cuts your debugging time in half.
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What did Jakarta Security replace, and what did it replace it with?</li>
+      <li>You are logged in successfully. Does that mean you may do anything in the application? Why not?</li>
+      <li>Which pillar would you investigate if a user logs in correctly but their roles are always empty?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>It replaced <strong>proprietary, server-specific configuration files</strong> (and the older JAAS
+          login modules) with <strong>portable Java annotations</strong> that travel with your code and run on
+          any compliant server.</li>
+        <li>No. Logging in answers <em>“who are you?”</em> (authentication). Whether you may perform a given
+          action is a separate question — <em>authorization</em> — decided by your roles. A teller is
+          authenticated, but still may not open the vault.</li>
+        <li>The <strong>identity store</strong> (pillar 2). It is the piece that looks up which groups or roles
+          belong to the authenticated user, so an empty role list usually means the lookup query or the role
+          table is at fault.</li>
+      </ol>
+    </details>
+  </div>
+
   <!-- =====================================================================
-       13.2 Declarative Authentication & Identity Stores
+       PART 2 — DECLARATIVE AUTHENTICATION AND IDENTITY STORES
        ===================================================================== -->
-  <span class="eyebrow">session 13.2</span>
-  <h2>Part 2 · Declarative Authentication &amp; Database Identity Stores</h2>
 
-  <p>In modern Jakarta EE, you can wire a complete database-backed authentication system using pure Java annotations —
-    with zero server-specific XML configuration:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · Setting up the door and the records — with annotations only</h2>
 
-  <div class="code-head">ApplicationSecurityConfig.java — Complete Portable Security Setup</div>
+  <h3>2.1 What “declarative” means</h3>
+  <p><strong>Declarative</strong> means you <em>describe</em> what you want and the container does the work. You
+    do not write a servlet filter that intercepts logins; you do not write a <code>while</code> loop that checks
+    passwords. You declare <em>“logins happen with a form, and user records live in that database table”</em>,
+    and Jakarta EE wires it all up for you.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Imperative: <em>“here are the fifteen steps to check a password.”</em></p>
+    <p>Declarative: <em>“passwords are checked against this table.”</em> You state the intention; the container
+      writes the steps.</p>
+  </div>
+
+  <h3>2.2 Choosing how people log in</h3>
+  <p>The first pillar — the guard — is chosen with one annotation on a class. There are three common flavours:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>The login experience</th><th>Typical use</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>@BasicAuthenticationMechanismDefinition</code></td>
+        <td>The browser's own pop-up box asking for username and password.</td>
+        <td>Quick internal tools and APIs. Ugly, but zero setup.</td>
+      </tr>
+      <tr>
+        <td><code>@FormAuthenticationMechanismDefinition</code></td>
+        <td>A standard login page the server generates for you.</td>
+        <td>Simple web apps that do not mind the default look.</td>
+      </tr>
+      <tr>
+        <td><code>@CustomFormAuthenticationMechanismDefinition</code></td>
+        <td><strong>Your own</strong> <code>.xhtml</code> login page, with your own branding and error page.</td>
+        <td>Real applications — this is the one we use below.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <h3>2.3 The whole security setup in one class</h3>
+  <p>Here is a complete, portable security configuration. Two annotations on one class declare the door
+    <em>and</em> the records:</p>
+
+  <div class="code-head">ApplicationSecurityConfig.java — complete portable security setup</div>
   <pre><code>package com.globalbank.security;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -81,33 +243,336 @@ import jakarta.security.enterprise.identitystore.DatabaseIdentityStoreDefinition
 import jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash;
 
 @ApplicationScoped
-// ① Configure Custom Form Authentication: Login at /login.xhtml, error page at /login-error.xhtml
+// 1. The guard: log in on our own page, show our own error page.
 @CustomFormAuthenticationMechanismDefinition(
     loginToContinue = @LoginToContinue(
         loginPage = "/login.xhtml",
         errorPage = "/login-error.xhtml"
     )
 )
-// ② Configure the Database Identity Store pointing directly to PostgreSQL JNDI DataSource!
+// 2. The records: look users and roles up in a database, through a JNDI DataSource.
 @DatabaseIdentityStoreDefinition(
-    dataSourceLookup = "java:/jdbc/GlobalBankDB",
+    dataSourceLookup = "java:jboss/datasources/ExampleDS",
     callerQuery = "SELECT password_hash FROM bank_users WHERE username = ?",
-    groupsQuery = "SELECT role_name FROM user_roles WHERE username = ?",
-    hashAlgorithm = Pbkdf2PasswordHash.class // Secure salted PBKDF2 hashing
+    groupsQuery = "SELECT group_name  FROM bank_users WHERE username = ?",
+    hashAlgorithm = Pbkdf2PasswordHash.class   // never compare plain-text passwords
 )
 public class ApplicationSecurityConfig {
-    // Declarative configuration class — no method bodies needed!
+    // Declarative configuration only — no method bodies at all.
 }</code></pre>
 
+  <p>Read it slowly, because every line is doing one clear job:</p>
+  <ul>
+    <li><code>dataSourceLookup</code> — <strong>where</strong> the database is. Notice it is the JNDI name you
+      met in Session 3, not a URL and password sitting in your code.</li>
+    <li><code>callerQuery</code> — the SQL that fetches <strong>this user's stored password</strong>. The
+      <code>?</code> is filled in with the typed username.</li>
+    <li><code>groupsQuery</code> — the SQL that fetches <strong>this user's roles</strong>.</li>
+    <li><code>hashAlgorithm</code> — the rule for turning a typed password into something comparable.</li>
+  </ul>
+
+  <div class="callout callout--analogy"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>Analogy — why passwords are never stored as words</b>
+      Think of a machine that turns a key into a <strong>fingerprint of that key</strong>. It only works one
+      way: given the key you can produce the fingerprint, but given the fingerprint you cannot rebuild the key.
+      The HR database stores fingerprints, not keys. When you log in, the system fingerprints what you typed and
+      compares the two fingerprints. A thief who steals the whole database gets a room full of fingerprints and
+      no keys — which is exactly why <code>Pbkdf2PasswordHash</code> is here and not a plain text column.
+    </div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      There is <strong>no XML and no server-specific file</strong> anywhere in that class. That portability is
+      the entire reason Jakarta Security exists. If you had to memorise one sentence from this page, it is this
+      one — and it is exactly what the exam asks.
+    </div>
+  </div>
+
+  <h3>2.4 The half that is easy to miss — who actually asks the container to log in?</h3>
+  <p>Look again at that class. It names a login page, it names the database, and it has <em>no methods at
+    all</em>. That is what declarative configuration means: you describe the outcome and the container does
+    the work. So far, so good.</p>
+
+  <p>Now the catch — and it catches nearly everybody. The annotation is
+    <code>@<strong>Custom</strong>FormAuthenticationMechanismDefinition</code>. The word <strong>custom</strong>
+    is the whole story: it means “<em>I have chosen to supply the form handling myself</em>.” The container
+    will not build a login form for you, will not read your <code>loginPage</code>, and will not check a
+    single password — <strong>unless your own code asks it to</strong>.</p>
+
+  <div class="callout callout--warn"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>A vault is not locked until somebody turns the handle</b>
+      <p>That class describes the vault: a door, and a list of who may pass through it. It does not open the
+        door. Something in your application must call <code>securityContext.authenticate(...)</code> and hand
+        the typed user name and password to the container.</p>
+      <p>And when you forget, nothing tells you. No exception, no warning, not even a log line. The form
+        submits, the page redisplays, and the user is still not signed in. Nothing is broken — nothing was
+        ever <em>asked</em> to happen. This is the failure mode people lose whole afternoons to.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>Analogy — the door and the handle</b>
+      <code>ApplicationSecurityConfig</code> is the door and the guest list, both perfectly built. Without
+      the <code>LoginBean</code> below you have a door nobody can open and a guest standing outside it,
+      wondering why they were not let in.
+    </div>
+  </div>
+
+  <p>Here is the handle. It is one ordinary CDI bean, and one line inside it does the real work:</p>
+
+  <div class="code-head">LoginBean.java — the code that actually performs the login</div>
+  <pre><code>package com.globalbank.security;
+
+import jakarta.enterprise.context.RequestScoped;
+import jakarta.inject.Inject;
+import jakarta.inject.Named;
+import jakarta.security.enterprise.AuthenticationStatus;
+import jakarta.security.enterprise.SecurityContext;
+import jakarta.security.enterprise.authentication.mechanism.http.AuthenticationParameters;
+import jakarta.security.enterprise.credential.Password;
+import jakarta.security.enterprise.credential.UsernamePasswordCredential;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.faces.context.FacesContext;
+
+@Named("login")
+@RequestScoped                       // NOT @ViewScoped — see the note below
+public class LoginBean {
+
+    @Inject
+    private SecurityContext securityContext;   // the container's authentication front door
+
+    private String username;                    // what the user typed; JSF fills these in
+    private String password;
+    private String message;                     // shown on the page after a failed attempt
+
+    public String login() {
+
+        // 1. Get the real servlet request and response behind this JSF request.
+        FacesContext faces = FacesContext.getCurrentInstance();
+        HttpServletRequest  request  = (HttpServletRequest)  faces.getExternalContext().getRequest();
+        HttpServletResponse response = (HttpServletResponse) faces.getExternalContext().getResponse();
+
+        // 2. Wrap what was typed in a Credential.
+        var credential = new UsernamePasswordCredential(username, new Password(password));
+
+        // 3. Wrap the credential in AuthenticationParameters, and hand it over.
+        AuthenticationParameters params =
+                AuthenticationParameters.withParams().credential(credential);
+
+        AuthenticationStatus status = securityContext.authenticate(request, response, params);
+
+        // 4. Act on the answer.
+        return switch (status) {
+            case SUCCESS        -&gt; "/accounts.xhtml?faces-redirect=true";  // signed in
+            case SEND_CONTINUE  -&gt; null;   // the mechanism took over the response
+            case SEND_FAILURE   -&gt; {      // wrong password, or no such user
+                message = "That user name and password combination was not recognised.";
+                yield null;
+            }
+            case NOT_DONE       -&gt; {      // configuration problem — a developer error
+                message = "Sign-in could not be completed. See the server log.";
+                yield null;
+            }
+        };
+    }
+
+    public String logout() {
+        FacesContext.getCurrentInstance().getExternalContext().invalidateSession();
+        return "/login.xhtml?faces-redirect=true";
+    }
+
+    public String getUsername()  { return username; }
+    public void setUsername(String username) { this.username = username; }
+    public String getPassword()  { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getMessage()   { return message; }
+}</code></pre>
+
+  <p>Five things in there are worth slowing down for:</p>
+  <ul>
+    <li><strong>The third argument is <em>not</em> the credential.</strong> <code>authenticate()</code> takes
+      an <code>AuthenticationParameters</code> — a small wrapper whose job is to carry the credential together
+      with two switches (“is this a fresh login or a re-authentication?” and “should this be remembered?”).
+      We want the defaults, so we build it with
+      <code>AuthenticationParameters.withParams().credential(credential)</code> and set neither. This is the
+      single most common compile error people hit here.</li>
+    <li><strong>Why it needs the request and the response.</strong> It looks odd: a method that checks a
+      password, asking for a servlet response. The reason is that logging in is not only a lookup — the
+      container may need to set a session cookie or write a redirect. Passing the real objects in lets it do
+      all of that. A method that only returned <code>true</code> or <code>false</code> would leave you to
+      redo it by hand, badly.</li>
+    <li><strong>Four answers, not two.</strong> <code>SUCCESS</code> and <code>SEND_FAILURE</code> are the
+      obvious pair. <code>SEND_CONTINUE</code> means the mechanism has taken over the response itself and is
+      mid-redirect — you must return <code>null</code>, because navigating a response that is already gone
+      would fail. <code>NOT_DONE</code> means the container declined to even try, which is a configuration
+      mistake and belongs in the server log.</li>
+    <li><strong>One message for both kinds of failure.</strong> A wrong password and a user name that does not
+      exist produce the same sentence, on purpose. Telling them apart tells an attacker which user names are
+      real, which is half of what they need.</li>
+    <li><strong><code>@RequestScoped</code>, not <code>@ViewScoped</code>.</strong> This bean holds a password
+      in a field. A view-scoped bean lives until the user navigates away, so the password would sit in memory
+      for as long as the page is open. A request-scoped bean is created for the submit and gone immediately
+      afterwards. <em>Lifetime is a security decision, not just a convenience one.</em></li>
+  </ul>
+
+  <p>The page that drives it is ordinary Facelets — two inputs and a button, wired to the bean by name:</p>
+
+  <div class="code-head">login.xhtml — the form (the file <code>loginPage</code> points at)</div>
+  <pre><code>&lt;!DOCTYPE html&gt;
+&lt;html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:h="jakarta.faces.html"&gt;
+&lt;h:head&gt;
+  &lt;title&gt;GlobalBank — sign in&lt;/title&gt;
+&lt;/h:head&gt;
+&lt;h:body&gt;
+  &lt;h1&gt;GlobalBank&lt;/h1&gt;
+
+  &lt;h:form&gt;
+    &lt;h:outputText value="#{login.message}" rendered="#{not empty login.message}" /&gt;
+
+    &lt;p&gt;User name&lt;br/&gt;
+      &lt;h:inputText value="#{login.username}" /&gt;&lt;/p&gt;
+
+    &lt;p&gt;Password&lt;br/&gt;
+      &lt;h:inputSecret value="#{login.password}" /&gt;&lt;/p&gt;
+
+    &lt;h:commandButton value="Sign in" action="#{login.login}" /&gt;
+  &lt;/h:form&gt;
+
+  &lt;p&gt;&lt;a href="login-error.xhtml"&gt;Having trouble signing in?&lt;/a&gt;&lt;/p&gt;
+&lt;/h:body&gt;
+&lt;/html&gt;</code></pre>
+
+  <p><code>#{login.login}</code> is the whole connection: <code>login</code> is the name from
+    <code>@Named("login")</code>, and <code>login</code> after the dot is the method. Press the button, the
+    method runs, and the method is the one that asks the container to authenticate.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>If you would rather not write any of this</b>
+      Jakarta Security also offers <code>@FormAuthenticationMechanismDefinition</code> — the same annotation
+      <em>without</em> the word <em>custom</em>. It ships a built-in login form and errors page, and it
+      performs the authentication itself, so no <code>LoginBean</code> is needed at all. It is the right
+      choice when you do not need to brand the page. Use the <em>custom</em> one the moment you do — and then
+      remember that the handle is yours to write.
+    </div>
+  </div>
+
+  <h3>2.5 Where the hashes in that table come from</h3>
+  <p>The identity store does not compare passwords — it compares <strong>fingerprints</strong>. So before
+    anybody can log in, the <code>bank_users</code> table must already contain a fingerprint for each user.
+    That raises the obvious question the earlier analogy skips over: <em>who makes the fingerprints?</em></p>
+
+  <p>In a real system a DBA's script might insert them. In a teaching project — and in plenty of real ones —
+    a small bean generates them at startup. This is the same <code>@Singleton @Startup</code> pattern you met
+    in Sessions 1–2, doing a job that has nothing to do with concurrency and everything to do with first run:</p>
+
+  <div class="code-head">UserInitializer.java — creating demo users, with properly hashed passwords</div>
+  <pre><code>@Singleton
+@Startup                                   // run once, when the application deploys
+public class UserInitializer {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @Inject
+    private Pbkdf2PasswordHash hasher;     // the container provides this
+
+    @PostConstruct
+    void seed() {
+        // Tell the hasher which options to use, before generating anything.
+        hasher.initialize(new java.util.HashMap&lt;&gt;());
+
+        // Only seed an empty table. Without this guard, every redeploy would try
+        // to insert the same users again.
+        if (em.createQuery("SELECT COUNT(u) FROM BankUser u", Long.class)
+              .getSingleResult() &gt; 0) {
+            return;
+        }
+
+        addUser("ada@globalbank.test",     "secret",  "CUSTOMER");
+        addUser("manager@globalbank.test", "manager", "BANK_MANAGER");
+    }
+
+    private void addUser(String username, String password, String group) {
+        String hash = hasher.generate(password.toCharArray());   // the fingerprint
+        em.persist(new BankUser(username, hash, group));
+    }
+}</code></pre>
+
+  <p>Two details matter more than the rest:</p>
+  <ul>
+    <li><strong><code>hasher.generate(...)</code> does the work — never build the string yourself.</strong>
+      The stored value is not a bare hash. It is a small bundle that carries the algorithm, the iteration
+      count and the random salt along with the result, in the form
+      <code>PBKDF2WithHmacSHA256:27500:&lt;salt&gt;:&lt;hash&gt;</code>. Hand-assembling that is a way to
+      produce something nothing can verify. Ask the same class that will later check the password to produce
+      it, and the two are guaranteed to agree.</li>
+    <li><strong>Run <code>initialize(...)</code> before <code>generate(...)</code>.</strong> It is how the
+      hasher learns which options to use. Skip it and the object is not ready.</li>
+  </ul>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>How to check it worked</b>
+      After deploying, look at the <code>bank_users</code> table with whatever database tool you have —
+      WildFly's admin console at <code>http://localhost:9990/console</code> (Session 3) is one way in, and
+      the Practical 3 project builds a raw view into the application itself. You should see two rows, and
+      the <code>password_hash</code> column should hold long strings starting
+      <code>PBKDF2WithHmacSHA256:</code> — never the words <code>secret</code> or <code>manager</code>. If
+      you can read a password in that column, the hashing is not happening, and that is a bug worth stopping
+      for.
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>In one sentence, what is the difference between declarative and imperative configuration?</li>
+      <li>Which of the three login flavours would you choose to put your company logo on the login page?</li>
+      <li>Why does <code>dataSourceLookup</code> hold a JNDI name instead of a database password?</li>
+      <li>You have written <code>ApplicationSecurityConfig</code> correctly, deployed it, and the form still
+        does not log anyone in — with no error anywhere. What is the first thing you check?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Declarative <strong>describes the outcome</strong> (“check passwords against this table”) and lets the
+          container do the work; imperative <strong>writes the steps yourself</strong>.</li>
+        <li><code>@CustomFormAuthenticationMechanismDefinition</code> — the only one that lets you supply your
+          own <code>loginPage</code> and <code>errorPage</code>.</li>
+        <li>Because the DataSource is a <strong>server-managed resource</strong> (Session 3). The pool, the URL
+          and the credentials are configured once on the server; your code only needs the name to look it up,
+          so no secret ever sits in your source.</li>
+        <li>Whether anything calls <code>securityContext.authenticate(request, response, params)</code>. A
+          <em>custom</em> form mechanism does nothing on its own — the container is waiting to be asked, and it
+          fails silently when nobody asks.</li>
+      </ol>
+    </details>
+  </div>
+
   <!-- =====================================================================
-       13.3 Injectable SecurityContext
+       PART 3 — SECURITYCONTEXT
        ===================================================================== -->
-  <span class="eyebrow">session 13.3</span>
-  <h2>Part 3 · Inspecting Credentials with <code>SecurityContext</code></h2>
 
-  <p>Any CDI bean, EJB, or JSF Backing Bean can inject <code>SecurityContext</code> to inspect user roles and identities dynamically:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Asking “who is logged in?” from inside your own code</h2>
 
-  <div class="code-head">AccountDashboardBean.java — Role-Aware CDI Bean</div>
+  <h3>3.1 The principal — a name for the logged-in person</h3>
+  <p>Once someone has logged in, the container keeps a small object representing them. It is called the
+    <strong>Principal</strong>, and for most applications it is simply their username wrapped in an object.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>Principal</strong> is the container's way of saying “<em>this</em> is the person making the
+      current request.” If nobody has logged in, there is no principal — you get <code>null</code>, which is how
+      you spot an anonymous visitor.</p>
+  </div>
+
+  <h3>3.2 Reading the keycard</h3>
+  <p>Your own beans can <strong>inject</strong> the security context — the keycard from Part 1 — and read it at
+    any moment during the request:</p>
+
+  <div class="code-head">AccountDashboardBean.java — a role-aware CDI bean</div>
   <pre><code>package com.globalbank.web;
 
 import jakarta.enterprise.context.RequestScoped;
@@ -120,7 +585,7 @@ import java.security.Principal;
 @RequestScoped
 public class AccountDashboardBean {
 
-    // ① Inject the portable Jakarta SecurityContext
+    // 1. Inject the portable security context, exactly like any other CDI bean.
     @Inject
     private SecurityContext securityContext;
 
@@ -130,28 +595,93 @@ public class AccountDashboardBean {
     }
 
     public boolean isManager() {
-        // ② Verify if user possesses high-privilege role
+        // 2. Ask whether the current caller holds a particular role.
         return securityContext.isCallerInRole("BANK_MANAGER");
     }
 
     public String accessVault() {
         if (!isManager()) {
-            throw new SecurityException("Unauthorized: Access to cash vault is restricted to Managers!");
+            throw new SecurityException("Unauthorized: the cash vault is for Managers only.");
         }
         return "vault-opened";
     }
 }</code></pre>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>securityContext</code> is fetched with plain <code>@Inject</code> — it is an ordinary CDI bean, not a
+      special server object. And note the two different questions it can answer:
+      <code>getCallerPrincipal()</code> tells you <strong>who</strong> (<em>authentication</em>), while
+      <code>isCallerInRole(...)</code> tells you <strong>whether they may</strong> (<em>authorization</em>).
+      Same two words from Part 1, one method each.
+    </div>
+  </div>
+
+  <div class="callout callout--warn"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Careful — an <code>if</code> is not real security</b>
+      The <code>accessVault()</code> method above checks a role by hand and throws if the check fails. That works,
+      and it is genuinely useful when the decision depends on runtime data. But it is <strong>fragile</strong>:
+      the day someone adds a second way into the vault and forgets the <code>if</code>, the hole is invisible.
+      Whenever the rule is simply “only these roles may call this method”, prefer the declarative annotation in
+      Part 4 and let the container enforce it for you.
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What do you get from <code>getCallerPrincipal()</code> when nobody has logged in?</li>
+      <li>Which method answers “may this person do it?”, and which answers “who is this person?”</li>
+      <li>Why is a hand-written <code>if</code> check riskier than <code>@RolesAllowed</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>null</code> — no principal exists, which is how you detect an anonymous or unauthenticated
+          caller.</li>
+        <li><code>isCallerInRole("...")</code> answers <em>authorization</em>; <code>getCallerPrincipal()</code>
+          answers <em>authentication</em>.</li>
+        <li>Because it is <strong>easy to forget</strong>. Every new code path into that method must remember to
+          repeat the check. <code>@RolesAllowed</code> is enforced by the container on <em>every</em> call,
+          automatically, so it cannot be bypassed by a colleague in a hurry.</li>
+      </ol>
+    </details>
+  </div>
+
   <!-- =====================================================================
-       13.4 Method-Level Authorization on CDI Beans
+       PART 4 — @RolesAllowed
        ===================================================================== -->
-  <span class="eyebrow">session 13.4</span>
-  <h2>Part 4 · Declarative Role Enforcement (<code>@RolesAllowed</code>)</h2>
 
-  <p>Jakarta Security extends standard authorization annotations (<code>@RolesAllowed</code>, <code>@PermitAll</code>, <code>@DenyAll</code>)
-    from EJBs to all CDI-managed beans:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · Locking a method to certain roles</h2>
 
-  <div class="code-head">WireTransferService.java — Secured CDI Bean</div>
+  <h3>4.1 Three annotations, one idea</h3>
+  <p>Jakarta Security takes the authorization annotations that used to work only on enterprise beans and makes
+    them work on <strong>every CDI-managed bean</strong>. There are three, and between them they cover every
+    case:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>@RolesAllowed({"A", "B"})</code></td><td>Only callers holding role A <em>or</em> role B may call this method.</td></tr>
+      <tr><td><code>@PermitAll</code></td><td>Anyone may call it, logged in or not. For genuinely public data.</td></tr>
+      <tr><td><code>@DenyAll</code></td><td>Nobody may call it. Used to switch a method off for good.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚪</span>
+    <div class="callout__b"><b>Analogy — a name list taped to each door</b>
+      Walk down a corridor of offices. On each door is a small plaque listing who may enter:
+      <em>“Everyone”</em> (<code>@PermitAll</code>), <em>“Tellers and Managers”</em>
+      (<code>@RolesAllowed</code>), or <em>“No entry”</em> (<code>@DenyAll</code>). You never hire someone to
+      stand at each door — the plaques do the work, and nobody can slip past one by taking a different route
+      down the corridor.
+    </div>
+  </div>
+
+  <h3>4.2 The annotations in action</h3>
+
+  <div class="code-head">WireTransferService.java — a secured CDI bean</div>
   <pre><code>package com.globalbank.services;
 
 import jakarta.annotation.security.RolesAllowed;
@@ -164,26 +694,32 @@ public class WireTransferService {
 
     @PermitAll
     public double getExchangeRate(String currency) {
-        return 1.15; // Public data accessible to all visitors
+        return 1.15;   // Public information — every visitor may read it.
     }
 
     @RolesAllowed({"TELLER", "BANK_MANAGER"})
     public void executeTransfer(int from, int to, double amount) {
-        // Only authenticated tellers and managers can initiate wire transfers
+        // Only authenticated tellers and managers may move money.
     }
 
     @RolesAllowed("BANK_MANAGER")
     public void authorizeForeignOverdraft(int accountId, double amount) {
-        // High-level managerial authorization only
+        // Management-only authority.
     }
 
     @DenyAll
     public void deprecatedLegacySweep() {
-        // Permanently disabled
+        // Permanently disabled — kept only so old code still compiles.
     }
 }</code></pre>
 
-  <!-- Interactive Simulation Bench -->
+  <p>Notice what is <em>absent</em>: there is not a single <code>if</code> statement, not one role check written
+    by hand. The rules live on the method like a label, and the container enforces them on every call.</p>
+
+  <h3>4.3 Watch the whole thing happen</h3>
+  <p>Press the button. This replays a real login, from the credentials arriving to a manager-only method being
+    refused:</p>
+
   <div class="bench" data-run="canned">
     <div class="bench__head">
       <span class="dot"></span>
@@ -212,27 +748,60 @@ public class WireTransferService {
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <p>Read the last three lines again, because they are the whole lesson. Sarah <em>authenticated perfectly</em>
+    — the password matched, she is genuinely who she says she is. She was still refused, because being
+    <em>who you are</em> and being <em>allowed</em> are two different things. That distinction is the exam
+    question, and it is the one that stops a real bank from being robbed by its own staff.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The refusal happened <strong>before a single line of the method ran</strong>. The container intercepted the
+      call, compared the caller's roles against the annotation, and turned her away. Your business code never
+      executed. That is why declarative security is safer than a check written inside the method.
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Which annotation would you put on a method that must never be called again?</li>
+      <li>Sarah is authenticated but refused at the vault. Which pillar made the refusal, and why?</li>
+      <li>Why is it significant that the refusal happened before the method body ran?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>@DenyAll</code> — nobody may call it, no matter what roles they hold.</li>
+        <li>The container, acting on the <code>@RolesAllowed("BANK_MANAGER")</code> annotation. The <em>identity
+          store</em> (pillar 2) gave her the role <code>TELLER</code>, and authorization then compared that to
+          the role the method demands — they did not match.</li>
+        <li>Because it proves the check is <strong>not bypassable</strong>. There is no code path that reaches
+          the body without passing the annotation check, so a later edit cannot accidentally skip it.</li>
+      </ol>
+    </details>
+  </div>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       QUIZ
        ===================================================================== -->
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 13 · Knowledge Check</h3>
+    <h3>Check yourself — Session 13</h3>
     <script type="application/json">
     [
       {
         "q": "What is the primary architectural improvement introduced by the Jakarta Security specification?",
         "opts": [
           "It eliminates the need for passwords",
-          "It replaces proprietary, vendor-specific server XML configs with portable, CDI-driven Java annotations",
-          "It moves authentication into client JavaScript",
+          "It replaces proprietary, vendor-specific server XML configuration with portable, CDI-driven Java annotations",
+          "It moves authentication into client-side JavaScript",
           "It restricts applications to single-user mode"
         ],
         "a": 1,
-        "why": "Jakarta Security standardizes authentication and authorization using portable CDI annotations like @DatabaseIdentityStoreDefinition."
+        "why": "Jakarta Security standardises authentication and authorization using portable CDI annotations such as @DatabaseIdentityStoreDefinition, so the setup travels with your code instead of living in one server's configuration file."
       },
       {
-        "q": "Which of the three security pillars is responsible for authenticating caller credentials against databases or LDAP directories?",
+        "q": "Which of the three pillars authenticates caller credentials against a database or LDAP directory?",
         "opts": [
           "HttpAuthenticationMechanism",
           "IdentityStore",
@@ -240,10 +809,21 @@ public class WireTransferService {
           "FacesContext"
         ],
         "a": 1,
-        "why": "IdentityStore is the database/LDAP repository connector that validates credentials and queries user group memberships."
+        "why": "The IdentityStore is the repository connector. It validates the supplied credentials and loads the caller's group and role memberships."
       },
       {
-        "q": "How can a CDI bean or JSF Backing Bean programmatically check if the current user has the 'ADMIN' role?",
+        "q": "What is the difference between authentication and authorization?",
+        "opts": [
+          "Authentication decides what you may do; authorization decides who you are",
+          "Authentication decides who you are; authorization decides what you may do",
+          "They are two names for the same thing",
+          "Authentication is done by the browser, authorization by the database"
+        ],
+        "a": 1,
+        "why": "Authentication answers 'who are you?'. Authorization answers 'what are you allowed to do?'. Authentication always comes first, but passing it does not grant every action."
+      },
+      {
+        "q": "How can a CDI bean programmatically check whether the current user holds the 'ADMIN' role?",
         "opts": [
           "securityContext.isCallerInRole(\"ADMIN\")",
           "httpRequest.hasRole(\"ADMIN\")",
@@ -251,10 +831,10 @@ public class WireTransferService {
           "database.queryAdmin()"
         ],
         "a": 0,
-        "why": "The CDI-injectable SecurityContext provides the standard isCallerInRole(String role) method."
+        "why": "The CDI-injectable SecurityContext provides the standard isCallerInRole(String role) method for runtime authorization checks."
       },
       {
-        "q": "Which annotation defines an authentication mechanism that redirects unauthenticated users to a customized XHTML login page?",
+        "q": "Which annotation defines an authentication mechanism that redirects unauthenticated users to a custom XHTML login page?",
         "opts": [
           "@BasicAuthenticationMechanismDefinition",
           "@CustomFormAuthenticationMechanismDefinition",
@@ -262,35 +842,214 @@ public class WireTransferService {
           "@CertificateAuthentication"
         ],
         "a": 1,
-        "why": "@CustomFormAuthenticationMechanismDefinition configures form-based login using custom application-provided pages (/login.xhtml)."
+        "why": "@CustomFormAuthenticationMechanismDefinition configures form-based login using application-provided pages, declared through @LoginToContinue(loginPage = \"/login.xhtml\", ...). Remember the trade-off that comes with the word \"custom\": the container supplies nothing, so your own code must call securityContext.authenticate(request, response, AuthenticationParameters.withParams().credential(...)) or nobody ever gets logged in — silently."
       },
       {
-        "q": "What happens if a user without the required role attempts to invoke a CDI method annotated with @RolesAllowed(\"DIRECTOR\")?",
+        "q": "What happens when a user without the required role invokes a CDI method annotated @RolesAllowed(\"DIRECTOR\")?",
         "opts": [
           "The method returns null",
-          "The server throws a security exception and returns HTTP 403 Forbidden",
+          "The container throws a security exception and returns HTTP 403 Forbidden, before the method body runs",
           "The user is automatically promoted to Director",
-          "The computer reboots"
+          "The method runs anyway and logs a warning"
         ],
         "a": 1,
-        "why": "@RolesAllowed enforces role authorization; unauthorized invocations are aborted with a security exception and HTTP 403."
+        "why": "@RolesAllowed is enforced by the container. An unauthorised invocation is aborted with a security exception and HTTP 403 — and the check happens before any of your business code executes."
+      },
+      {
+        "q": "Why does @DatabaseIdentityStoreDefinition use hashAlgorithm = Pbkdf2PasswordHash.class?",
+        "opts": [
+          "To make database queries faster",
+          "To compress the password column and save disk space",
+          "So stored passwords are one-way fingerprints rather than readable text, so a stolen database does not reveal the passwords",
+          "Because PostgreSQL cannot store plain text"
+        ],
+        "a": 2,
+        "why": "Pbkdf2PasswordHash is a one-way salted hash. The database stores fingerprints, not passwords, so stealing the table does not hand an attacker the users' logins."
+      },
+      {
+        "q": "Which annotation would you place on a method that must never be callable by anyone?",
+        "opts": [
+          "@PermitAll",
+          "@RolesAllowed(\"NONE\")",
+          "@DenyAll",
+          "@Deprecated"
+        ],
+        "a": 2,
+        "why": "@DenyAll blocks every caller regardless of roles — the standard way to permanently switch a method off while keeping it compiling."
       }
     ]
     </script>
   </section>
 
   <!-- =====================================================================
-       Summary
+       REFERENCE
+       ===================================================================== -->
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>Nothing below is needed for your first read. Come back when you are writing real code.</p>
+
+  <details>
+    <summary><strong>The three pillars, in full</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Pillar</th><th>Interface / annotation</th><th>Responsibility</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>1 · Authentication mechanism</td>
+          <td><code>HttpAuthenticationMechanism</code><br><code>@FormAuthenticationMechanismDefinition</code></td>
+          <td>Intercepts HTTP requests, collects login credentials, redirects to login and error pages, and issues the authentication challenge.</td>
+        </tr>
+        <tr>
+          <td>2 · Identity store</td>
+          <td><code>IdentityStore</code><br><code>@DatabaseIdentityStoreDefinition</code></td>
+          <td>Validates username/password credentials against a database or LDAP directory and loads the caller's groups and roles.</td>
+        </tr>
+        <tr>
+          <td>3 · Security context</td>
+          <td><code>jakarta.security.enterprise.SecurityContext</code></td>
+          <td>CDI-injectable API used by application beans to inspect the caller principal, test role membership, and perform programmatic authentication.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>Authentication mechanisms you can declare</strong></summary>
+    <ul>
+      <li><code>@BasicAuthenticationMechanismDefinition</code> — the browser's native username/password dialog.
+        Simplest to configure; no custom page.</li>
+      <li><code>@FormAuthenticationMechanismDefinition</code> — a server-generated HTML login form.</li>
+      <li><code>@CustomFormAuthenticationMechanismDefinition</code> — your own login and error pages, supplied
+        through <code>@LoginToContinue(loginPage = "...", errorPage = "...")</code>.</li>
+      <li><code>@OpenIdAuthenticationMechanismDefinition</code> — login delegated to an OpenID Connect provider
+        (for example a corporate single sign-on).</li>
+    </ul>
+    <p>All of them are placed on a single <code>@ApplicationScoped</code> configuration class, exactly as shown in
+      Part 2.</p>
+  </details>
+
+  <details>
+    <summary><strong>@DatabaseIdentityStoreDefinition — the key attributes</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Attribute</th><th>What it specifies</th></tr></thead>
+      <tbody>
+        <tr><td><code>dataSourceLookup</code></td><td>The JNDI name of the DataSource to use (Session 3). Keeps database secrets on the server, out of your source.</td></tr>
+        <tr><td><code>callerQuery</code></td><td>SQL returning the stored password (or hash) for a username. The username is bound to the <code>?</code> parameter.</td></tr>
+        <tr><td><code>groupsQuery</code></td><td>SQL returning the roles belonging to a username.</td></tr>
+        <tr><td><code>hashAlgorithm</code></td><td>The class that hashes and compares passwords, e.g. <code>Pbkdf2PasswordHash.class</code>.</td></tr>
+        <tr><td><code>priority</code></td><td>Ordering when more than one identity store is present — lower runs first.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>SecurityContext — the methods you will actually use</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Method</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>getCallerPrincipal()</code></td><td>The <code>Principal</code> of the logged-in user, or <code>null</code> if nobody is logged in.</td></tr>
+        <tr><td><code>isCallerInRole(String role)</code></td><td><code>true</code> if the current caller holds that role.</td></tr>
+        <tr><td><code>getPrincipalsByType(Class&lt;T&gt;)</code></td><td>All principals of a given type, for applications using more than one identity source.</td></tr>
+        <tr><td><code>hasAccessToWebResource(...)</code></td><td>Whether the caller may access a given web resource with given methods.</td></tr>
+        <tr><td><code>authenticate(request, response, params)</code></td><td>Performs the login. <strong>Mandatory</strong> when you use <code>@CustomFormAuthenticationMechanismDefinition</code> — the container will not authenticate anybody unless your code calls this. Returns an <code>AuthenticationStatus</code>. The third argument is an <code>AuthenticationParameters</code>, not a credential — build it with <code>AuthenticationParameters.withParams().credential(...)</code>.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>@RolesAllowed, @PermitAll, @DenyAll — the exact rules</strong></summary>
+    <ul>
+      <li><code>@RolesAllowed({"A","B"})</code> — the caller must hold at least one of the listed roles. Usable on
+        a class (applying to all its methods) or on a single method (overriding the class).</li>
+      <li><code>@PermitAll</code> — no restriction. Use deliberately, never as a default.</li>
+      <li><code>@DenyAll</code> — no caller passes. Useful for disabling a method without deleting it.</li>
+      <li>A method with <strong>no</strong> annotation inherits the class-level rule, if there is one. If there is
+        none anywhere, the method is unrestricted.</li>
+      <li>Roles are plain strings — they must <strong>match exactly</strong> the role names your identity store
+        returns. <code>"BANK_MANAGER"</code> and <code>"bank_manager"</code> are different roles.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>Why hashing, and what Pbkdf2PasswordHash actually does</strong></summary>
+    <p>A <strong>hash</strong> turns a password into a fixed-length fingerprint that cannot be reversed. Storing
+      hashes means a stolen database yields no usable passwords.</p>
+    <p>A <strong>salt</strong> is random data mixed in before hashing, so two users with the same password produce
+      two different stored values — defeating pre-computed “rainbow table” attacks.</p>
+    <p><strong>PBKDF2</strong> deliberately repeats the hashing many thousands of times, so checking one password
+      is cheap for your server but testing billions of guesses is prohibitively slow for an attacker.</p>
+    <p><code>Pbkdf2PasswordHash</code> handles salt generation, iteration count and comparison for you, so your
+      configuration just names the class.</p>
+  </details>
+
+  <!-- =====================================================================
+       RECAP
        ===================================================================== -->
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>Jakarta Security</strong></td><td>Modern, portable, CDI-driven enterprise security replacing proprietary server XML.</td></tr>
-    <tr><td><strong>Auth Mechanism</strong></td><td><code>HttpAuthenticationMechanism</code> handles incoming HTTP login challenges and redirects.</td></tr>
-    <tr><td><strong><code>IdentityStore</code></strong></td><td>Validates passwords and loads role groups from relational databases or LDAP.</td></tr>
-    <tr><td><strong><code>SecurityContext</code></strong></td><td>CDI-injectable facade providing <code>getCallerPrincipal()</code> and <code>isCallerInRole()</code>.</td></tr>
-    <tr><td><strong>RBAC Annotations</strong></td><td><code>@RolesAllowed</code>, <code>@PermitAll</code>, and <code>@DenyAll</code> enforce method permissions declaratively.</td></tr>
+    <tr><td>Jakarta Security</td><td>Portable, CDI-driven, annotation-based security that replaced proprietary per-server configuration files.</td></tr>
+    <tr><td>Authentication</td><td>“Who are you?” — proving identity. Always comes first.</td></tr>
+    <tr><td>Authorization</td><td>“What may you do?” — decided by your roles, and a separate question from who you are.</td></tr>
+    <tr><td>Pillar 1 — mechanism</td><td><code>HttpAuthenticationMechanism</code>. Collects credentials and drives the login page — by itself for the built-in flavours, through your own code for the <em>custom</em> one.</td></tr>
+    <tr><td>Pillar 2 — identity store</td><td><code>@DatabaseIdentityStoreDefinition</code>. Checks the password and loads the caller's roles.</td></tr>
+    <tr><td>Pillar 3 — security context</td><td><code>SecurityContext</code>, injected with <code>@Inject</code>. Lets your code ask who is calling and what they may do.</td></tr>
+    <tr><td><code>getCallerPrincipal()</code></td><td>The current user, or <code>null</code> if nobody is logged in.</td></tr>
+    <tr><td><code>isCallerInRole(...)</code></td><td>Runtime authorization check inside your own code.</td></tr>
+    <tr><td><code>@RolesAllowed</code></td><td>Declarative role enforcement on any CDI bean, checked by the container before the method runs.</td></tr>
+    <tr><td><code>@PermitAll</code> / <code>@DenyAll</code></td><td>Open to everyone / open to nobody.</td></tr>
+    <tr><td><code>Pbkdf2PasswordHash</code></td><td>Salted, one-way password hashing so a stolen database reveals no passwords.</td></tr>
+    <tr><td><code>SecurityContext.authenticate(...)</code></td><td>The call that actually logs somebody in. <strong>Required</strong> with a <em>custom</em> form mechanism, which does nothing on its own.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Confusing authentication with authorization</td><td>Remember the order: <em>who you are</em> first, then <em>what you may do</em>. Passing one never implies the other.</td></tr>
+      <tr><td>Storing passwords as plain text</td><td>Always declare a <code>hashAlgorithm</code> such as <code>Pbkdf2PasswordHash.class</code>, and store only the hash.</td></tr>
+      <tr><td>Putting the database URL and password directly in your code</td><td>Point <code>dataSourceLookup</code> at a JNDI DataSource (Session 3) so the secrets stay on the server.</td></tr>
+      <tr><td>Role names in <code>@RolesAllowed</code> that do not match the store</td><td>They must match <strong>exactly</strong>, including case. <code>"BANK_MANAGER"</code> ≠ <code>"bank_manager"</code>.</td></tr>
+      <tr><td>Hand-writing role checks inside methods</td><td>Prefer <code>@RolesAllowed</code> so the container enforces it on every path. Reserve in-method checks for decisions that depend on runtime data.</td></tr>
+      <tr><td>Assuming an unannotated method is protected</td><td>With no annotation and no class-level rule, a method is <strong>unrestricted</strong>. Annotate deliberately.</td></tr>
+      <tr><td>Reaching for <code>@Inject</code> to get a DataSource</td><td>A DataSource is a server resource — use <code>@Resource</code>. Reserve <code>@Inject</code> for CDI beans such as <code>SecurityContext</code>.</td></tr>
+      <tr><td>Testing the happy path only</td><td>Always test the <em>refused</em> case too — log in as a low-privilege user and confirm the protected method actually returns 403.</td></tr>
+      <tr><td>Declaring a <em>custom</em> form mechanism and expecting the container to log people in</td><td><code>@CustomFormAuthenticationMechanismDefinition</code> does nothing on its own — it fails with no error at all. Your code must call <code>securityContext.authenticate(request, response, AuthenticationParameters.withParams().credential(...))</code>. Or use plain <code>@FormAuthenticationMechanismDefinition</code>, which handles it for you.</td></tr>
+      <tr><td>Hand-assembling a <code>PBKDF2WithHmacSHA256:iterations:salt:hash</code> string to seed users</td><td>Call <code>hasher.generate(password.toCharArray())</code> on the same <code>Pbkdf2PasswordHash</code> the container will verify with — and call <code>initialize(...)</code> on it first.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Security touches almost every other session in this course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Security topic</th><th>Where else you meet it</th></tr></thead>
+    <tbody>
+      <tr><td><code>@RolesAllowed</code> introduced at a beginner level</td><td><a href="session-04-working-with-ejb.html">Session 4 — Working with Enterprise Beans</a></td></tr>
+      <tr><td><code>@Inject</code> and the CDI container that makes <code>SecurityContext</code> injectable</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI (Part I)</a></td></tr>
+      <tr><td>Qualifiers and interceptors — how <code>@RolesAllowed</code> is actually enforced</td><td><a href="session-12-cdi-part2.html">Session 12 — CDI (Part II)</a></td></tr>
+      <tr><td><code>dataSourceLookup</code>, JNDI names and connection pools</td><td><a href="session-03-resource-creation.html">Session 3 — Resource Creation</a></td></tr>
+      <tr><td>Where the security annotations end up inside your deployable archive</td><td><a href="session-14-packaging.html">Session 14 — Packaging</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/security/" target="_blank" rel="noopener">Jakarta Security Specification</a></li>
+          <li><a href="https://jakarta.ee/specifications/authorization/" target="_blank" rel="noopener">Jakarta Authorization Specification</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly — official documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

@@ -1,93 +1,272 @@
-<title>Session 9 — Jakarta Bean Validation</title>
+<title>Session 9 — Bean Validation, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 9: Jakarta Bean Validation, declarative constraints (@NotNull, @Size, @Pattern), custom constraint validators, programmatic Validator API, and automatic multi-tier validation across JSF, EJB, and JPA.">
+<meta name="description" content="Session 9, written for people who have never heard of a 'constraint' or a 'validator'. Why you write a data rule once instead of three times, the ready-made rules like @NotNull and @Size, how to build your own custom constraint in two steps, and how to run the Validator yourself.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s09";</script>
 
 <main class="page">
 
-  <h1>Session 9 · Jakarta Bean Validation</h1>
-  <p class="lede">In enterprise systems, data validation was historically duplicated across three layers: JavaScript in
-    the browser, check methods in the EJB layer, and table constraints in the database. <strong>Jakarta Bean Validation</strong>
-    solves this redundancy: you declare business constraints <em>once</em> on your domain classes, and the container automatically
-    enforces them across the web tier (JSF), business tier (EJB), and database persistence tier (JPA).</p>
+  <h1>Session 9 · Bean Validation — Write the Rule Once, Check It Everywhere</h1>
+  <p class="lede">Every program has to check its data before it trusts it: a name is not blank, an age
+    is a real number, an account number is really ten digits. For years programmers wrote each of those
+    checks <em>three times over</em> — once in the browser, once in the business code, once in the
+    database — and the three copies quietly drifted apart. <strong>Jakarta Bean Validation</strong>
+    ends that. You write each rule <em>once</em>, as a short label on the field it guards, and every
+    layer of the application obeys it automatically. If you have never heard of a “constraint” or a
+    “validator”, this page is written for exactly you.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Define the Jakarta Bean Validation architecture and explain "write once, enforce everywhere"</li>
-        <li>Apply standard built-in constraint annotations (<code>@NotNull</code>, <code>@Size</code>, <code>@Min</code>, <code>@Pattern</code>, <code>@Email</code>)</li>
-        <li>Distinguish between field, property (getter), and class-level constraint placement</li>
-        <li>Construct custom validation annotations and implement <code>ConstraintValidator</code> logic</li>
-        <li>Explain container integration: automatic JSF Phase 3 validation, EJB method validation, and JPA pre-persist hooks</li>
-        <li>Perform programmatic validation using the <code>Validator</code> and <code>ConstraintViolation</code> API</li>
+        <li><strong>No jargon without a translation.</strong> Every new word — constraint, validator,
+          violation — gets a plain-English box the moment it appears.</li>
+        <li><strong>Nothing is assumed.</strong> Never heard of Bean Validation? That is who this is for.</li>
+        <li><strong>The idea first, the code second.</strong> You will never meet a code block before the
+          plain-English version of what it does.</li>
+        <li><strong>By the end you can do it yourself.</strong> Read the rules, write your own from
+          scratch, and run the check by hand from plain Java.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       9.1 What is Jakarta Bean Validation?
-       ===================================================================== -->
-  <span class="eyebrow">session 9.1</span>
-  <h2>Part 1 · The "Validate Once, Enforce Everywhere" Paradigm</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a list copied from a manual — just six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what Bean Validation is, and why writing a rule once beats writing it three times</td><td>Part 1</td></tr>
+      <tr><td>Explain how JSF, EJB and JPA each enforce the same rule for you, without being asked</td><td>Part 1</td></tr>
+      <tr><td>Read the common ready-made rules (<code>@NotNull</code>, <code>@Size</code>, <code>@Min</code>, <code>@Max</code>, <code>@Email</code>, <code>@Pattern</code>, <code>@NotBlank</code>) and drop them on a field</td><td>Part 2</td></tr>
+      <tr><td>Say where a rule may sit — on a field, a getter, or a whole class</td><td>Part 2</td></tr>
+      <tr><td>Build your own rule from scratch: the annotation, then the validator</td><td>Part 3</td></tr>
+      <tr><td>Run the checks yourself from plain Java with the <code>Validator</code> API</td><td>Part 4</td></tr>
+    </tbody>
+  </table></div>
 
-  <div class="callout callout--analogy"><span class="callout__i">🛂</span>
-    <div class="callout__b"><b>The Airport Security Checkpoint Analogy</b>
-      Without Bean Validation, an airport would force you to unpack your luggage at the front door, unpack it again
-      at the check-in desk, unpack it at the boarding gate, and unpack it on the plane. Each agent writes their own rules.<br>
-      With <strong>Jakarta Bean Validation</strong>, there is one authoritative specification for allowed items. The luggage
-      tag declares the constraints; every checkpoint (web form, business logic, persistence store) applies the exact same rules automatically.
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// interactive simulation</code> — press <strong>Run</strong> and watch a real server-log replay. Nothing touches your computer.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers stay hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
     </div>
   </div>
 
-  <p>Jakarta Bean Validation (implemented by reference providers like <strong>Hibernate Validator</strong>) attaches
-    declarative constraint metadata to Java bean fields, getters, or classes:</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Application Layer</th><th>How Bean Validation Integrates</th><th>Failure Behavior</th></tr></thead>
-    <tbody>
-      <tr>
-        <td><strong>Presentation Tier (JSF Facelets)</strong></td>
-        <td>JSF reads model constraints automatically during <strong>Phase 3 (Process Validation)</strong>.</td>
-        <td>Stops request; displays localized error messages in <code>&lt;h:messages&gt;</code> without hitting EJB.</td>
-      </tr>
-      <tr>
-        <td><strong>Business Tier (EJB / CDI)</strong></td>
-        <td>Container intercepts method calls with <code>@ValidateExecutable</code> and parameter <code>@Valid</code>.</td>
-        <td>Throws <code>ConstraintViolationException</code> before executing method body.</td>
-      </tr>
-      <tr>
-        <td><strong>Persistence Tier (JPA)</strong></td>
-        <td>JPA automatically runs the validator before executing SQL <code>INSERT</code> or <code>UPDATE</code>.</td>
-        <td>Aborts the transaction before sending invalid SQL to the database.</td>
-      </tr>
-    </tbody>
-  </table></div>
+  <hr>
 
   <!-- =====================================================================
-       9.2 Built-in Constraints
+       PART 1 — ONE RULE, ENFORCED EVERYWHERE
        ===================================================================== -->
-  <span class="eyebrow">session 9.2</span>
-  <h2>Part 2 · Standard Built-in Constraints</h2>
 
-  <p>The <code>jakarta.validation.constraints.*</code> package provides an extensive library of production-ready rules:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · One rule on the field, honoured by every layer</h2>
+
+  <h3>1.1 The same check, written three times</h3>
+  <p>Checking data before you trust it is called <strong>validation</strong>. A name is not blank. An
+    age is a number, not the word “banana”. An account number is exactly ten digits.</p>
+  <p>For years, programmers wrote each check in <em>three separate places</em>:</p>
+  <ul>
+    <li>in the <strong>browser</strong>, as JavaScript, so the user gets an instant “that's wrong”;</li>
+    <li>in the <strong>business code</strong> (the EJB layer), as hand-written <code>if</code> checks, in
+      case the browser check was skipped;</li>
+    <li>in the <strong>database</strong>, as table rules, as a last line of defence.</li>
+  </ul>
+  <p>Three copies of one rule. The danger shows the moment the rule changes: someone updates the browser
+    to allow twelve digits, forgets the database, and now the two disagree. The copies
+    <strong>drift apart</strong>, and the bugs that follow are miserable to find.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>The rule “an account number is ten digits” lived in three notebooks at once. Change one notebook
+      and the others are quietly wrong — and nobody can tell which notebook is the real one.</p>
+  </div>
+
+  <h3>1.2 The fix: write the rule once, on the field itself</h3>
+  <p><strong>Jakarta Bean Validation</strong> is the Jakarta EE feature that ends the duplication. You
+    attach the rule straight to the field it guards, as a short label called a
+    <strong>constraint</strong>, and you write it <em>once</em>.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>constraint</strong> is a label on a field that states a rule the value must obey — “not
+      blank”, “between 2 and 50 characters”, “looks like an email”. You stick the label on; you do not
+      write the checking code.</p>
+  </div>
+
+  <p>The checking code already exists. It lives in an engine called a <strong>validation provider</strong>;
+    the one almost everyone uses is <strong>Hibernate Validator</strong>. It reads your labels and does
+    the work.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✦</span>
+    <div class="callout__b"><b>The one-sentence definition</b>
+      <strong>Jakarta Bean Validation</strong> lets you declare a data rule once, as a constraint on a
+      field, getter or class of an ordinary Java object — and every layer of the application then
+      enforces that same rule for you, automatically.</div>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🛂</span>
+    <div class="callout__b"><b>Analogy — one rulebook, every gate</b>
+      Picture an airport with a single official list of what you may carry on board. It is written once
+      and pinned up where individual staff cannot edit it. Security, the check-in desk and the boarding
+      gate all read that <em>same</em> list and turn away the same forbidden items. Nobody keeps a private
+      version, so no two gates can disagree. Bean Validation is that one pinned-up rulebook; the gates are
+      your web, business and database layers.</div>
+  </div>
+
+  <h3>1.3 “Enforce everywhere” — the three layers that obey the label</h3>
+  <p>Here is the part that feels like magic the first time. Once the constraint is on the field, you
+    never call it. Three different layers notice it and enforce it on their own:</p>
+  <ul>
+    <li>the <strong>web tier</strong> — your JSF screens from Session 5;</li>
+    <li>the <strong>business tier</strong> — your EJB and CDI beans;</li>
+    <li>the <strong>persistence tier</strong> — JPA, the part that saves objects to the database.</li>
+  </ul>
+  <p>Each one checks the rule at the right moment and reacts in its own sensible way. The table spells
+    out exactly when, and what happens when a value is rejected.</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Annotation</th><th>Supported Types</th><th>Description</th></tr></thead>
+    <thead><tr><th>Layer</th><th>How it enforces the constraint</th><th>What happens when a value fails</th></tr></thead>
     <tbody>
-      <tr><td><code>@NotNull</code></td><td>Any Object</td><td>Value must not be <code>null</code> (allows empty strings).</td></tr>
-      <tr><td><code>@NotEmpty</code></td><td>String, Collection, Map, Array</td><td>Must not be <code>null</code> and size/length must be $> 0$.</td></tr>
-      <tr><td><code>@NotBlank</code></td><td>String</td><td>Must not be <code>null</code> and must contain at least one non-whitespace character.</td></tr>
-      <tr><td><code>@Size(min=X, max=Y)</code></td><td>String, Collection, Array</td><td>Ensures string length or collection size is within specified bounds.</td></tr>
-      <tr><td><code>@Min(val)</code> / <code>@Max(val)</code></td><td>Numeric types (int, long, BigDecimal)</td><td>Ensures numeric value is $\ge$ min or $\le$ max.</td></tr>
-      <tr><td><code>@Positive</code> / <code>@PositiveOrZero</code></td><td>Numeric types</td><td>Value must be strictly positive ($> 0$) or non-negative ($\ge 0$).</td></tr>
-      <tr><td><code>@Email</code></td><td>String</td><td>Validates RFC-compliant email address structure.</td></tr>
-      <tr><td><code>@Pattern(regexp="...")</code></td><td>String</td><td>Validates string against a standard regular expression.</td></tr>
-      <tr><td><code>@Past</code> / <code>@Future</code></td><td>Date, LocalDate, Instant</td><td>Ensures date is strictly in the past (e.g., date of birth) or future (e.g., card expiry).</td></tr>
+      <tr>
+        <td><strong>Presentation tier (JSF Facelets)</strong></td>
+        <td>JSF reads the model's constraints automatically during <strong>Phase 3</strong> — the validation step of the JSF lifecycle from Session 5.</td>
+        <td>Stops the request and shows <em>localized</em> error messages (phrased in the user's own language and locale) in the <code>&lt;h:messages&gt;</code> tag — without ever reaching the EJB.</td>
+      </tr>
+      <tr>
+        <td><strong>Business tier (EJB / CDI)</strong></td>
+        <td>The container intercepts method calls (method validation; tuned with <code>@ValidateOnExecution</code>) and checks any parameter marked <code>@Valid</code>.</td>
+        <td>Throws <code>ConstraintViolationException</code> before the method body runs.</td>
+      </tr>
+      <tr>
+        <td><strong>Persistence tier (JPA)</strong></td>
+        <td>JPA runs the validator automatically before executing any SQL <code>INSERT</code> or <code>UPDATE</code>.</td>
+        <td>Aborts the transaction (the unit of database work) before invalid SQL reaches the database.</td>
+      </tr>
     </tbody>
   </table></div>
 
-  <div class="code-head">CustomerRegistration.java — Model with Declarative Constraints</div>
+  <div class="plainwords"><b>In plain words</b>
+    <p>You pin the rule to the field. The screen refuses bad input before it is sent. The business bean
+      refuses it before it runs. The database layer refuses it before it writes. One label, three
+      guards, no wiring from you.</p>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      You never register these checks with JSF, EJB or JPA. Putting the constraint on the field is the
+      <em>whole</em> of the work — the three tiers find it and honour it by themselves. That is what
+      <strong>declarative</strong> means: you state the rule, you do not run it.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Before Bean Validation, where were the three copies of a rule kept, and why was that a problem?</li>
+      <li>What is a <em>constraint</em>, in your own words?</li>
+      <li>Name the three layers that enforce a constraint automatically.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>In the <strong>browser</strong> (JavaScript), the <strong>business code</strong> (EJB), and
+          the <strong>database</strong> (table rules). Three copies <strong>drift apart</strong> when one
+          is changed and the others are not.</li>
+        <li>A <strong>label on a field</strong> that states a rule the value must obey. You add the label;
+          the engine (Hibernate Validator) does the checking.</li>
+        <li>The <strong>web tier (JSF)</strong>, the <strong>business tier (EJB / CDI)</strong>, and the
+          <strong>persistence tier (JPA)</strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — THE READY-MADE RULES
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · The ready-made rules you can just drop on</h2>
+
+  <p>You almost never have to invent a rule. Jakarta ships a whole shelf of them in one package,
+    <code>jakarta.validation.constraints</code>. You pick the label you want and put it above the field.
+    That is the entire job.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📏</span>
+    <div class="callout__b"><b>Analogy — a drawer of ready-made gauges</b>
+      A workshop keeps a drawer of measuring tools: a ruler, a set of go/no-go gauges, a pair of scales,
+      a date stamp. You do not file your own ruler from scratch to measure a plank — you open the drawer
+      and grab the right one. The built-in constraints are that drawer. Each annotation is a finished
+      gauge; you just clip it onto the field you want measured.</div>
+  </div>
+
+  <h3>2.1 The rules you will use most</h3>
+  <p>They sort naturally by the question they answer. Every name below comes from
+    <code>jakarta.validation.constraints</code>.</p>
+
+  <p><strong>“Is a value even there?”</strong></p>
+  <ul>
+    <li><code>@NotNull</code> — the value must not be <code>null</code>. (An empty string <code>""</code>
+      still passes — it is not null.)</li>
+    <li><code>@NotEmpty</code> — not null <em>and</em> not empty: a string, collection, map or array must
+      have at least one element.</li>
+    <li><code>@NotBlank</code> — for text only: not null, not empty, and not just whitespace. At least one
+      visible character.</li>
+  </ul>
+
+  <p><strong>“How big, how long, how much?”</strong></p>
+  <ul>
+    <li><code>@Size(min = X, max = Y)</code> — a string's length, or a collection's size, must fall
+      between the two bounds.</li>
+    <li><code>@Min(val)</code> / <code>@Max(val)</code> — a number must be at least, or at most, the given
+      value (works on <code>int</code>, <code>long</code>, <code>BigDecimal</code> and friends).</li>
+    <li><code>@Positive</code> / <code>@PositiveOrZero</code> — a number must be strictly greater than
+      zero, or zero and above.</li>
+  </ul>
+
+  <p><strong>“What shape is the text?”</strong></p>
+  <ul>
+    <li><code>@Email</code> — the string must look like a real email address.</li>
+    <li><code>@Pattern(regexp = "…")</code> — the string must match a regular expression (a compact
+      pattern language for text). <code>"^\\d{10}$"</code> means “exactly ten digits”.</li>
+  </ul>
+
+  <p><strong>“Is the date on the right side of today?”</strong></p>
+  <ul>
+    <li><code>@Past</code> — the date must be before now (a date of birth).</li>
+    <li><code>@Future</code> — the date must be after now (a card's expiry).</li>
+  </ul>
+
+  <h3>2.2 The trap: <code>@NotNull</code> is usually not what you want</h3>
+  <p>The three “not” rules look alike and are the single most common mix-up on this topic. On a text
+    field, the difference is exactly this:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Rule</th><th>Rejects <code>null</code>?</th><th>Rejects <code>""</code> (empty)?</th><th>Rejects <code>"   "</code> (only spaces)?</th></tr></thead>
+    <tbody>
+      <tr><td><code>@NotNull</code></td><td>Yes</td><td>No</td><td>No</td></tr>
+      <tr><td><code>@NotEmpty</code></td><td>Yes</td><td>Yes</td><td>No</td></tr>
+      <tr><td><code>@NotBlank</code></td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The one everyone gets wrong</b>
+      Putting <code>@NotNull</code> on a name field to mean “the user must type something” does
+      <em>not</em> work: <code>""</code> and <code>"   "</code> both slip past it. When you mean “must
+      actually contain text”, the rule is <code>@NotBlank</code>.</div>
+  </div>
+
+  <h3>2.3 Putting them on a real class</h3>
+  <p>Here is a registration form's data as a plain Java class — a <strong>domain class</strong>, meaning
+    it just holds application data. Watch how the rules stack up, one or more per field, each with its
+    own <code>message</code> for when it is broken.</p>
+
+  <div class="code-head">CustomerRegistration.java — a domain class with constraints</div>
   <pre><code>package com.globalbank.model;
 
 import jakarta.validation.constraints.*;
@@ -114,21 +293,103 @@ public class CustomerRegistration implements Serializable {
     @Positive(message = "Opening deposit must be greater than zero")
     private double initialDeposit;
 
-    // Getters and setters...
+    // Getters and setters — an IDE generates these in one keystroke
+    // (IntelliJ: Alt+Insert → Getter and Setters; Eclipse: Source → Generate Getters and Setters).
+    // The setters used by the demos on this page are written out in full:
+
+    public void setFullName(String fullName) { this.fullName = fullName; }
+    public void setEmail(String email) { this.email = email; }
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
+    public void setDateOfBirth(LocalDate dateOfBirth) { this.dateOfBirth = dateOfBirth; }
+    public void setInitialDeposit(double initialDeposit) { this.initialDeposit = initialDeposit; }
 }</code></pre>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      The labels are the only validation code here — there is not a single <code>if</code> statement.
+      Several constraints can stack on one field: <code>fullName</code> is both <code>@NotBlank</code>
+      <em>and</em> <code>@Size</code>, and each carries its own <code>message</code> that the user will
+      see.</div>
+  </div>
+
+  <h3>2.4 Where a rule is allowed to sit</h3>
+  <p>In the class above every constraint sits on a <strong>field</strong>. That is the usual place, but
+    not the only one. The same label works in three spots:</p>
+  <ul>
+    <li><strong>On a field</strong> — <code>@NotBlank private String fullName;</code> — the everyday
+      choice.</li>
+    <li><strong>On a getter (a “property”)</strong> — <code>@NotBlank public String getFullName()</code> —
+      handy when the value is computed rather than stored.</li>
+    <li><strong>On the whole class</strong> — a <em>class-level</em> constraint, for a rule that needs to
+      see several fields at once (for example, “end date must be after start date”).</li>
+  </ul>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A rule about one value goes on that field (or its getter). A rule that compares two values goes on
+      the class, because only the class can see both. Field and getter are the everyday choices;
+      class-level is for cross-field rules.</p>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>A user leaves a required name box as three spaces. Which of <code>@NotNull</code>,
+        <code>@NotEmpty</code>, <code>@NotBlank</code> would catch that?</li>
+      <li>Which rule would you use to force an opening deposit above zero?</li>
+      <li>You need “the end date must be after the start date”. On a field, a getter, or the class — and why?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Only <strong><code>@NotBlank</code></strong>. <code>@NotNull</code> and <code>@NotEmpty</code>
+          both treat <code>"   "</code> as present.</li>
+        <li><strong><code>@Positive</code></strong> (strictly greater than zero). <code>@Min(1)</code>
+          would also work for whole numbers.</li>
+        <li>On the <strong>class</strong>. Only a class-level constraint can see both the start date and
+          the end date at the same time; a field-level rule sees just its own value.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       9.3 Custom Constraints
+       PART 3 — WRITING YOUR OWN RULE
        ===================================================================== -->
-  <span class="eyebrow">session 9.3</span>
-  <h2>Part 3 · Creating Custom Constraints</h2>
 
-  <p>When business requirements exceed standard annotations (such as verifying a bank routing number checksum or
-    enforcing password complexity), you build a <strong>Custom Constraint</strong> in two straightforward steps:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Writing your own rule when none fits</h2>
 
-  <h3>Step 1: Define the Custom Annotation</h3>
-  <div class="code-head">ValidAccountNumber.java — Custom Constraint Annotation</div>
-  <pre><code>package com.globalbank.validation;
+  <p>The drawer of ready-made gauges is deep, but it cannot cover rules that are specific to your
+    business. Two common examples:</p>
+  <ul>
+    <li>a <strong>bank account number with a check digit</strong> — the digits must add up a certain way,
+      or the number is a typo;</li>
+    <li><strong>password complexity</strong> — at least one capital, one digit, one symbol.</li>
+  </ul>
+  <p>No off-the-shelf annotation knows your check-digit maths, so you build your own
+    <strong>custom constraint</strong>. It is always the same two pieces, and they split the job
+    cleanly.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🕵️</span>
+    <div class="callout__b"><b>Analogy — a badge and the inspector who wears it</b>
+      Imagine adding a new quality check to a factory. First you print a <strong>badge</strong> that names
+      the role: “Account-Number Inspector”. Then you <strong>hire the inspector</strong> who actually
+      knows how to do the checking, and give them the badge. The badge alone inspects nothing; the
+      inspector without a badge is never called to the line. You need both, and they are made separately.
+      The annotation is the badge; the <code>ConstraintValidator</code> is the inspector.</div>
+  </div>
+
+  <p>So the build is two steps: <strong>Step 1</strong> defines the badge (an annotation),
+    <strong>Step 2</strong> writes the inspector (a class). Here they are.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Step 1 — Define the annotation (the badge)</h4>
+      <p>A new annotation is declared with <code>@interface</code>. Four lines on top of it do the setup,
+        and the body lists three attributes every constraint must have.</p>
+      <div class="code-head">ValidAccountNumber.java — the custom constraint annotation</div>
+      <pre><code>package com.globalbank.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
@@ -145,10 +406,35 @@ public @interface ValidAccountNumber {
     Class&lt;?&gt;[] groups() default {};
     Class&lt;? extends Payload&gt;[] payload() default {};
 }</code></pre>
+      <p>Reading the four setup lines:</p>
+      <ul>
+        <li><code>@Documented</code> — include this constraint in generated documentation. Cosmetic.</li>
+        <li><code>@Constraint(validatedBy = AccountNumberValidator.class)</code> — <strong>the wire</strong>:
+          it names the class that holds the checking code (Step 2).</li>
+        <li><code>@Target({ElementType.FIELD, ElementType.PARAMETER})</code> — where the label may be used:
+          on fields and on method parameters.</li>
+        <li><code>@Retention(RetentionPolicy.RUNTIME)</code> — keep the label around while the program
+          runs, so the engine can read it. Without this the rule would vanish at compile time.</li>
+      </ul>
+      <p>The three attributes — <code>message</code>, <code>groups</code> and <code>payload</code> — are
+        mandatory on every constraint. <code>message</code> is the text shown when the rule fails;
+        <code>groups</code> and <code>payload</code> are advanced extras you can leave empty for now (both
+        are explained in the Reference).</p>
+      <div class="callout callout--tip"><span class="callout__i">🔑</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          <code>@Constraint(validatedBy = AccountNumberValidator.class)</code> is the only line that links
+          the badge to the inspector. Miss it, and your annotation compiles, sits on the field, and
+          silently checks nothing.</div>
+      </div>
+    </li>
 
-  <h3>Step 2: Implement the <code>ConstraintValidator</code></h3>
-  <div class="code-head">AccountNumberValidator.java — Validator Logic</div>
-  <pre><code>package com.globalbank.validation;
+    <li>
+      <h4>Step 2 — Implement the ConstraintValidator (the inspector)</h4>
+      <p>The checking code goes in a class that implements <code>ConstraintValidator</code>. It takes two
+        type parameters in angle brackets: the <em>annotation</em> it serves and the <em>type of value</em>
+        it inspects — here <code>ConstraintValidator&lt;ValidAccountNumber, String&gt;</code>.</p>
+      <div class="code-head">AccountNumberValidator.java — the validator logic</div>
+      <pre><code>package com.globalbank.validation;
 
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -166,27 +452,93 @@ public class AccountNumberValidator implements ConstraintValidator&lt;ValidAccou
             return false; // Null or incorrect length fails
         }
 
-        // Luhn algorithm or bank check-digit verification:
+        // Simple check-digit sum: the ten digits must add up to a multiple of 10.
+        // (This is a plain digit sum, not the full Luhn algorithm — Luhn doubles every
+        //  second digit, which a real bank rule would need.)
         int sum = 0;
         for (int i = 0; i &lt; value.length(); i++) {
             char c = value.charAt(i);
             if (!Character.isDigit(c)) return false;
             sum += Character.getNumericValue(c);
         }
-        return (sum % 10 == 0); // Must satisfy check-digit rule
+        return (sum % 10 == 0); // Check-digit rule: total must be divisible by 10
     }
 }</code></pre>
+      <p>Two methods matter. <code>initialize(...)</code> runs once and can read settings off the
+        annotation (this one needs none). <code>isValid(...)</code> is where the decision is made: it
+        returns <code>true</code> if the value passes and <code>false</code> if it fails.</p>
+      <div class="callout callout--tip"><span class="callout__i">🔑</span>
+        <div class="callout__b"><b>The one thing to notice</b>
+          <code>isValid</code> returns a plain <code>boolean</code>. It never throws an exception to signal
+          bad data, and it never fixes the value — it just answers yes or no. On <code>false</code>, the
+          engine raises the constraint's <code>message</code> for you.</div>
+      </div>
+    </li>
+
+  </ol>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The trap: doing too much inside <code>isValid</code></b>
+      Beginners sometimes throw an exception, print an error, or try to correct the value inside
+      <code>isValid</code>. Do none of that: decide <code>true</code> or <code>false</code> and return it —
+      reporting the failure is the engine's job, using the <code>message</code> from Step 1. Deciding how
+      to treat <code>null</code> is yours, though. This validator rejects it; many built-ins instead let
+      <code>null</code> pass and leave that to a separate <code>@NotNull</code>.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>What are the two pieces of a custom constraint, and what does each one do?</li>
+      <li>Which single line connects the annotation to the class that checks it?</li>
+      <li>What does <code>isValid</code> return, and what should it <em>not</em> do?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>An <strong>annotation</strong> (the badge: declares the rule and its message) and a
+          <strong><code>ConstraintValidator</code></strong> class (the inspector: holds the checking
+          logic).</li>
+        <li><code>@Constraint(validatedBy = AccountNumberValidator.class)</code> on the annotation.</li>
+        <li>It returns a <strong><code>boolean</code></strong> — <code>true</code> passes,
+          <code>false</code> fails. It must <strong>not</strong> throw, print, or fix the value; the
+          engine reports the failure using the constraint's <code>message</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
 
   <!-- =====================================================================
-       9.4 Programmatic Validation API
+       PART 4 — PROGRAMMATIC VALIDATION
        ===================================================================== -->
-  <span class="eyebrow">session 9.4</span>
-  <h2>Part 4 · Programmatic Validation with the <code>Validator</code> API</h2>
 
-  <p>While the container validates web inputs and entities automatically, batch processors or standalone utilities
-    can invoke the validation engine manually:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · Running the check yourself, from code</h2>
 
-  <div class="code-head">ProgrammaticValidationDemo.java</div>
+  <p>So far the rules fire on their own, inside a running server — a JSF form, an EJB call, a JPA save.
+    But sometimes there is no server doing it for you: a nightly <strong>batch job</strong> importing a
+    file, a small command-line tool, or a unit test. In those places you run the validation engine
+    yourself, in three short lines.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">⚖️</span>
+    <div class="callout__b"><b>Analogy — your own weighing scale</b>
+      At the airport your bag is weighed for you at the check-in desk. But you can also buy a small
+      luggage scale and weigh the bag at home, whenever you like, before you ever leave. The
+      <code>Validator</code> API is that handheld scale: the same measurement, run on demand, in your own
+      code, without waiting for a checkpoint to do it.</div>
+  </div>
+
+  <h3>4.1 The three moves</h3>
+  <p>The pattern never changes:</p>
+  <ol>
+    <li>Build a <strong><code>ValidatorFactory</code></strong> — the engine, created once.</li>
+    <li>Ask it for a <strong><code>Validator</code></strong> — the thing that does the checking.</li>
+    <li>Call <strong><code>validate(bean)</code></strong> — it hands back a <code>Set</code> of
+      <strong><code>ConstraintViolation</code></strong> objects, one per broken rule. An empty set means
+      everything passed.</li>
+  </ol>
+
+  <div class="code-head">ProgrammaticValidationDemo.java — running the Validator by hand</div>
   <pre><code>package com.globalbank.validation;
 
 import com.globalbank.model.CustomerRegistration;
@@ -223,6 +575,42 @@ public class ProgrammaticValidationDemo {
     }
 }</code></pre>
 
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Before this code will run, add a provider</b>
+      <p><code>Validation.buildDefaultValidatorFactory()</code> is not part of the JDK. With no
+        provider on the classpath it throws <code>NoProviderFoundException</code>. Inside WildFly the
+        provider is already present, but a plain project must name it in <code>pom.xml</code> — the
+        engine plus the Expression Language library it uses to build messages:</p>
+      <pre><code>&lt;dependency&gt;
+    &lt;groupId&gt;org.hibernate.validator&lt;/groupId&gt;
+    &lt;artifactId&gt;hibernate-validator&lt;/artifactId&gt;
+    &lt;version&gt;8.0.1.Final&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;dependency&gt;
+    &lt;groupId&gt;org.glassfish.expressly&lt;/groupId&gt;
+    &lt;artifactId&gt;expressly&lt;/artifactId&gt;
+    &lt;version&gt;5.0.0&lt;/version&gt;
+&lt;/dependency&gt;</code></pre>
+      <p>Then run the class the usual way — right-click it in your IDE and choose <em>Run</em>, or from
+        the command line with the Maven exec plugin:</p>
+      <pre><code>mvn -q compile exec:java -Dexec.mainClass="com.globalbank.validation.ProgrammaticValidationDemo"</code></pre>
+    </div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">🔬</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>validate()</code> does not throw when data is bad — it <em>returns</em> the problems as a set.
+      Empty set, all good; otherwise you loop through it. Each <code>ConstraintViolation</code> tells you
+      two things: <code>getPropertyPath()</code> (which field failed) and <code>getMessage()</code> (the
+      message you wrote on the constraint).</div>
+  </div>
+
+  <h3>4.2 The same rules, running inside the server</h3>
+  <p>When a JSF screen submits that same <code>CustomerRegistration</code>, you write none of the code
+    above — the container runs it for you during <strong>Phase 3</strong> of the lifecycle (Session 5).
+    The replay below is a real server log of exactly that: three rules fail, and the request never
+    reaches the business method or the database. Press <strong>Run</strong>.</p>
+
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
     <div class="bench__head">
@@ -253,85 +641,199 @@ c.setInitialDeposit(-200.00);            // Fails @Positive
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Read the last two lines of the log. The moment validation found three problems, the lifecycle jumped
+      straight to drawing the response with the error messages — and the database was never touched. That
+      is “enforce everywhere” from Part 1, caught on camera.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <ol>
+      <li>When would you run validation yourself in code instead of letting the container do it?</li>
+      <li>What does <code>validator.validate(bean)</code> return when the data is perfectly valid?</li>
+      <li>From one <code>ConstraintViolation</code>, how do you find out <em>which</em> field failed and <em>why</em>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>When there is no container running the check for you — a <strong>batch job</strong>, a
+          command-line tool, or a <strong>unit test</strong>.</li>
+        <li>An <strong>empty <code>Set</code></strong>. A non-empty set means one entry per broken rule;
+          <code>validate</code> never throws for bad data.</li>
+        <li><code>getPropertyPath()</code> gives the field, and <code>getMessage()</code> gives the reason
+          (the <code>message</code> from the constraint).</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       QUIZ
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 9 · Knowledge Check</h3>
+    <h3>Check yourself — Session 9</h3>
     <script type="application/json">
     [
-      {
-        "q": "What is the primary architectural benefit of Jakarta Bean Validation over manual validation methods?",
-        "opts": [
-          "It makes databases run without SQL",
-          "Constraints are defined once on the domain model and enforced uniformly across JSF, EJB, and JPA tiers",
-          "It eliminates the need for Java constructors",
-          "It compresses images automatically"
-        ],
-        "a": 1,
-        "why": "Bean Validation centralizes constraint rules on the domain model, preventing duplicate validation code across presentation, business, and storage tiers."
-      },
-      {
-        "q": "What is the difference between @NotNull, @NotEmpty, and @NotBlank on a String field?",
-        "opts": [
-          "There is no difference; they are aliases",
-          "@NotNull disallows null; @NotEmpty disallows null and \"\"; @NotBlank disallows null, \"\", and whitespace-only strings",
-          "@NotBlank only works on numbers",
-          "@NotEmpty requires at least 100 characters"
-        ],
-        "a": 1,
-        "why": "@NotBlank is the strictest check for text: it requires non-null, non-empty, and at least one non-whitespace character."
-      },
-      {
-        "q": "Which interface must you implement when writing the evaluation logic for a custom constraint?",
-        "opts": [
-          "ConstraintValidator<A, T>",
-          "java.lang.Runnable",
-          "jakarta.ejb.SessionBean",
-          "java.io.Serializable"
-        ],
-        "a": 0,
-        "why": "Custom validators implement ConstraintValidator<AnnotationType, TargetType> and provide the isValid(...) method."
-      },
-      {
-        "q": "When does JPA automatically execute Bean Validation by default?",
-        "opts": [
-          "Only when the database server restarts",
-          "Automatically prior to executing INSERT (pre-persist) and UPDATE (pre-update) statements",
-          "Only on SELECT queries",
-          "Never; JPA ignores Bean Validation"
-        ],
-        "a": 1,
-        "why": "JPA hooks directly into Bean Validation lifecycle events, validating entities before writing to the database."
-      },
-      {
-        "q": "Which method on the Validator interface returns the set of detected errors for a given object?",
-        "opts": [
-          "validator.checkErrors(obj)",
-          "validator.validate(obj)",
-          "validator.verify(obj)",
-          "validator.inspect(obj)"
-        ],
-        "a": 1,
-        "why": "validator.validate(object) returns a Set<ConstraintViolation<T>>, which is empty if all constraints pass."
-      }
+      {"q":"Before Bean Validation, why did the same rule often end up written three times?","opts":["Because Java requires three copies of every method","Because the check was duplicated in the browser, the business code and the database, and the copies drifted apart","Because the database cannot store rules","Because three programmers must share one field"],"a":1,"why":"The browser, the EJB layer and the database each kept their own copy of the rule, so they fell out of step. Bean Validation keeps one copy on the field."},
+      {"q":"What is the core idea of Jakarta Bean Validation?","opts":["Rules run only in the browser","You declare each constraint once on the domain model, and JSF, EJB and JPA all enforce it automatically","It replaces SQL","It compresses the database"],"a":1,"why":"One rule on the field is honoured by every tier — the 'validate once, enforce everywhere' paradigm."},
+      {"q":"On a String field, how do @NotNull, @NotEmpty and @NotBlank differ?","opts":["They are identical aliases","@NotNull only forbids null; @NotEmpty also forbids the empty string; @NotBlank also forbids whitespace-only text","@NotBlank works only on numbers","@NotEmpty needs at least 100 characters"],"a":1,"why":"@NotBlank is the strictest for text: non-null, non-empty, and at least one non-whitespace character."},
+      {"q":"Which constraint forces an opening deposit to be strictly greater than zero?","opts":["@NotNull","@Positive","@Size(min=0)","@Future"],"a":1,"why":"@Positive requires a number strictly greater than zero; @PositiveOrZero would also allow exactly zero."},
+      {"q":"A 10-digit account number needs a check-digit rule that no built-in annotation provides. What do you build?","opts":["A new database table","A custom constraint: an @interface marked @Constraint(validatedBy=...) plus a ConstraintValidator","A JavaScript function","Nothing; it is impossible"],"a":1,"why":"Custom rules are two parts: the annotation that declares the rule and the ConstraintValidator that checks it."},
+      {"q":"Which interface holds the actual checking logic for a custom constraint?","opts":["ConstraintValidator&lt;A, T>","java.lang.Runnable","jakarta.ejb.SessionBean","java.io.Serializable"],"a":0,"why":"A custom validator implements ConstraintValidator&lt;AnnotationType, TargetType> and provides the isValid(...) method."},
+      {"q":"What does isValid(...) return, and what happens on failure?","opts":["It throws an exception that stops the server","It returns a boolean; false makes the constraint's message fire","It returns the corrected value","It returns the matching database row"],"a":1,"why":"isValid returns true (passes) or false (fails). On false the engine reports the constraint's message; you never throw."},
+      {"q":"When does JPA run Bean Validation by default?","opts":["Only when the database server restarts","Automatically before INSERT (pre-persist) and UPDATE (pre-update)","Only on SELECT queries","Never; JPA ignores Bean Validation"],"a":1,"why":"JPA validates the entity before writing, aborting the transaction before invalid SQL reaches the database."},
+      {"q":"Which Validator call checks a bean in plain Java, and what does it return?","opts":["validator.checkErrors(obj), returning a boolean","validator.validate(obj), returning a Set&lt;ConstraintViolation> that is empty when every rule passes","validator.verify(obj), returning void","validator.inspect(obj), returning a String"],"a":1,"why":"validator.validate(bean) returns Set&lt;ConstraintViolation&lt;T>>; empty means valid, otherwise each violation names the field and message."}
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the session. It is here because exam questions and the textbook
+    use these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📋 The full built-in constraint library</strong></summary>
+    <p>Every rule from <code>jakarta.validation.constraints</code> used on this page, with the types each
+      one accepts. This is the lookup version of the grouped list in Part 2.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Annotation</th><th>Supported types</th><th>What it checks</th></tr></thead>
+      <tbody>
+        <tr><td><code>@NotNull</code></td><td>Any object</td><td>Value must not be <code>null</code> (an empty string still passes).</td></tr>
+        <tr><td><code>@NotEmpty</code></td><td>String, Collection, Map, Array</td><td>Must not be <code>null</code>, and its length or size must be greater than 0.</td></tr>
+        <tr><td><code>@NotBlank</code></td><td>String</td><td>Must not be <code>null</code> and must contain at least one non-whitespace character.</td></tr>
+        <tr><td><code>@Size(min=X, max=Y)</code></td><td>String, Collection, Array</td><td>String length or collection size must lie within the given bounds.</td></tr>
+        <tr><td><code>@Min(val)</code> / <code>@Max(val)</code></td><td>Numeric types (int, long, BigDecimal)</td><td>Number must be at least <code>min</code>, or at most <code>max</code>.</td></tr>
+        <tr><td><code>@Positive</code> / <code>@PositiveOrZero</code></td><td>Numeric types</td><td>Value must be strictly greater than zero, or zero and above.</td></tr>
+        <tr><td><code>@Email</code></td><td>String</td><td>Must be a structurally valid, RFC-compliant email address.</td></tr>
+        <tr><td><code>@Pattern(regexp="...")</code></td><td>String</td><td>Must match the given regular expression.</td></tr>
+        <tr><td><code>@Past</code> / <code>@Future</code></td><td>Date, LocalDate, Instant</td><td>Date must be strictly in the past (e.g. date of birth) or the future (e.g. card expiry).</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🧩 The <code>ConstraintValidator</code> interface, and the three members every constraint needs</strong></summary>
+    <p>The interface your validator implements has two type parameters and two methods:</p>
+    <pre><code>public interface ConstraintValidator&lt;A extends Annotation, T&gt; {
+    default void initialize(A constraintAnnotation) { }
+    boolean isValid(T value, ConstraintValidatorContext context);
+}</code></pre>
+    <p><code>A</code> is the annotation (the badge), <code>T</code> is the type of value being checked, and
+      <code>isValid</code> returns the yes/no decision.</p>
+    <p>Every constraint annotation — built-in or custom — must declare these three members:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Member</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>message()</code></td><td>The text reported when the rule fails. Has a default and may contain placeholders.</td></tr>
+        <tr><td><code>groups()</code></td><td>Which validation groups this constraint belongs to (see below). Defaults to none.</td></tr>
+        <tr><td><code>payload()</code></td><td>Extra typed metadata carried to whoever reads the violation (e.g. a severity). Defaults to none.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🏷️ What <code>groups</code> and <code>payload</code> are for</strong></summary>
+    <p>Both appear in every constraint, and both can be left empty until you need them.</p>
+    <ul>
+      <li><strong><code>groups</code></strong> lets you sort constraints into named sets and run only some
+        of them at a time. A classic use is a <em>draft</em> versus a <em>final</em> save: a half-filled
+        form passes the <code>Draft</code> group, while the <code>Final</code> group demands every field.
+        Without groups, all constraints are in the one default group and always run together.</li>
+      <li><strong><code>payload</code></strong> lets you attach extra typed information to a constraint —
+        most often a <em>severity</em> such as “error” or “warning” — which the code reading the
+        violations can act on. It changes nothing about whether the value is valid; it is a label for the
+        caller.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>📍 Where a constraint can be placed</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Placement</th><th>Meaning</th><th>Example</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Field</strong></td><td>Directly on the stored field. The usual choice.</td><td><code>@NotNull private String name;</code></td></tr>
+        <tr><td><strong>Getter (property)</strong></td><td>On the getter method; useful for a computed value.</td><td><code>@NotNull public String getName()</code></td></tr>
+        <tr><td><strong>Class</strong></td><td>On the type itself, for a rule that spans several fields.</td><td>a “start date before end date” check</td></tr>
+        <tr><td><strong>Method parameter / return</strong></td><td>On an EJB or CDI method's parameters or result, enforced when the method is called.</td><td><code>register(@Valid Customer c)</code></td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>Bean Validation</strong></td><td>Declarative constraint specification (<code>jakarta.validation.*</code>) enforced across all application tiers.</td></tr>
-    <tr><td><strong>Core Constraints</strong></td><td><code>@NotNull</code>, <code>@NotBlank</code>, <code>@Size</code>, <code>@Min</code>, <code>@Max</code>, <code>@Pattern</code>, <code>@Email</code>.</td></tr>
-    <tr><td><strong>Custom Validator</strong></td><td>Annotated with <code>@Constraint</code> and backed by a <code>ConstraintValidator&lt;A, T&gt;</code> implementation.</td></tr>
-    <tr><td><strong>Container Hooks</strong></td><td>JSF validates in Phase 3; EJB validates parameters; JPA validates on pre-persist/pre-update.</td></tr>
-    <tr><td><strong>Programmatic API</strong></td><td><code>Validation.buildDefaultValidatorFactory().getValidator().validate(bean)</code>.</td></tr>
+    <tr><td>Bean Validation</td><td>Write each data rule once as a label on the field; every tier enforces it. Rules live in <code>jakarta.validation.*</code>; Hibernate Validator is the engine.</td></tr>
+    <tr><td>Constraint</td><td>A label on a field, getter or class that states a rule the value must obey.</td></tr>
+    <tr><td>Built-in rules</td><td>Ready-made: <code>@NotNull</code>, <code>@NotBlank</code>, <code>@Size</code>, <code>@Min</code>, <code>@Max</code>, <code>@Pattern</code>, <code>@Email</code>, <code>@Past</code>, and more.</td></tr>
+    <tr><td>@NotNull vs @NotEmpty vs @NotBlank</td><td>Rejects null only / null and empty / null, empty and whitespace-only. For “must have text”, use <code>@NotBlank</code>.</td></tr>
+    <tr><td>Where a rule sits</td><td>On a field or getter for one value; on the class for a rule that compares several fields.</td></tr>
+    <tr><td>Custom constraint</td><td>Two parts: an <code>@interface</code> marked <code>@Constraint(validatedBy=…)</code>, and a <code>ConstraintValidator&lt;A, T&gt;</code> whose <code>isValid</code> returns true/false.</td></tr>
+    <tr><td>Container hooks</td><td>JSF checks in Phase 3; EJB checks <code>@Valid</code> parameters; JPA checks before <code>INSERT</code>/<code>UPDATE</code>.</td></tr>
+    <tr><td>Programmatic API</td><td><code>Validation.buildDefaultValidatorFactory().getValidator().validate(bean)</code> → a <code>Set</code> of <code>ConstraintViolation</code> (empty = valid).</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Using <code>@NotNull</code> on a text field to mean “must have text”</td><td>Use <code>@NotBlank</code>. <code>@NotNull</code> still lets <code>""</code> and <code>"   "</code> through.</td></tr>
+      <tr><td>Writing the same check in the browser, the bean and the database</td><td>Declare it once as a constraint on the field; every tier enforces that one copy.</td></tr>
+      <tr><td>Null-checking bad input inside your business method</td><td>It will not run — the container rejected the value first. In plain Java, inspect the returned violation set instead.</td></tr>
+      <tr><td>Putting the checking logic inside the annotation</td><td>The annotation only declares the rule; the <code>ConstraintValidator</code> holds the logic.</td></tr>
+      <tr><td>Forgetting <code>@Constraint(validatedBy = …)</code> on a custom annotation</td><td>Without it the engine has no code to run, and your rule silently checks nothing.</td></tr>
+      <tr><td>Expecting <code>validator.validate()</code> to throw on bad data</td><td>It returns a (possibly empty) <code>Set</code> of violations. You inspect it; it does not throw.</td></tr>
+      <tr><td>Leaving off the <code>message</code> and wondering why errors are cryptic</td><td>Give each constraint a clear <code>message="…"</code> so users see a readable reason.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this session turns up in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Constraints enforced on a form during JSF Phase 3</td><td><a href="session-05-facelets.html">Session 5 — Facelets</a></td></tr>
+      <tr><td>Validation aborting a transaction before the write</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+      <tr><td><code>@Valid</code> parameters and method validation on CDI beans</td><td><a href="session-11-cdi-part1.html">Session 11 — Jakarta CDI, Part I</a></td></tr>
+      <tr><td>Constraints on JPA entities (pre-persist / pre-update)</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+      <tr><td>Reading and asserting on <code>ConstraintViolation</code> in tests</td><td><a href="16-testing.html">Bonus — Testing &amp; Reading Errors</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/bean-validation/" target="_blank" rel="noopener">Jakarta Bean Validation Specification</a></li>
+          <li><a href="https://hibernate.org/validator/documentation/" target="_blank" rel="noopener">Hibernate Validator — documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

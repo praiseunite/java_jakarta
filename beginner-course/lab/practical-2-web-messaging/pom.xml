@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     globalbank-web — Practical 2.
+
+     Practical 1 built the bank's core: entities, service beans, a database.
+     This project keeps every one of those files and adds the FRONT DOOR —
+     a web page a real person can use — plus the parts of Jakarta EE that only
+     matter once something is talking to your application from outside:
+
+       * Facelets (JSF)      -> accounts.xhtml, a real web page
+       * Remote interfaces   -> a standalone Java program can call the bean
+       * Jakarta Messaging   -> transfers can be queued instead of run inline
+       * Bean Validation     -> requests are checked before the bank sees them
+       * Transactions        -> an audit log that survives a rolled-back transfer
+
+     To build:   mvn clean package
+     Result:     target/globalbank-web.war
+     ========================================================================== -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- ===== Who made it and what it is called ============================== -->
+  <groupId>com.globalbank</groupId>       <!-- your organisation, reversed domain -->
+  <artifactId>globalbank-web</artifactId> <!-- this project's name -->
+  <version>1.0.0</version>                <!-- this project's version -->
+
+  <!-- Still a single war. Practical 3 splits it into a multi-module EAR. -->
+  <packaging>war</packaging>
+
+  <properties>
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- Still one dependency. Jakarta EE 10 includes Faces, Messaging,
+         Validation and everything else this project uses — and WildFly already
+         has implementations of all of them, so nothing is shipped in the war. -->
+    <dependency>
+      <groupId>jakarta.platform</groupId>
+      <artifactId>jakarta.jakartaee-api</artifactId>
+      <version>10.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- New output name, and therefore a new URL folder:
+         http://localhost:8080/globalbank-web/... -->
+    <finalName>globalbank-web</finalName>
+
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.4.0</version>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

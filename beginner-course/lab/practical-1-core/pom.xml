@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ==========================================================================
+     globalbank-core — Practical 1.
+
+     A complete, working Maven project. You do not need to edit it to run it.
+     Read the comments; they explain what every part is for.
+
+     To build:   mvn clean package
+     Result:     target/globalbank-core.war
+     ========================================================================== -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- ===== Who made it and what it is called ============================== -->
+  <groupId>com.globalbank</groupId>          <!-- your organisation, reversed domain -->
+  <artifactId>globalbank-core</artifactId>   <!-- this project's name -->
+  <version>1.0.0</version>                   <!-- this project's version -->
+
+  <!-- packaging "war" = "build me a web archive (.war)".
+       A .war is a zip the application server knows how to run. -->
+  <packaging>war</packaging>
+
+  <properties>
+    <!-- Compile for Java 17. WildFly 30 needs Java 11 or newer. -->
+    <maven.compiler.release>17</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!-- The whole Jakarta EE 10 API in one line: @Stateless, @Entity,
+         @PersistenceContext, HttpServlet and everything else we import.
+
+         scope "provided" means: I need this to COMPILE, but do NOT put it inside
+         my .war — the application server already has its own copy. Bundling it
+         would cause a version clash.
+
+         There is deliberately NO database driver here. WildFly ships one, and we
+         use the datasource WildFly already has configured (ExampleDS). -->
+    <dependency>
+      <groupId>jakarta.platform</groupId>
+      <artifactId>jakarta.jakartaee-api</artifactId>
+      <version>10.0.0</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <!-- Name the output globalbank-core.war. This also becomes the URL folder:
+         http://localhost:8080/globalbank-core/... -->
+    <finalName>globalbank-core</finalName>
+
+    <plugins>
+      <!-- The plugin that turns compiled classes into a .war. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-war-plugin</artifactId>
+        <version>3.4.0</version>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>

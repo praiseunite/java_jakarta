@@ -1,32 +1,136 @@
 <title>Try It Yourself — Review &amp; Consolidation (Sessions 13 &amp; 14)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Try It Yourself Review for Sessions 13 & 14: Complete enterprise security and packaging consolidation, Skinny WAR vs EAR assembly, WildFly CLI deployment, and security verification.">
+<meta name="description" content="Try It Yourself Review for Sessions 13 & 14: a step-by-step lab that packages code into a JAR, WAR and EAR, deploys it to WildFly with the management CLI, reads the deployment marker files, and diagnoses the three deployment and security errors beginners actually hit.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s14t";</script>
 
 <main class="page">
 
   <h1>Try It Yourself · Review &amp; Consolidation (Sessions 13 &amp; 14)</h1>
-  <p class="lede">In the final two sessions of the curriculum, you mastered enterprise security and production deployment:
-    securing CDI components with <strong>Jakarta Security</strong> (IdentityStores and SecurityContext) and assembling
-    modular <strong>JAR</strong>, <strong>WAR</strong>, and <strong>EAR</strong> packages for deployment onto WildFly.</p>
+  <p class="lede">The last two sessions taught you two things that only matter when they meet:
+    <strong>portable security</strong> (Session 13) and <strong>packaging and deployment</strong>
+    (Session 14). You wrote the code and locked it down; now you have to wrap it in a standard box and
+    hand it to a running server so it actually serves requests. That is what this page is for. You are
+    not going to read a summary — you are going to build an archive, deploy it to a real WildFly, watch
+    the server report its status, and then produce and fix the three errors that catch everybody.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>No jargon without a translation.</strong> Every heavy word — <em>archive,
+          descriptor, marker, context root</em> — gets a plain-English box the moment it appears.</li>
+        <li><strong>Every step is executable.</strong> Each one gives you the exact command or the exact
+          code to type. Nothing is left as “and then do the usual thing”.</li>
+        <li><strong>Every step is checkable.</strong> After each step you are told what you should see
+          if it worked. If you do not see it, you are not stuck — there is a troubleshooting block.</li>
+        <li><strong>By the end you will have deployed a real archive</strong> to a running WildFly, read
+          its status light, and produced all three classic errors on purpose, so they stop being
+          frightening.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Not eight objectives copied from a manual — these six things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what a JAR, WAR and EAR each hold, and when a single WAR is enough instead of an EAR</td><td>Part 1</td></tr>
+      <tr><td>Trace your build through the four stages that turn code into one deployable file</td><td>Part 1</td></tr>
+      <tr><td>Deploy an archive to WildFly with the management CLI and confirm it succeeded</td><td>Part 2</td></tr>
+      <tr><td>Read the deployment marker files and tell “live” from “failed” at a glance</td><td>Part 2</td></tr>
+      <tr><td>Recognise the three deployment and security errors by their exact name, and fix each</td><td>Part 3</td></tr>
+      <tr><td>Answer the exam-style questions on Sessions 13 &amp; 14</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// lab</code> — a numbered step with something to type and something to check.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch a real deployment replay.</li>
+        <li><code>// developer toolkit</code> — the debugging equipment, with commands used on real servers.</li>
+        <li><code>// checkpoint</code> — a self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. Every part ends with a checkpoint, and each checkpoint
+      assumes you did the step before it — so do not skip ahead.
+    </div>
+  </div>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL20)</b>
+    <div class="callout__b"><b>What this review consolidates (Presenter's Manual TL20)</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
         <li>Assemble a secured multi-tier enterprise banking application into a production-ready EAR archive</li>
         <li>Configure portable database-backed authentication and role enforcement on CDI business beans</li>
-        <li>Deploy and manage application lifecycle using the WildFly Management CLI</li>
+        <li>Deploy and manage the application lifecycle using the WildFly Management CLI</li>
         <li>Diagnose and troubleshoot classloading conflicts, security domain failures, and deployment marker errors</li>
       </ol>
     </div>
   </div>
 
+  <hr>
+
   <!-- =====================================================================
-       Part 1: The Secured Enterprise Packaging Pipeline
+       PART 1 — FROM CODE TO ONE DEPLOYABLE FILE
        ===================================================================== -->
-  <span class="eyebrow">consolidation</span>
-  <h2>Part 1 · The Production Assembly Pipeline</h2>
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · From your code to one deployable file</h2>
+
+  <p>By now you have written Java classes, web pages and configuration files. A server will not accept
+    that pile of loose files. It wants <strong>one tidy package, built to a shape it recognises</strong>.
+    Packaging is the act of turning your build output into that one file.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An <strong>archive</strong> is just a ZIP file with two special things: a <strong>fixed layout
+      inside</strong> (certain folders in certain places) and a <strong>known extension</strong>
+      (<code>.jar</code>, <code>.war</code>, <code>.ear</code>).</p>
+    <p>The server opens the ZIP, recognises the layout from the extension, and knows exactly what to do
+      with what it finds. Renaming <code>hello.jar</code> to <code>hello.war</code> does <em>not</em>
+      fool it — the server looks inside for the required layout, not just at the name.</p>
+  </div>
+
+  <h3>1.1 Three boxes, three jobs</h3>
+  <p>You already met these in Session 14. Here they are again, because the assembly pipeline below
+    builds all three:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Archive</th><th>What goes inside</th><th>What it becomes</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong><code>.jar</code></strong><br><em>Java Archive</em></td>
+        <td>Compiled classes, EJB session beans and JPA entities — business logic, no web pages.</td>
+        <td>A reusable library or the business-logic module of an application.</td>
+      </tr>
+      <tr>
+        <td><strong><code>.war</code></strong><br><em>Web Application Archive</em></td>
+        <td>Servlets, JSF Facelets (<code>.xhtml</code>), static assets, REST endpoints, and a
+          <code>WEB-INF/</code> folder.</td>
+        <td>A web address — the page a user actually visits.</td>
+      </tr>
+      <tr>
+        <td><strong><code>.ear</code></strong><br><em>Enterprise Application Archive</em></td>
+        <td>One or more WARs, EJB JARs, and a shared <code>lib/</code> folder, plus
+          <code>META-INF/application.xml</code>.</td>
+        <td>One delivery containing a whole multi-module application.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧳</span>
+    <div class="callout__b"><b>Analogy — posting a parcel</b>
+      A JAR is a jiffy bag of parts. A WAR is a ready-to-display shop-front stand. An EAR is a removal
+      van carrying several boxes — including the shared <code>lib/</code> toiletry bag everything can
+      reach — to one address in a single delivery.</div>
+  </div>
+
+  <h3>1.2 The four stages of the assembly pipeline</h3>
+  <p>A real enterprise application is not built in one step. It is assembled in four, and each stage
+    produces an artifact the next stage consumes. Follow the table left to right:</p>
 
   <div class="tablewrap"><table>
     <thead><tr><th>Stage</th><th>Action</th><th>Artifact Generated</th><th>Verification Step</th></tr></thead>
@@ -58,14 +162,98 @@
     </tbody>
   </table></div>
 
+  <div class="plainwords"><b>In plain words</b>
+    <p>Read the four stages as a sentence: <em>compile the business beans into a JAR; compile the web
+      pages into a WAR; put the WAR, the JAR and their shared libraries into one EAR; hand the EAR to
+      the server.</em></p>
+    <p>Stages 1 to 3 happen on your machine at build time. Stage 4 is the only one that needs a running
+      server — and it is the whole of Part 2.</p>
+    <p><strong>Context root</strong> is the URL prefix your application lives under. Deploy
+      <code>GlobalBank.ear</code> and its web module answers at <code>localhost:8080/globalbank/…</code>
+      — that first path segment is the context root. Two running apps cannot share one, which is exactly
+      what Fault 2 below demonstrates.</p>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The classic trap: the “fat” WAR</b>
+      If you bundle the Jakarta EE API inside your WAR instead of marking it
+      <code>&lt;scope&gt;provided&lt;/scope&gt;</code>, you ship <strong>two copies</strong> of the same
+      classes — yours and the server's. The result is ugly, intermittent failures such as
+      <code>ClassCastException</code> or “loaded by a different classloader”. A WAR built with your code
+      only, and server-supplied APIs left out, is called a <strong>skinny WAR</strong> — and since EJB
+      3.1 you can even put the beans straight inside it.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What <em>is</em> an archive, underneath the fancy name?</li>
+      <li>Your web team built servlets and JSF pages. Which archive do those go into, and which stage of
+        the pipeline produces it?</li>
+      <li>Why would a company choose an EAR over a single skinny WAR?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A <strong>ZIP file with a fixed internal layout and a known extension</strong>, which the
+          server knows how to open and run. The extension is the server's instruction.</li>
+        <li>A <strong><code>.war</code></strong> (Web Application Archive) — <strong>stage 2, the Web
+          Build</strong>. Servlets, Facelets and <code>WEB-INF/</code> live there.</li>
+        <li>When <strong>several separate web front ends must share the exact same EJB business
+          JAR</strong> — for example a customer portal WAR and an admin portal WAR. An EAR makes them
+          deploy, version and share libraries together.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Part 2: Step-by-Step Production Deployment
+       PART 2 — DEPLOY IT AND WATCH THE STATUS LIGHT
        ===================================================================== -->
-  <span class="eyebrow">practical guide</span>
-  <h2>Part 2 · Deploying via the WildFly Management CLI</h2>
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Deploy it and watch the status light</h2>
+
+  <p>Deploying means giving your finished archive to a running server so it starts serving it. In
+    <strong>production</strong> nobody copies files by hand — they use the <strong>Management CLI</strong>,
+    a command-line tool that talks to the server and can be scripted. This part walks you through the
+    same commands used on a real server, then lets you run them against a real one.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What you will have at the end</b>
+      A working web address — <code>http://localhost:8080/hello-ejb/greet?name=Ada</code> — that prints
+      a greeting produced by a real bean, inside a real server, that <em>you</em> deployed with the
+      Management CLI. Not a simulation.</div>
+  </div>
+
+  <div class="callout"><span class="callout__i">📁</span>
+    <div class="callout__b"><b>The project already exists — you do not have to write it</b>
+      The lab uses the project from Session 1: <code>beginner-course/lab/session-01-hello-ejb/</code>,
+      with a <code>README.md</code> containing the same steps. If you have already built it, this is a
+      chance to redeploy it the <em>professional</em> way — through the CLI, not by copying a file.</div>
+  </div>
+
+  <h3>2.1 Before you begin</h3>
+  <p>You need three things installed. If any is missing, do <a href="01-setup.html">Set up your
+    workshop</a> first.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>What</th><th>Check it with</th><th>You want to see</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>JDK 17</td><td><code>java -version</code></td><td><code>openjdk version "17…</code></td></tr>
+      <tr><td>2</td><td>Maven</td><td><code>mvn -v</code></td><td><code>Apache Maven 3.9…</code></td></tr>
+      <tr><td>3</td><td>WildFly 30+</td><td>the folder exists</td><td>an unzipped <code>wildfly-30…</code> folder</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>2.2 The exact commands</h3>
+  <p>This is the whole production flow, written out. Read it once before you run the numbered lab below
+    — every line is a step you are about to take for real. The example deploys the enterprise archive
+    <code>GlobalBank.ear</code> from Part 1:</p>
 
   <div class="code-head">Terminal Commands — Production CLI Deployment</div>
   <pre><code># 1. Start WildFly Application Server in standalone mode
+# ($WILDFLY_HOME = the folder you unzipped WildFly into, e.g. C:\wildfly)
 $WILDFLY_HOME/bin/standalone.sh
 
 # 2. Launch the JBoss Management CLI
@@ -81,49 +269,110 @@ deployment-info --name=GlobalBank.ear
 # NAME              RUNTIME-NAME      PERSISTENT RUNTIME-STATUS
 # GlobalBank.ear    GlobalBank.ear    true       OK</code></pre>
 
-  <!-- =====================================================================
-       Part 3: Top Troubleshooting Gotchas
-       ===================================================================== -->
-  <span class="eyebrow">troubleshooting</span>
-  <h2>Part 3 · Top 3 Deployment &amp; Security Pitfalls</h2>
-
-  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
-    <div class="callout__b"><b>Fault 1: <code>ClassNotFoundException</code> on Shared Libraries in EAR</b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> An EJB or Web module crashes at startup unable to find a utility class located in the EAR.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> In an EAR, shared libraries must reside inside the directory specified by <code>&lt;library-directory&gt;lib&lt;/library-directory&gt;</code> in <code>application.xml</code>. Placing JARs directly in the root of the EAR will not add them to sub-module classpaths.</p>
-    </div>
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>--connect</code> opens a live conversation with the running server. Once you are connected,
+      <code>deploy</code> sends an archive and <code>deployment-info</code> asks the server to report
+      on it. The last line — <code>OK</code> — is the server saying the application is live.</p>
   </div>
 
-  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
-    <div class="callout__b"><b>Fault 2: WildFly reports <code>.failed</code> with <code>DuplicateResourceException</code></b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Deployment scanner generates <code>GlobalBank.ear.failed</code> stating context root <code>/globalbank</code> is already registered.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> An older version of the WAR or an undeployed test archive is still holding the URL context path. Execute <code>undeploy GlobalBank.ear</code> in the CLI or remove old archives from <code>standalone/deployments/</code>.</p>
-    </div>
-  </div>
+  <h3>2.3 Now do it for real</h3>
+  <p>Same four moves, but against the project you can actually build. Keep the server window open for
+    the whole lab.</p>
 
-  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
-    <div class="callout__b"><b>Fault 3: HTTP 403 Forbidden on Valid Logged-In User</b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> User logs in successfully, but clicking a protected button yields HTTP 403 Access Denied.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Check the role names returned by <code>groupsQuery</code> in <code>@DatabaseIdentityStoreDefinition</code>. Role names are <strong>case-sensitive</strong>: if your DB returns <code>"teller"</code> and your annotation expects <code>@RolesAllowed("TELLER")</code>, the container will deny access.</p>
-    </div>
-  </div>
+  <ol class="steps">
 
-  <!-- Interactive Simulation Bench -->
-  <div class="bench" data-run="canned">
-    <div class="bench__head">
-      <span class="dot"></span>
-      <span class="kind">interactive simulation</span>
-      <span class="mode">Full Production Deployment &amp; Security Replay</span>
-    </div>
-    <pre class="bench__code"><code>// Packaging GlobalBank.ear (EJB + WAR + Database Driver)
+    <li>
+      <h4>Start WildFly</h4>
+      <p>Open a terminal in WildFly's <code>bin</code> folder and run:</p>
+      <pre><code>standalone.bat          REM  Windows
+./standalone.sh         #    macOS / Linux</code></pre>
+      <p><strong>Leave this window open.</strong> Wait until the console prints a line ending like:</p>
+      <pre><code>WildFly Full 30.0.1.Final started in 3512ms</code></pre>
+      <p><strong>You should see</strong> that <code>started in …ms</code> line. Nothing else in this lab
+        will work until you do. If it never appears, jump to the troubleshooting table in 2.5.</p>
+    </li>
+
+    <li>
+      <h4>Build the archive</h4>
+      <p>Open a <strong>second</strong> terminal and move into the lab project — the folder that contains
+        <code>pom.xml</code>:</p>
+      <pre><code>cd beginner-course/lab/session-01-hello-ejb
+mvn clean package</code></pre>
+      <p><strong>You should see</strong> <code>BUILD SUCCESS</code>. You now have a real, deployable file
+        at <code>target/hello-ejb.war</code>. Type <code>dir target</code> (Windows) or
+        <code>ls target</code> (macOS/Linux) and confirm the <code>.war</code> is there.</p>
+    </li>
+
+    <li>
+      <h4>Connect the Management CLI</h4>
+      <p>From WildFly's <code>bin</code> folder, launch the CLI and connect to the running server:</p>
+      <pre><code>jboss-cli.bat --connect      REM  Windows
+./jboss-cli.sh --connect     #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> the prompt change to something like
+        <code>[standalone@localhost:9990 /]</code>. That means you are talking to the server. Nothing has
+        been deployed yet — you are just at the controls.</p>
+    </li>
+
+    <li>
+      <h4>Deploy through the CLI</h4>
+      <p>At the CLI prompt, deploy the WAR you just built (use the full path to your project's
+        <code>target</code> folder):</p>
+      <pre><code>deploy target/hello-ejb.war</code></pre>
+      <p>Watch the <strong>server</strong> window (the first terminal) as well. <strong>You should
+        see</strong> two things:</p>
+      <pre><code>Deployed "hello-ejb.war"
+Deployment status: hello-ejb.war.deployed created.</code></pre>
+      <p>That second line is the <strong>status light</strong> going green — see 2.4.</p>
+    </li>
+
+    <li>
+      <h4>Verify the deployment</h4>
+      <p>Still at the CLI prompt, ask the server to report on the archive:</p>
+      <pre><code>deployment-info --name=hello-ejb.war</code></pre>
+      <p><strong>You should see</strong> a row whose <code>RUNTIME-STATUS</code> column reads
+        <code>OK</code>:</p>
+      <pre><code>NAME            RUNTIME-NAME    PERSISTENT RUNTIME-STATUS
+hello-ejb.war   hello-ejb.war   true       OK</code></pre>
+      <p>That <code>OK</code> is your proof the deploy succeeded. If you see <code>FAILED</code> instead,
+        the reason is in the <code>.failed</code> file (2.4) — do not guess.</p>
+    </li>
+
+    <li>
+      <h4>Use it in the browser</h4>
+      <p>Open your browser at:</p>
+      <pre><code>http://localhost:8080/hello-ejb/greet?name=Ada</code></pre>
+      <p><strong>You should see exactly:</strong></p>
+      <pre><code>Hello, Ada! (said by a container-managed bean)</code></pre>
+      <p>That string came out of a bean that <em>you</em> packaged and deployed through the CLI. Now
+        leave the name off entirely:</p>
+      <pre><code>http://localhost:8080/hello-ejb/greet</code></pre>
+      <p>→ <code>Hello, stranger! (said by a container-managed bean)</code>. That is the bean's
+        <code>if (name == null…)</code> rule doing the work — exactly the same bean from Session 1,
+        reached the production way.</p>
+    </li>
+
+    <li>
+      <h4>Watch the whole enterprise deploy play out</h4>
+      <p>Your WAR is one small box. The replay below traces what the server does when the full
+        multi-module <code>GlobalBank.ear</code> from Part 1 lands: it reads
+        <code>application.xml</code>, starts the EJB module, mounts the web module at its context root,
+        and finally flips the marker. Press <strong>Run</strong>.</p>
+
+      <div class="bench" data-run="canned">
+        <div class="bench__head">
+          <span class="dot"></span>
+          <span class="kind">interactive simulation</span>
+          <span class="mode">Full Production Deployment &amp; Security Replay</span>
+        </div>
+        <pre class="bench__code"><code>// Packaging GlobalBank.ear (EJB + WAR + Database Driver)
 deploy target/GlobalBank.ear
 WildFly deploys Enterprise Archive -> Starts Security Context
 Client navigates to /globalbank/admin.xhtml -> Enforces RBAC</code></pre>
-    <div class="bench__controls">
-      <button class="btn-run" type="button">Execute Production Verification</button>
-      <span class="bench__hint">Simulates complete EAR deployment followed by role-based security validation.</span>
-    </div>
-    <script type="text/plain" class="bench__canned">
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Execute Production Verification</button>
+          <span class="bench__hint">Simulates complete EAR deployment followed by role-based security validation.</span>
+        </div>
+        <script type="text/plain" class="bench__canned">
 [09:55:01,002 INFO] [jboss-cli] Executing command: deploy GlobalBank.ear
 [09:55:01,015 INFO] [WildFly] Parsing GlobalBank.ear/META-INF/application.xml.
 [09:55:01,022 INFO] [WildFly] Starting EJB module: GlobalBank-EJB.jar -> 4 session beans registered.
@@ -132,13 +381,262 @@ Client navigates to /globalbank/admin.xhtml -> Enforces RBAC</code></pre>
 [09:55:01,040 INFO] [Security] User 'alex_m' authenticated against DatabaseIdentityStore. Roles: [ADMIN].
 [09:55:01,044 INFO] [SecurityContext] Access to /globalbank/admin.xhtml (@RolesAllowed("ADMIN")) -> GRANTED.
 [09:55:01,048 INFO] [HTTP 200 OK] Production verification completed successfully.
-    </script>
-    <pre class="bench__out" aria-live="polite"></pre>
+        </script>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+
+      <p><strong>You should see</strong> the eight trace lines appear one at a time, starting with the
+        parsed <code>application.xml</code> and ending with <code>HTTP 200 OK</code>. Read them in order:
+        parse the packing list → start the EJB module → mount the web module → flip the marker to
+        <code>.deployed</code> → authenticate the user → grant the role → return 200. That is Part 1's
+        pipeline, happening live.</p>
+    </li>
+
+    <li>
+      <h4>Take it back down</h4>
+      <p>Still at the CLI prompt, undeploy so you leave the server tidy:</p>
+      <pre><code>undeploy hello-ejb.war</code></pre>
+      <p><strong>You should see</strong> the marker file become <code>hello-ejb.war.undeployed</code>,
+        and the URL stop responding. Type <code>quit</code> to leave the CLI.</p>
+    </li>
+  </ol>
+
+  <h3>2.4 Read the status light: the marker files</h3>
+  <p>WildFly reports every deployment's state with small files next to your archive in the
+    <code>deployments/</code> folder. These <strong>marker files</strong> are how you and the server
+    talk to each other, and reading them is a core exam skill. There are five:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Marker file</th><th>What it means</th></tr></thead>
+    <tbody>
+      <tr><td><code>myapp.ear.dodeploy</code></td><td>You created this file to <strong>request</strong> a deployment. It is the “start” button.</td></tr>
+      <tr><td><code>myapp.ear.isdeploying</code></td><td>The server is currently unpacking and parsing the archive. Amber light.</td></tr>
+      <tr><td><code>myapp.ear.deployed</code></td><td>Deployment <strong>succeeded</strong> — the application is live and serving requests. Green light.</td></tr>
+      <tr><td><code>myapp.ear.failed</code></td><td>Deployment <strong>failed</strong> — this file contains the stack trace explaining why. Red light.</td></tr>
+      <tr><td><code>myapp.ear.undeployed</code></td><td>The application was successfully <strong>stopped</strong> and removed.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The markers are the server's controls, not scratch files</b>
+      Do not hand-edit or casually delete a marker. Deleting <code>hello-ejb.war.deployed</code> tells
+      WildFly to <strong>undeploy</strong> the application. Treat the markers as buttons, not
+      litter.</div>
   </div>
 
+  <h3>2.5 Troubleshooting: the four things that go wrong</h3>
+  <p>When it goes wrong, find your symptom in this table before doing anything else. This is normal
+    developer work, not failure.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>The <code>started in …ms</code> line never appears</td>
+        <td>WildFly did not finish starting</td>
+        <td>Run it in a terminal you can see and read the <em>first</em> error line. Most often a port is already taken.</td>
+      </tr>
+      <tr>
+        <td><code>Address already in use</code> / port 8080 busy</td>
+        <td>Something else owns the HTTP port</td>
+        <td>Close that program, or start WildFly with <code>-Djboss.socket.binding.port-offset=100</code> and use port <strong>8180</strong> instead.</td>
+      </tr>
+      <tr>
+        <td><code>Connection refused</code></td>
+        <td>The CLI cannot reach the server</td>
+        <td>The server is not running, or you skipped <code>--connect</code>. Start WildFly (step 1), wait for <code>started in …ms</code>, then connect again.</td>
+      </tr>
+      <tr>
+        <td><code>hello-ejb.war.failed</code> appears</td>
+        <td>Deployment aborted</td>
+        <td>Open the <code>.failed</code> file — it holds the stack trace. Read the <em>deepest</em> <code>Caused by:</code> line — the last one in the chain. That is the root cause; the ones above it are just consequences.</td>
+      </tr>
+      <tr>
+        <td><code>DuplicateResourceException</code> — context root already registered</td>
+        <td>An older copy of the same app is still holding the URL path</td>
+        <td>Run <code>undeploy hello-ejb.war</code> (or remove the old archive from <code>deployments/</code>), then deploy again.</td>
+      </tr>
+      <tr>
+        <td><code>404 Not Found</code> in the browser, but deployment says <code>OK</code></td>
+        <td>Wrong URL, or the deployment has not finished</td>
+        <td>Confirm the path is exactly <code>/hello-ejb/greet?name=Ada</code>, and wait for the
+          <code>.deployed</code> marker before reloading.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <p>Cover Part 2 and answer from memory. Then open the answers.</p>
+    <ol>
+      <li>Name the three ways WildFly can deploy an archive.</li>
+      <li>You copied a WAR into <code>deployments/</code> and a <code>.failed</code> file appeared. What
+        does it mean, and where exactly do you look?</li>
+      <li>Which CLI command tells you whether a deployment is live, and which column do you read?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The <strong>management CLI</strong> (<code>deploy</code>), the <strong>Admin web
+          console</strong>, and the <strong>file-system scanner</strong> (dropping the file into
+          <code>deployments/</code>).</li>
+        <li>Deployment <strong>failed</strong>. Open the <code>.failed</code> file itself — it contains
+          the <strong>stack trace</strong> describing why the deployment aborted.</li>
+        <li><code>deployment-info --name=…</code>, and you read the <strong><code>RUNTIME-STATUS</code></strong>
+          column — you want <code>OK</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Assessment Quiz
+       PART 3 — LOCK IT DOWN
        ===================================================================== -->
+
+  <span class="eyebrow">developer toolkit</span>
+  <h2>Part 3 · Lock it down — and the three errors you will hit</h2>
+
+  <p>Packaging gets your code onto the server. <strong>Security</strong> decides who is allowed to do
+    what once it is there. Session 13's big idea was that this lives <em>in your code</em>, as CDI
+    annotations, not in a server-specific configuration file. That portability is exactly why the same
+    EAR deploys to WildFly, Payara or Open Liberty unchanged.</p>
+
+  <h3>3.1 Portable, code-first security in one class</h3>
+  <p>Two annotations on one class declare both the login door and the user records. There is no XML and
+    no server file:</p>
+
+  <div class="code-head">ApplicationSecurityConfig.java — the whole portable security setup</div>
+  <pre><code>package com.globalbank.security;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.security.enterprise.authentication.mechanism.http.CustomFormAuthenticationMechanismDefinition;
+import jakarta.security.enterprise.authentication.mechanism.http.LoginToContinue;
+import jakarta.security.enterprise.identitystore.DatabaseIdentityStoreDefinition;
+import jakarta.security.enterprise.identitystore.Pbkdf2PasswordHash;
+
+@ApplicationScoped
+@CustomFormAuthenticationMechanismDefinition(     // 1. the door: our own login page
+    loginToContinue = @LoginToContinue(
+        loginPage = "/login.xhtml",
+        errorPage = "/login-error.xhtml"
+    )
+)
+@DatabaseIdentityStoreDefinition(                 // 2. the records: users and roles in PostgreSQL
+    dataSourceLookup = "java:/jdbc/GlobalBankDB",
+    callerQuery = "SELECT password_hash FROM bank_users WHERE username = ?",
+    groupsQuery = "SELECT role_name FROM user_roles WHERE username = ?",
+    hashAlgorithm = Pbkdf2PasswordHash.class      // never compare plain-text passwords
+)
+public class ApplicationSecurityConfig {
+    // Declarative configuration only — no method bodies at all.
+}</code></pre>
+
+  <p>Each line does one clear job. <code>dataSourceLookup</code> says <strong>where</strong> the
+    database is (a JNDI name, never a password in your source). <code>callerQuery</code> fetches
+    <strong>this user's stored password</strong>. <code>groupsQuery</code> fetches <strong>this user's
+    roles</strong>. <code>hashAlgorithm</code> is the rule for turning a typed password into something
+    comparable, so the database stores fingerprints, not keys.</p>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      That class is fully portable. Because <code>@DatabaseIdentityStoreDefinition</code> is part of the
+      Jakarta Security specification, the setup travels with your code and needs
+      <strong>zero server XML edits</strong> — which is exactly what makes it superior to the old
+      server-specific security realms.</div>
+  </div>
+
+  <h3>3.2 The three faults, side by side</h3>
+  <p>These are the three you will meet in real work. Read the symptom, then the root cause, then the
+    fix.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Fault 1: <code>ClassNotFoundException</code> on Shared Libraries in EAR</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> An EJB or Web module crashes at startup unable to find a utility class located in the EAR.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> The shared JAR was put in the wrong place, so it was never added to the sub-modules' classpath.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> In an EAR, shared libraries must reside inside the directory specified by <code>&lt;library-directory&gt;lib&lt;/library-directory&gt;</code> in <code>application.xml</code>. Placing JARs directly in the root of the EAR will not add them to sub-module classpaths.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Fault 2: WildFly reports <code>.failed</code> with <code>DuplicateResourceException</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Deployment scanner generates <code>GlobalBank.ear.failed</code> stating context root <code>/globalbank</code> is already registered.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> An older version of the WAR, or an undeployed test archive, is still holding the URL context path.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Execute <code>undeploy GlobalBank.ear</code> in the CLI or remove old archives from <code>standalone/deployments/</code>, then deploy again.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Fault 3: HTTP 403 Forbidden on a Valid Logged-In User</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> The user logs in successfully, but clicking a protected button yields HTTP 403 Access Denied.</p>
+      <p style="margin:.3rem 0"><strong>Root Cause:</strong> The role names returned to the container do not match the role names your annotation demands.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Check the role names returned by <code>groupsQuery</code> in <code>@DatabaseIdentityStoreDefinition</code>. Role names are <strong>case-sensitive</strong>: if your database returns <code>"teller"</code> and your annotation expects <code>@RolesAllowed("TELLER")</code>, the container will deny access.</p>
+    </div>
+  </div>
+
+  <h3>3.3 Prove Fault 3 on a real server</h3>
+  <p>The security check happens <em>before</em> your business code runs — so you can watch it fire
+    without touching a database. Follow these two steps.</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Log in, then call a method your role does not allow</h4>
+      <p>Deploy the application, log in as a user whose role is <code>teller</code> (lower-case), and
+        call a method annotated <code>@RolesAllowed("TELLER")</code>.</p>
+      <p><strong>You should see</strong> an <code>EJBAccessException</code> in the server console, and
+        HTTP <strong>403 Forbidden</strong> in the browser. Critically, you should see <em>no</em> SQL
+        and <em>no</em> work done — the container refused the call before the method body ran.</p>
+    </li>
+    <li>
+      <h4>Confirm which roles the user actually holds</h4>
+      <p>Before blaming your code, check the identity store. If you are using a database identity store,
+        run the <code>groupsQuery</code> against the database directly and read the exact strings it
+        returns:</p>
+      <pre><code>SELECT role_name FROM user_roles WHERE username = 'alex_m';</code></pre>
+      <p><strong>You should see</strong> the role exactly as stored. If it prints <code>teller</code>
+        but your annotation says <code>TELLER</code>, you have found the bug — the fix is to make the
+        two spellings match, in one place or the other. Change one, redeploy, and the 403 becomes a
+        200.</p>
+    </li>
+  </ol>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The lesson that sticks</b>
+      All three faults are the container <em>protecting your system</em>: it refuses to start a broken
+      module, refuses a clashing context root, and refuses a caller without the exact role. None of them
+      is random. Each one leaves you a precise clue — the <code>.failed</code> file names the missing
+      class, the <code>DuplicateResourceException</code> names the busy context root, and a 403 means
+      one thing only: compare the role strings character by character.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <p>Look back at Part 3. Answer without scrolling.</p>
+    <ol>
+      <li>Where, exactly, must a shared library live so every module of an EAR can use it?</li>
+      <li>Your deployment produced a <code>.failed</code> file mentioning <code>DuplicateResourceException</code>
+        and <code>/globalbank</code>. What is the one command that fixes it?</li>
+      <li>Why does <code>@DatabaseIdentityStoreDefinition</code> beat a server-specific security realm,
+        in one sentence?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>In the EAR's <strong><code>lib/</code></strong> folder — the directory named by
+          <code>&lt;library-directory&gt;lib&lt;/library-directory&gt;</code> in
+          <code>application.xml</code>. JARs in the EAR root are <em>not</em> shared.</li>
+        <li><code>undeploy GlobalBank.ear</code> — it frees the stuck <code>/globalbank</code> context
+          root; then deploy again.</li>
+        <li>Because it is <strong>part of the standard</strong>, so it moves with your code to any
+          compliant server and needs <strong>no server XML edits</strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
     <h3>Consolidation Assessment (Sessions 13 &amp; 14)</h3>
@@ -148,7 +646,7 @@ Client navigates to /globalbank/admin.xhtml -> Enforces RBAC</code></pre>
         "q": "What is the recommended practice for shared third-party JARs in a multi-module EAR application?",
         "opts": [
           "Paste copies of the JAR into every single sub-module",
-          "Place them inside the EAR's lib/ directory and declare <library-directory>lib</library-directory> in application.xml",
+          "Place them inside the EAR's lib/ directory and declare &lt;library-directory>lib&lt;/library-directory> in application.xml",
           "Store them in the user's home directory",
           "Hardcode the bytecode in Java source files"
         ],
@@ -198,14 +696,152 @@ Client navigates to /globalbank/admin.xhtml -> Enforces RBAC</code></pre>
         ],
         "a": 1,
         "why": "Role evaluation is strictly case-sensitive; mismatches between identity store role strings and @RolesAllowed values will cause HTTP 403 access rejections."
+      },
+      {
+        "q": "In WildFly's deployments folder, which marker means the archive is live and serving requests?",
+        "opts": [
+          "myapp.ear.dodeploy",
+          "myapp.ear.isdeploying",
+          "myapp.ear.deployed",
+          "myapp.ear.undeployed"
+        ],
+        "a": 2,
+        "why": "WildFly renames the marker to .deployed once deployment succeeds; .dodeploy requests it and .isdeploying means it is still in progress."
+      },
+      {
+        "q": "What does &lt;scope>provided&lt;/scope> tell Maven about the Jakarta EE API?",
+        "opts": [
+          "Bundle a copy of the API inside my WAR",
+          "Use the API to compile, but do not package it — the server supplies its own copy at runtime",
+          "Download the API only on Fridays",
+          "Delete the API from the repository"
+        ],
+        "a": 1,
+        "why": "provided scope keeps the API on the compile classpath but out of the finished archive, which is what makes a WAR 'skinny' and avoids duplicate-class clashes."
       }
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the lab. It is here because exam questions and the textbook use
+    these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📦 The archive types — full contents table</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Archive</th><th>Full name</th><th>Primary contents</th><th>Typical deployment role</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong><code>.jar</code></strong></td>
+          <td>Java Archive</td>
+          <td>Compiled <code>.class</code> files, EJB session beans, JPA entities, <code>META-INF/beans.xml</code></td>
+          <td>Reusable business-logic libraries or a standalone EJB module.</td>
+        </tr>
+        <tr>
+          <td><strong><code>.war</code></strong></td>
+          <td>Web Application Archive</td>
+          <td>Servlets, JSF Facelets (<code>.xhtml</code>), static assets, <code>WEB-INF/web.xml</code>, <code>WEB-INF/classes/</code></td>
+          <td>Web user-interface tier and RESTful API endpoints.</td>
+        </tr>
+        <tr>
+          <td><strong><code>.rar</code></strong></td>
+          <td>Resource Adapter Archive</td>
+          <td>JCA connector classes, native socket libraries, <code>META-INF/ra.xml</code></td>
+          <td>Pluggable enterprise connectors (e.g. SAP, IBM CICS adapters).</td>
+        </tr>
+        <tr>
+          <td><strong><code>.ear</code></strong></td>
+          <td>Enterprise Application Archive</td>
+          <td>Multiple WARs, EJB JARs, RARs, shared <code>lib/</code>, and <code>META-INF/application.xml</code></td>
+          <td>Top-level enterprise suite bundling web and business tiers into one deployment.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🚦 WildFly deployment marker files — the complete list</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Marker file</th><th>Status meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>myapp.ear.dodeploy</code></td><td>You created this file to trigger WildFly to start deploying <code>myapp.ear</code>.</td></tr>
+        <tr><td><code>myapp.ear.isdeploying</code></td><td>WildFly is currently unpacking and parsing the archive.</td></tr>
+        <tr><td><code>myapp.ear.deployed</code></td><td>Deployment succeeded — the application is active and ready to accept traffic.</td></tr>
+        <tr><td><code>myapp.ear.failed</code></td><td>Deployment failed — contains the stack trace describing why deployment aborted.</td></tr>
+        <tr><td><code>myapp.ear.undeployed</code></td><td>The application was successfully undeployed and stopped.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🗂️ application.xml — the EAR's packing list</strong></summary>
+    <p>A <strong>deployment descriptor</strong> is a configuration file telling the server how to treat
+      a package. The EAR's descriptor is <code>application.xml</code>, and it lives in
+      <code>META-INF/</code>. It declares three things:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Element</th><th>What it declares</th></tr></thead>
+      <tbody>
+        <tr><td><code>&lt;application-name&gt;</code></td><td>A logical name for the whole application (used in JNDI names).</td></tr>
+        <tr><td><code>&lt;module&gt;&lt;web&gt;</code></td><td>A web module. Holds <code>&lt;web-uri&gt;</code> (the WAR file) and <code>&lt;context-root&gt;</code> (its URL path).</td></tr>
+        <tr><td><code>&lt;web-uri&gt;</code></td><td>The name of the WAR file inside the EAR.</td></tr>
+        <tr><td><code>&lt;context-root&gt;</code></td><td>The URL path the web module answers on, e.g. <code>/globalbank</code>.</td></tr>
+        <tr><td><code>&lt;module&gt;&lt;ejb&gt;</code></td><td>An EJB module — names the EJB JAR file to start.</td></tr>
+        <tr><td><code>&lt;library-directory&gt;</code></td><td>The folder (usually <code>lib</code>) whose JARs are shared by every module.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Read it top to bottom and it says: <em>“My name is GlobalBankApp. I contain a web module — serve
+      it at <code>/globalbank</code>. I contain an EJB module — start its beans. And any JAR in my
+      <code>lib/</code> folder is shared by both.”</em></p>
+  </details>
+
+  <details>
+    <summary><strong>🔐 @DatabaseIdentityStoreDefinition — the key attributes</strong></summary>
+    <p>The whole portable security setup, in one class (see Part 3.1). Every attribute does one job:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Attribute</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>dataSourceLookup</code></td><td>The JNDI name of the database the store queries — never a URL or password in your source.</td></tr>
+        <tr><td><code>callerQuery</code></td><td>SQL returning the stored password for a username. The <code>?</code> is filled in with the typed username.</td></tr>
+        <tr><td><code>groupsQuery</code></td><td>SQL returning the roles belonging to a username. <strong>Case matters.</strong></td></tr>
+        <tr><td><code>hashAlgorithm</code></td><td>The rule for converting a typed password into a comparable hash (<code>Pbkdf2PasswordHash</code>). Plain-text comparison is never allowed.</td></tr>
+      </tbody>
+    </table></div>
+    <p><code>SecurityContext</code>, injected with <code>@Inject</code>, is the other half: it lets your
+      own code ask <code>getCallerPrincipal()</code> (“who is calling?”) and
+      <code>isCallerInRole("ADMIN")</code> (“may they?”).</p>
+  </details>
+
+  <details>
+    <summary><strong>🧬 Classloading isolation — where to look when libraries clash</strong></summary>
+    <p>This is the first thing you reach for when the “fat WAR” clash from Part 1 bites. The ideas in
+      plain words:</p>
+    <ul>
+      <li><strong>Classloading isolation.</strong> Each deployment gets its own classloader, so one
+        application's libraries do not leak into another's.</li>
+      <li><strong>Parent-first vs. child-first delegation.</strong> When a class is needed, which
+        classloader is asked first? <em>Parent-first</em> (WildFly's default) asks the server's modules
+        first; <em>child-first</em> asks your deployment's own copy first. The wrong order is what causes
+        the “loaded by a different classloader” errors.</li>
+      <li><strong><code>jboss-deployment-structure.xml</code>.</strong> A WildFly-specific descriptor
+        (in <code>META-INF/</code> or <code>WEB-INF/</code>) where you fine-tune this: add a dependency
+        on a server module, exclude one, or flip the delegation order for a troublesome library.</li>
+    </ul>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
   <h2>One-Line Summary</h2>
   <div class="tablewrap summary"><table><tbody>
@@ -215,6 +851,67 @@ Client navigates to /globalbank/admin.xhtml -> Enforces RBAC</code></pre>
     <tr><td><strong>Portable Security</strong></td><td><code>@DatabaseIdentityStoreDefinition</code> eliminates vendor-specific security configurations.</td></tr>
     <tr><td><strong>Role Enforcement</strong></td><td><code>@RolesAllowed</code> checks are strictly case-sensitive against the IdentityStore group strings.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Dropping shared JARs into the root of the EAR</td>
+        <td>Put them in the <code>lib/</code> folder named by <code>&lt;library-directory&gt;</code> in <code>application.xml</code>. Root-level JARs are not shared.</td>
+      </tr>
+      <tr>
+        <td>Deploying a new version before undeploying the old one</td>
+        <td>Run <code>undeploy</code> first (or remove the old archive) — otherwise you get <code>DuplicateResourceException</code> on the context root.</td>
+      </tr>
+      <tr>
+        <td>Guessing why a deployment failed</td>
+        <td>Open the <code>.failed</code> marker file. It holds the exact stack trace — read the <em>deepest</em> <code>Caused by:</code> line, the last one in the chain. That is the root cause.</td>
+      </tr>
+      <tr>
+        <td>Blaming your code for a 403</td>
+        <td>The code is often correct. Compare the exact role strings from <code>groupsQuery</code> with the <code>@RolesAllowed</code> value — they are case-sensitive.</td>
+      </tr>
+      <tr>
+        <td>Bundling the Jakarta EE API inside your WAR</td>
+        <td>Mark it <code>&lt;scope&gt;provided&lt;/scope&gt;</code> — the server supplies its own copy at runtime. Keep the WAR skinny.</td>
+      </tr>
+      <tr>
+        <td>Deleting or editing a marker file to “clean up”</td>
+        <td>Treat markers as the server's controls. Deleting <code>.deployed</code> <em>undeploys</em> the application.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything in this review underpins how all your other code reaches a server:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this review</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>The <code>.war</code> you build and deploy</td><td><a href="session-14-packaging.html">Session 14 — Packaging &amp; Deploying</a> and <a href="session-01-02-intro-and-beans.html">Session 1 &amp; 2 — the hello-ejb.war lab</a></td></tr>
+      <tr><td>Portable security with <code>@DatabaseIdentityStoreDefinition</code> and <code>@RolesAllowed</code></td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI, Beans &amp; Security</a></td></tr>
+      <tr><td>The JNDI DataSource the identity store queries</td><td><a href="session-03-resource-creation.html">Session 3 — Resource Creation</a></td></tr>
+      <tr><td>Transactions that wrap the secured business method</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/security/" target="_blank" rel="noopener">Jakarta Security Specification</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly Deployment Documentation &amp; CLI Reference</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

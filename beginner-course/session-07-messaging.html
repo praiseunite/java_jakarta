@@ -1,39 +1,179 @@
-<title>Session 7 — Jakarta Messaging Services (JMS)</title>
+<title>Session 7 — Messaging, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 7: Jakarta Messaging (JMS), Point-to-Point queues vs. Publish/Subscribe topics, ConnectionFactory, JMSContext simplified API, and Request-Reply messaging.">
+<meta name="description" content="Session 7, written for people who have never heard of messaging. What a message broker is, why asynchronous messaging beats waiting, queues versus topics, the modern JMSContext API, message anatomy, and the request-reply pattern.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s07";</script>
 
 <main class="page">
 
-  <h1>Session 7 · Jakarta Messaging Services (JMS)</h1>
-  <p class="lede">When a customer places an order or triggers a bank transfer, they should never be forced to wait
-    synchronously while invoices generate, inventory locks, and email confirmations send. <strong>Jakarta Messaging (JMS)</strong>
-    enables asynchronous, reliable, decoupled communication where components drop messages into queues and move on immediately.</p>
+  <h1>Session 7 · Messaging, Explained Slowly</h1>
+  <p class="lede">This page teaches you what <strong>messaging</strong> is, why one program leaves a
+    message instead of calling another and waiting, and how to send and receive one in Jakarta EE. You
+    do not need to have heard of a queue, a topic, a broker or JMS before — every new word is explained
+    the moment it appears. When a customer places an order, they should not have to sit and wait while
+    invoices print, stock is reserved and confirmation emails go out. By the end you will know exactly
+    how <strong>Jakarta Messaging (JMS)</strong> lets a program hand that work off and answer the
+    customer in milliseconds.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Define Jakarta Messaging and Message-Oriented Middleware (MOM)</li>
-        <li>Compare synchronous calls (RMI / RPC) with asynchronous messaging</li>
-        <li>Contrast the two primary messaging domains: <strong>Point-to-Point (Queue)</strong> and <strong>Publish/Subscribe (Topic)</strong></li>
-        <li>Explain Administered Objects, Connection Factories, and Destinations</li>
-        <li>Differentiate between the Classic API (JMS 1.1) and Simplified API (JMS 2.0 / Jakarta Messaging) (<code>JMSContext</code>)</li>
-        <li>Structure JMS Messages (Headers, Properties, Body) and apply acknowledgement modes</li>
-        <li>Implement the Request-Reply pattern using <code>JMSReplyTo</code> and <code>JMSCorrelationID</code></li>
+        <li><strong>No jargon without a translation.</strong> Broker, queue, topic, producer — each new word gets a plain-English box the first time it appears.</li>
+        <li><strong>Nothing is assumed.</strong> If a line of code matters, it is explained piece by piece.</li>
+        <li><strong>You can watch it happen.</strong> Press <em>Run</em> on the simulation and see a message leave while the user walks away.</li>
+        <li><strong>Pictures first, specifications later.</strong> Every idea arrives with an everyday comparison. The dense exam-term tables are parked at the end, for looking up.</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       7.1 Introduction to MOM & Jakarta Messaging
-       ===================================================================== -->
-  <span class="eyebrow">session 7.1</span>
-  <h2>Part 1 · Message-Oriented Middleware (MOM)</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>Not seven bullet points from a manual — just a handful of things, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what messaging is, and why a program sends a message instead of waiting for an answer</td><td>Part 1</td></tr>
+      <tr><td>Explain what a broker (MOM) does in the middle, and how asynchronous differs from a direct call</td><td>Part 1</td></tr>
+      <tr><td>Pick a queue or a topic for a job, and say what happens when the reader is offline</td><td>Part 2</td></tr>
+      <tr><td>Name the two things the server sets up for you, and send a message with the modern <code>JMSContext</code> API</td><td>Part 3</td></tr>
+      <tr><td>Write the receiving side — a <code>@MessageDriven</code> bean and its <code>onMessage</code> method</td><td>Part 3</td></tr>
+      <tr><td>Describe the three parts of a message, and get a reply back without making the sender wait</td><td>Part 4</td></tr>
+      <tr><td>Answer the exam-style questions on this topic</td><td>Checkpoints &amp; the quiz</td></tr>
+    </tbody>
+  </table></div>
 
-  <p><strong>Message-Oriented Middleware (MOM)</strong> is software infrastructure that acts as a reliable intermediary
-    between distributed systems. In Jakarta EE, the application server embeds a message broker (such as <strong>Apache Artemis</strong>
-    in WildFly) to store, route, and deliver messages asynchronously.</p>
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch the messages flow.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest, not the
+      order a textbook would use.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — WHY MESSAGING EXISTS
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · Why programs send messages instead of waiting</h2>
+
+  <h3>1.1 The problem: a call makes you wait</h3>
+  <p>Picture a checkout page. The customer clicks <strong>Pay</strong>. Behind that one click, your
+    program has to charge the card, reserve the stock, generate an invoice and send a confirmation
+    email.</p>
+  <p>The obvious way is to do them one after another: call the card service and wait for it to answer,
+    then call the stock service and wait, then the invoice service, then the email service. Only when
+    the <em>last</em> one finishes does the customer's page finally respond.</p>
+  <p>This is a <strong>synchronous</strong> call. The word just means <em>“at the same time”</em>: the
+    caller and the thing it called are both busy with the same job at the same moment, and the caller
+    does nothing else until the answer comes back.</p>
+  <p>Two things go wrong:</p>
+  <ul>
+    <li>If any step is slow, the customer stares at a spinner for all of them added together.</li>
+    <li>If any step is <em>down</em>, the whole click fails — even the parts that would have worked.</li>
+  </ul>
+
+  <div class="callout callout--analogy"><span class="callout__i">☎️</span>
+    <div class="callout__b"><b>Analogy</b>
+      A synchronous call is a <em>phone call</em>. You both have to be free at the same moment, you
+      cannot do anything else while you hold the line, and if the other person does not pick up, you
+      got nothing at all.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Synchronous</strong> means “wait right here for the answer.” It is simple, but it ties
+      the caller's speed — and its success — to everything it calls.</p>
+  </div>
+
+  <h3>1.2 The fix: leave a message and move on</h3>
+  <p>Here is the whole idea of messaging, and it is this simple:</p>
+  <ol>
+    <li>Instead of calling the card, stock, invoice and email services directly, your program writes
+      down what it wants — <em>“charge $450 to account 8812”</em> — as a <strong>message</strong>.</li>
+    <li>It drops that message into a safe holding place and <strong>immediately</strong> goes back to
+      the customer with “Order submitted.”</li>
+    <li>Something else picks the message up <em>later</em> and does the work, on its own schedule.</li>
+  </ol>
+  <p>That “later, on its own schedule” is the key word: <strong>asynchronous</strong> — <em>“not at
+    the same time.”</em> The sender does not wait for the work to finish.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Asynchronous</strong> means “drop it off and carry on.” The sender is free the instant
+      the message is handed over, no matter how long the actual work takes afterwards.</p>
+  </div>
+
+  <h3>1.3 The thing in the middle: a broker</h3>
+  <p>So who holds the message between “the sender drops it off” and “a worker picks it up”? A piece of
+    software called a <strong>message broker</strong>. It receives messages, keeps them safe, sorts
+    them, and hands each one on when a worker is ready.</p>
+  <p>The general name for middle software like this is <strong>Message-Oriented Middleware</strong>,
+    almost always shortened to <strong>MOM</strong>. “Middleware” just means <em>software that sits in
+    the middle</em>, between the programs that talk to each other.</p>
+  <p>You do not have to install one. In Jakarta EE, the application server <strong>already contains a
+    broker</strong>. WildFly bundles one called <strong>Apache ActiveMQ Artemis</strong> (usually just
+    “Artemis”). It is running the moment the server starts.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏤</span>
+    <div class="callout__b"><b>Analogy</b>
+      A broker is a <em>post office</em>. You drop your letter in the box and walk away — you do not
+      stand on the recipient's doorstep waiting. The post office holds the letter, sorts it, and
+      delivers it when it can. The recipient need not be home when you send it, and you need not know
+      the route it takes.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>broker</strong> is the trusted go-between that stores and delivers messages. MOM is
+      just the category of software it belongs to. Because the broker holds the message, the sender and
+      the receiver never have to be busy at the same instant.</p>
+  </div>
+
+  <p>Two words you will see on every diagram from here on:</p>
+  <ul>
+    <li>A <strong>producer</strong> is any code that <em>sends</em> a message. (The checkout page, above.)</li>
+    <li>A <strong>consumer</strong> is any code that <em>receives</em> one. (The background worker that charges the card.)</li>
+  </ul>
+  <p>In Jakarta EE the consumer is very often a <strong>message-driven bean</strong> — a background
+    bean the container wakes up each time a message arrives. You met message-driven beans in
+    <a href="session-01-02-intro-and-beans.html">Sessions 1 &amp; 2</a>; here you see where their
+    messages come from.</p>
+
+  <h3>1.4 So what is Jakarta Messaging (JMS)?</h3>
+  <p><strong>Jakarta Messaging</strong> is the standard Java way to talk to a broker. It is a set of
+    interfaces — <code>JMSContext</code>, <code>Queue</code>, <code>Message</code> and a few more —
+    that every compliant broker understands. You write to the standard; the broker does the real work
+    underneath.</p>
+  <p>Because it is a standard, the same code works whether the broker is Artemis, ActiveMQ or something
+    else — exactly the “learn it once, use it anywhere” idea from Session 1.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Two names, one thing: “JMS” and “Jakarta Messaging”</b>
+      The technology was born as the <strong>Java Message Service (JMS)</strong>, and almost everyone
+      still says “JMS” out loud. Its current official name is <strong>Jakarta Messaging</strong>, and
+      the classes now live in the <code>jakarta.jms</code> package (they used to be
+      <code>javax.jms</code>). Same technology, newer label — just like <code>javax</code> →
+      <code>jakarta</code> in Session 1.</div>
+  </div>
+
+  <h3>1.5 A direct call versus messaging, side by side</h3>
+  <p>The left column of the table below lists the usual ways one program calls another directly and
+    waits: <strong>RMI</strong> (one Java program invoking a method on another across the network),
+    <strong>RPC</strong> (the same idea in general) and <strong>REST</strong> (calling a web API over
+    HTTP). Three more words appear too — here they are first, in one line each:</p>
+  <ul>
+    <li><strong>Blocking</strong> — the caller is frozen, doing nothing, until the answer arrives.</li>
+    <li><strong>Coupling</strong> — how much one program must know about the other to work.</li>
+    <li><strong>Temporal coupling</strong> — “temporal” means <em>to do with time</em>: whether both
+      sides must be running at the <em>same moment</em>.</li>
+  </ul>
+  <p>Now the comparison:</p>
 
   <div class="tablewrap"><table>
     <thead><tr><th>Criteria</th><th>Synchronous Calls (RMI / REST / RPC)</th><th>Asynchronous Messaging (MOM / JMS)</th></tr></thead>
@@ -46,7 +186,7 @@
       <tr>
         <td><strong>Coupling</strong></td>
         <td><strong>Tight:</strong> Caller must know exact host, port, and endpoint URL</td>
-        <td><strong>Loose:</strong> Producers and Consumers only know the destination channel name</td>
+        <td><strong>Loose:</strong> Producers and Consumers only know the destination — the named place a message is sent to — and nothing else about each other</td>
       </tr>
       <tr>
         <td><strong>Temporal Coupling</strong></td>
@@ -61,11 +201,101 @@
     </tbody>
   </table></div>
 
+  <div class="plainwords"><b>In plain words</b>
+    <p>A direct call is fast and simple <em>when everything is up and quick</em>. Messaging keeps
+      working when a part is slow, overloaded, or temporarily switched off — because the broker holds
+      the backlog and the sender never waits.</p>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What does <em>asynchronous</em> mean, and how is it different from a normal method call?</li>
+      <li>What is a broker, and what job does it do between the sender and the receiver?</li>
+      <li>Name one thing that goes wrong with a direct synchronous call that messaging avoids.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Asynchronous</strong> means “drop the message off and carry on” — the sender does
+          not wait for the work to finish. A normal (synchronous) call freezes the caller until the
+          answer comes back.</li>
+        <li>A <strong>broker</strong> is the software go-between (the “post office”). It receives
+          messages, stores them safely, and delivers each one to a consumer when one is ready.</li>
+        <li>Any one of: a slow step makes the user wait for everything; one service being down fails
+          the whole request; a traffic spike overwhelms the receiver. Messaging buffers all three in
+          the broker.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       7.2 The Two Messaging Domains
+       PART 2 — QUEUES VERSUS TOPICS
        ===================================================================== -->
-  <span class="eyebrow">session 7.2</span>
-  <h2>Part 2 · Point-to-Point (Queue) vs. Publish/Subscribe (Topic)</h2>
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · One reader, or the whole crowd? Queues versus topics</h2>
+
+  <p>A message always goes to a named place called a <strong>destination</strong>. There are two kinds
+    of destination, and choosing between them is the single most important decision in messaging. The
+    kind decides <em>who gets the message</em>.</p>
+
+  <h3>2.1 A queue: exactly one reader</h3>
+  <p>A <strong>queue</strong> delivers each message to <strong>exactly one</strong> consumer. If ten
+    workers are all listening to the same queue, each message is still handed to only one of them. The
+    others never see it. This style has a formal name: <strong>Point-to-Point</strong> — from one
+    producer to one consumer.</p>
+  <p>If several workers listen, they <em>share the load</em>: the broker spreads messages across them,
+    one each. That is how you process ten thousand orders quickly — add more workers to the same
+    queue.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍳</span>
+    <div class="callout__b"><b>Analogy</b>
+      A queue is the <em>order-ticket rail</em> in a restaurant kitchen. Orders clip onto the rail in a
+      line. Whichever cook is free grabs the next ticket — and each ticket is cooked exactly
+      <em>once</em>. Two cooks never make the same order. Add more cooks and the rail clears faster.</div>
+  </div>
+
+  <h3>2.2 A topic: everyone who is listening</h3>
+  <p>A <strong>topic</strong> gives <strong>every</strong> subscriber its <strong>own copy</strong> of
+    each message. Send once; everyone tuned in receives it. This style is called
+    <strong>Publish/Subscribe</strong> (often “pub/sub”): one publisher, many subscribers.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📻</span>
+    <div class="callout__b"><b>Analogy</b>
+      A topic is a <em>radio station</em>. The DJ plays the song once, and every radio tuned to that
+      frequency hears it at the same time. The station does not care how many are listening — and if
+      your radio is switched off, you simply miss that song.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>queue</strong> is for <em>work</em>: “somebody — any one of you — do this job once.” A
+      <strong>topic</strong> is for <em>news</em>: “everybody who cares, here is what just
+      happened.”</p>
+  </div>
+
+  <h3>2.3 The important difference: what if the reader is offline?</h3>
+  <p>This is where queues and topics part ways most sharply.</p>
+  <ul>
+    <li><strong>Queue:</strong> if no consumer is available, the message simply <em>waits in the
+      queue</em> until one shows up. Nothing is lost.</li>
+    <li><strong>Topic:</strong> if you were not subscribed and online when the message was published,
+      you <em>miss it</em> — just like a radio broadcast — <em>unless</em> you set up a
+      <strong>durable subscription</strong>, which asks the broker to hold messages for your named
+      subscriber even while it is switched off.</li>
+  </ul>
+
+  <div class="callout callout--analogy"><span class="callout__i">🎧</span>
+    <div class="callout__b"><b>Analogy</b>
+      A <strong>durable subscription</strong> turns the live radio broadcast into a <em>podcast
+      subscription</em>: the episodes you missed are kept for you, waiting the next time you open the
+      app.</div>
+  </div>
+
+  <p>Here is the full comparison. Keep it for reference — the rows you most need are the first and the
+    third:</p>
 
   <div class="tablewrap"><table>
     <thead><tr><th>Feature</th><th>Point-to-Point — <code>Queue</code></th><th>Publish/Subscribe — <code>Topic</code></th></tr></thead>
@@ -93,22 +323,117 @@
     </tbody>
   </table></div>
 
+  <h3>2.4 How to choose, every time</h3>
+  <div class="callout callout--key"><span class="callout__i">❓</span>
+    <div class="callout__b"><b>One question decides it</b>
+      <ul style="margin:.6rem 0 0">
+        <li><strong>Should exactly one worker do this job?</strong> → use a <strong>Queue</strong>
+          (orders, payments, invoice printing).</li>
+        <li><strong>Should everyone who is interested hear about this event?</strong> → use a
+          <strong>Topic</strong> (price updates, news feeds, system alerts).</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The trap: using a topic for work that must happen once</b>
+      Put “charge the customer's card” on a <em>topic</em> and every subscriber charges the card — the
+      customer is billed three times. Work that must happen <strong>exactly once</strong> belongs on a
+      <strong>queue</strong>. Use a topic only for notifications, where many listeners are the point.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>Five consumers are all listening to one queue. A single message arrives. How many of them
+        process it?</li>
+      <li>Your consumer was offline for an hour. What happened to the messages sent meanwhile — in a
+        queue, and in a plain (non-durable) topic?</li>
+      <li>You must charge a card exactly once. Queue or topic, and why?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>One.</strong> A queue delivers each message to exactly one consumer; the broker
+          shares the load across the five, one message each.</li>
+        <li><strong>Queue:</strong> the messages waited safely until the consumer returned.
+          <strong>Topic:</strong> they were missed — unless it had a durable subscription, which holds
+          them for a named subscriber.</li>
+        <li><strong>Queue.</strong> Exactly one consumer handles each message, so the card is charged
+          once. A topic would let every subscriber charge it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       7.3 Administered Objects & The Simplified API
+       PART 3 — ADMINISTERED OBJECTS & THE SIMPLIFIED API
        ===================================================================== -->
-  <span class="eyebrow">session 7.3 &amp; 7.4</span>
-  <h2>Part 3 · Administered Objects &amp; the Modern Simplified API</h2>
 
-  <p>To connect to the broker, your application relies on two server-managed <strong>Administered Objects</strong>:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · The setup the server does for you, and the easy modern way to send</h2>
+
+  <h3>3.1 You never build the plumbing — the server does</h3>
+  <p>To send a message, your code needs two things:</p>
   <ul>
-    <li><strong><code>ConnectionFactory</code>:</strong> Encapsulates connection parameters to the message broker (typically registered in JNDI at <code>java:/ConnectionFactory</code>).</li>
-    <li><strong><code>Destination</code>:</strong> The physical <code>Queue</code> or <code>Topic</code> target.</li>
+    <li>a way to <em>open a connection</em> to the broker, called a <strong>ConnectionFactory</strong>;</li>
+    <li>the <em>destination</em> itself — the specific <code>Queue</code> or <code>Topic</code> to send to.</li>
   </ul>
+  <p>You do not create either one. An administrator sets them up ahead of time inside the server and
+    registers each under a name. Objects prepared this way have a name of their own:
+    <strong>Administered Objects</strong> — literally, “objects an administrator looks after.” Your
+    code just asks for them by name.</p>
+  <p>Asking “by name” uses the server's naming directory, <strong>JNDI</strong> — think of it as the
+    server's phone book. The <code>ConnectionFactory</code> is listed under a name like
+    <code>java:/ConnectionFactory</code>, and a queue under something like
+    <code>java:/jms/queue/OrderQueue</code>. (JNDI first appeared in the Session 1 diagram, and gets
+    its own treatment in <a href="session-03-resource-creation.html">Session 3</a>.)</p>
 
-  <h3>Classic API (JMS 1.1) vs. Modern Simplified API (JMS 2.0+)</h3>
-  <p>In older JMS 1.1 code, developers had to manually create Connections, Sessions, MessageProducers, and handle endless try/catch blocks. Modern Jakarta Messaging simplifies this into a single, auto-closable <strong><code>JMSContext</code></strong>:</p>
+  <div class="callout callout--analogy"><span class="callout__i">🏢</span>
+    <div class="callout__b"><b>Analogy</b>
+      Administered objects are the fixtures in a <em>serviced office</em>. Before you moved in, the
+      building manager ran a phone line to your desk (the <code>ConnectionFactory</code> — your line to
+      the outside) and bolted a labelled mailbox to the wall (the <code>Destination</code> — where your
+      mail goes). You never lay cable or build mailboxes. You just use the ones already labelled with
+      your name.</div>
+  </div>
 
-  <div class="code-head">OrderProducer.java — Modern Simplified Producer using JMSContext</div>
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>ConnectionFactory</strong> is your pre-installed line to the broker; a
+      <strong>Destination</strong> is a pre-made queue or topic. Both are set up by the server in
+      advance, and you fetch them by name instead of building them.</p>
+  </div>
+
+  <h3>3.2 The old way of sending, and the new way</h3>
+  <p>Messaging has been in Java a long time, and the way you write it changed dramatically.</p>
+  <p>In the first version — the <strong>Classic API (JMS 1.1)</strong> — sending a single message was
+    a chore. You had to create a <code>Connection</code>, then open a <code>Session</code> from it,
+    then make a <code>MessageProducer</code>, send, and then carefully <em>close</em> every one of
+    those objects in a <code>finally</code> block, wrapped in nested try/catch. Forget one
+    <code>close()</code> and you leaked a resource.</p>
+  <p>The modern <strong>Simplified API (JMS 2.0+, Jakarta Messaging)</strong> folds all of that into a
+    single object: <strong><code>JMSContext</code></strong>. One object replaces the old
+    <code>Connection</code> <em>and</em> <code>Session</code>, it closes itself automatically, and when
+    the container injects it, even the closing is handled for you.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚗</span>
+    <div class="callout__b"><b>Analogy</b>
+      The classic API is a <em>manual car</em>: clutch, gears, and you must work them in the right
+      order or stall. <code>JMSContext</code> is an <em>automatic</em>: one pedal, and the car
+      coordinates the gearbox for you. Same journey, far less to get wrong.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Old JMS made you assemble and tidy up four or five objects by hand. Modern JMS gives you one —
+      <code>JMSContext</code> — that does the assembling and the tidying itself.</p>
+  </div>
+
+  <h3>3.3 The code: a modern message producer</h3>
+  <p>Now that you know the pieces — a factory, a destination, and a <code>JMSContext</code> — here is a
+    complete producer. It is an ordinary <code>@Stateless</code> bean (from Sessions 1 &amp; 2) that
+    submits an order onto a queue. Read the three numbered comments, then the explanation below.</p>
+
+  <div class="code-head">OrderProducer.java — a modern producer using JMSContext</div>
   <pre><code>package com.globalbank.messaging;
 
 import jakarta.annotation.Resource;
@@ -140,13 +465,166 @@ public class OrderProducer {
     }
 }</code></pre>
 
-  <!-- =====================================================================
-       7.4 Message Anatomy & Acknowledgement Modes
-       ===================================================================== -->
-  <span class="eyebrow">session 7.5 &amp; 7.6</span>
-  <h2>Part 4 · Message Anatomy &amp; Request-Reply Pattern</h2>
+  <p>What each numbered line is doing:</p>
+  <ul>
+    <li><strong>①</strong> <code>@Inject @JMSConnectionFactory("java:/ConnectionFactory")</code> asks
+      the container for a ready-to-use <code>JMSContext</code>, already wired to that factory. You do
+      not create it, start it, or close it.</li>
+    <li><strong>②</strong> <code>@Resource(lookup = "java:/jms/queue/OrderQueue")</code> looks the
+      pre-made queue up in JNDI by name and drops it into your field — an administered object,
+      injected.</li>
+    <li><strong>③</strong> <code>createProducer().setProperty(...).send(...)</code> is one
+      <em>fluent</em> line: each call returns something you can call the next method on, so making a
+      producer, tagging the message, and sending it read as a single sentence.</li>
+  </ul>
 
-  <p>Every JMS Message consists of three distinct parts:</p>
+  <div class="callout callout--tip"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      There is no <code>new</code>, no <code>connection.start()</code>, and no <code>close()</code>
+      anywhere. The container injected a managed <code>JMSContext</code> and will close it when the
+      method ends. It is the same deal as beans in Session 1 — <em>you never create the plumbing; you
+      ask for it.</em></div>
+  </div>
+
+  <h3>3.4 The other half: the bean that receives the message</h3>
+  <p>A producer with nobody listening is a letter posted into an empty room. The receiving side is called
+    a <strong>message-driven bean</strong> (MDB), and it is the third kind of enterprise bean — alongside
+    <code>@Stateless</code> and <code>@Stateful</code> from Sessions 1–2 and the <code>@Singleton</code>
+    from Session 4.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A message-driven bean is a bean with <strong>no client and no interface</strong>. Nobody calls its
+      methods. Instead, the container watches a destination, and the moment a message arrives it calls
+      <em>one</em> method on your bean: <code>onMessage</code>. You never write the loop that waits for
+      messages — that is the container's job, and it is the whole reason MDBs exist.</p>
+  </div>
+
+  <div class="code-head">OrderProcessor.java — a message-driven bean</div>
+  <pre><code>package com.globalbank.messaging;
+
+import jakarta.ejb.ActivationConfigProperty;
+import jakarta.ejb.MessageDriven;
+import jakarta.jms.JMSException;
+import jakarta.jms.Message;
+import jakarta.jms.MessageListener;
+import jakarta.jms.TextMessage;
+
+// ① @MessageDriven says "I am a listener, not a servant waiting to be called".
+@MessageDriven(activationConfig = {
+
+    // ② Which destination to watch. This is the same lookup name the producer sent to.
+    @ActivationConfigProperty(propertyName  = "destinationLookup",
+                              propertyValue = "java:/jms/queue/OrderQueue"),
+
+    // ③ What kind of destination it is — a Queue (one reader) or a Topic (all readers).
+    @ActivationConfigProperty(propertyName  = "destinationType",
+                              propertyValue = "jakarta.jms.Queue")
+})
+public class OrderProcessor implements MessageListener {
+
+    // ④ The one method the container calls, once per message.
+    @Override
+    public void onMessage(Message message) {
+        try {
+            if (message instanceof TextMessage text) {
+                String orderXml = text.getText();
+                System.out.println("Order received and being processed: " + orderXml);
+                // ... do the real work here: save the order, email a receipt, ...
+            }
+        } catch (JMSException e) {
+            // Throwing tells the container the message was NOT handled.
+            // What happens next is Section 4.2 — acknowledgement.
+            throw new RuntimeException("Could not read the order message", e);
+        }
+    }
+}</code></pre>
+
+  <p>Four things to notice, because they are what make an MDB unlike any bean you have written so far:</p>
+  <ul>
+    <li><strong>① No interface, and no client.</strong> There is no <code>OrderProcessorRemote</code>, and
+      nothing anywhere calls <code>onMessage</code>. The container does. This is why an MDB cannot be
+      reached by JNDI lookup the way the beans in Session 6 could — there is nothing to look up.</li>
+    <li><strong>② <code>destinationLookup</code> is the same name the producer sent to.</strong> That string
+      is the entire connection between the two classes. Nothing imports the other, and neither one knows
+      the other exists. That is the point of messaging: you can rewrite, redeploy or replace either side
+      without touching the other.</li>
+    <li><strong>③ <code>destinationType</code> decides the delivery rule</strong> you met in Part 2. Say
+      <code>jakarta.jms.Queue</code> and exactly one MDB instance gets each message — deploy three
+      instances of this class and the work is shared out between them, which is how you scale. Say
+      <code>jakarta.jms.Topic</code> and every listener gets a copy.</li>
+    <li><strong>④ <code>onMessage</code> is the only method.</strong> No annotations on it, no business
+      interface. The container calls it on a thread it manages, inside a transaction it started
+      (Session 10), and if it throws, the container treats the message as unhandled.</li>
+  </ul>
+
+  <div class="callout callout--analogy"><span class="callout__i">📬</span>
+    <div class="callout__b"><b>Analogy — the producer posts, the MDB has a mailbox</b>
+      The producer is somebody dropping a letter into a post box. The MDB is not a person you phone — it is
+      a mailbox with a rule attached: “whenever a letter lands in me, do this.” Nobody waits at the box.
+      The postal service (the container) delivers, and the rule runs when it runs. That is what
+      <em>asynchronous</em> means, and it is why the producer's thread was freed immediately back in
+      Section 3.3.
+    </div>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Try it yourself</b>
+      Start WildFly, deploy a project containing both classes above, then send one order from the
+      producer. You will see the producer's line print <em>immediately</em>, and the MDB's line print a
+      moment later — on a different thread, in a different transaction, with nothing in the producer's code
+      waiting for it. If you would rather watch this before building it, Section 4.4 has a full replay.
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>What is an <em>administered object</em>? Name the two kinds you met.</li>
+      <li>What does a single <code>JMSContext</code> replace from the classic API?</li>
+      <li>In the producer, how many times did the code call <code>new</code> or <code>close()</code>?</li>
+      <li>Why can you not look a message-driven bean up in JNDI and call it, the way Session 6's remote
+        bean was called?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>An object the <strong>administrator sets up in advance and registers by name</strong>, so
+          your code just looks it up. The two are the <strong>ConnectionFactory</strong> and the
+          <strong>Destination</strong> (a <code>Queue</code> or <code>Topic</code>).</li>
+        <li>The separate <strong><code>Connection</code> and <code>Session</code></strong> — rolled
+          into one self-closing object.</li>
+        <li><strong>Zero.</strong> The container injects the <code>JMSContext</code> and the queue, and
+          closes the context for you.</li>
+        <li>Because it has <strong>no client interface and no business methods</strong> — only
+          <code>onMessage</code>, which the container calls. Nobody invokes an MDB; the container does, when
+          a message arrives on the destination it was told to watch.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4 — MESSAGE ANATOMY & REQUEST-REPLY
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · What a message is made of, and how to get an answer back</h2>
+
+  <h3>4.1 Every message has three parts</h3>
+  <p>A JMS message is not just a blob of text. It has three parts, and knowing them explains almost
+    everything the broker can do.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">✉️</span>
+    <div class="callout__b"><b>Analogy</b>
+      A message is a <em>posted envelope</em>. The printed address and postmark on the outside are the
+      <strong>headers</strong> — the postal system reads them to route and track it. The sticky labels
+      you add, like “FRAGILE” or “PRIORITY”, are the <strong>properties</strong> — sorters act on them
+      without opening anything. The letter folded inside is the <strong>body</strong> — the actual
+      message.</div>
+  </div>
+
+  <p>Here is the same three-part structure as the exam states it:</p>
+
   <div class="tablewrap"><table>
     <thead><tr><th>Section</th><th>Contents</th><th>Purpose</th></tr></thead>
     <tbody>
@@ -158,7 +636,7 @@ public class OrderProducer {
       <tr>
         <td><strong>2. Properties</strong></td>
         <td>Custom key-value pairs (e.g., <code>region="EMEA"</code>, <code>amount=450.00</code>)</td>
-        <td>Enables consumers to filter messages without deserializing the body using <strong>Message Selectors</strong> (SQL-92 syntax).</td>
+        <td>Enables consumers to filter messages without deserializing the body using a <strong>message selector</strong> — a broker-side filter (SQL-92 syntax).</td>
       </tr>
       <tr>
         <td><strong>3. Body (Payload)</strong></td>
@@ -168,10 +646,71 @@ public class OrderProducer {
     </tbody>
   </table></div>
 
-  <h3>Request-Reply Communication Pattern</h3>
-  <p>Although messaging is asynchronous, systems often need a response back. JMS implements this without blocking using a <strong>Temporary Queue</strong> and <strong>Correlation IDs</strong>:</p>
+  <p>The point of <strong>properties</strong> is worth a sentence on its own. Because they sit on the
+    outside of the “envelope,” a consumer can ask the broker for <em>only</em> the messages it cares
+    about — “just the ones where <code>amount &gt; 400</code>” — without opening and parsing every
+    body. That filter string is called a <strong>message selector</strong>, and it is written in a
+    SQL-like syntax (SQL-92).</p>
 
-  <div class="code-head">Implementing Request-Reply with JMSReplyTo &amp; JMSCorrelationID</div>
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Headers</strong> are the system's routing info, <strong>properties</strong> are your own
+      labels for filtering, and the <strong>body</strong> is the real content. Put anything you want to
+      filter on into a property, not buried in the body.</p>
+  </div>
+
+  <h3>4.2 How the broker knows a message was handled: acknowledgement</h3>
+  <p>When a consumer finishes with a message, it sends an <strong>acknowledgement</strong> — a quiet
+    “got it, you can delete it now” back to the broker. Until that happens, the broker keeps the
+    message; if the consumer crashes before acknowledging, the broker <em>redelivers</em> it, so work
+    is not silently lost.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">📦</span>
+    <div class="callout__b"><b>Analogy</b>
+      Acknowledgement is <em>signing for a parcel</em>. The courier will not mark it delivered — and
+      will try again — until someone signs. Your signature is the acknowledgement.</div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>Acknowledgement is the receiver confirming “done.” It is what makes a queue <em>reliable</em>: a
+      message is only forgotten once someone has actually handled it. The exact <em>acknowledgement
+      modes</em> are listed in the Reference section at the end.</p>
+  </div>
+
+  <h3>4.3 Getting an answer back: the Request-Reply pattern</h3>
+  <p>Messaging is one-way by nature: send, and move on. But sometimes you really do need the answer —
+    “get me account summary 1001.” How do you get a reply <em>without</em> going back to a blocking,
+    synchronous call?</p>
+  <p>The trick uses two of the headers from the table above. Here is the whole dance:</p>
+
+  <ol class="steps">
+    <li>
+      <h4>Make a private reply mailbox</h4>
+      <p>The sender creates a <strong>temporary queue</strong> — a short-lived queue that exists just
+        for this one exchange and disappears afterwards.</p>
+    </li>
+    <li>
+      <h4>Say where to reply</h4>
+      <p>The sender puts that reply queue into the message's <code>JMSReplyTo</code> header, so the
+        receiver knows exactly where to send its answer.</p>
+    </li>
+    <li>
+      <h4>Keep a reference number</h4>
+      <p>After sending, the sender reads the message's unique <code>JMSMessageID</code> and keeps it as
+        a <em>correlation id</em> — its reference number for this request.</p>
+    </li>
+    <li>
+      <h4>Listen for the matching answer only</h4>
+      <p>The sender waits on the reply queue with a selector that says
+        <code>JMSCorrelationID = '…'</code>, so it picks up only the reply that belongs to <em>its</em>
+        request — not some other request's answer flying past.</p>
+    </li>
+  </ol>
+
+  <p>On the other side, the responder copies the request's <code>JMSMessageID</code> into the reply's
+    <code>JMSCorrelationID</code> and sends it to the <code>JMSReplyTo</code> destination. Here is the
+    sender's half in code:</p>
+
+  <div class="code-head">Request-Reply with JMSReplyTo &amp; JMSCorrelationID</div>
   <pre><code>// SENDER (Client):
 TemporaryQueue replyQueue = jmsContext.createTemporaryQueue();
 JMSProducer producer = jmsContext.createProducer();
@@ -186,6 +725,19 @@ String correlationId = requestMsg.getJMSMessageID(); // Unique request token
 JMSConsumer replyConsumer = jmsContext.createConsumer(replyQueue,
     "JMSCorrelationID = '" + correlationId + "'");
 String response = replyConsumer.receiveBody(String.class, 5000); // 5s timeout</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">🎟️</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Two headers do all the work. <code>JMSReplyTo</code> is the <em>self-addressed envelope</em> — it
+      tells the responder where to send the answer. <code>JMSCorrelationID</code> is the
+      <em>cloakroom ticket</em> — the number that lets the sender match the returning answer to the
+      request it belongs to, even with hundreds in flight at once.</div>
+  </div>
+
+  <h3>4.4 Watch the whole flow run</h3>
+  <p>You have now met every piece: a producer, a queue, the broker, and the background workers
+    (message-driven beans) that consume. The simulation below sends two messages from a checkout and
+    then shows what happens next. Press <strong>Run</strong>.</p>
 
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
@@ -214,85 +766,239 @@ jmsContext.createProducer().send(inventoryQueue, "DECREMENT SKU-3901 QUANTITY 1"
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      Look at the timestamps. The three <code>[Web …]</code> lines all finish within a few
+      milliseconds, and the browser already has its “200 OK” — <em>before</em> the broker has even
+      delivered the messages to the workers. That gap between “sent” and “processed” is the entire
+      point of asynchronous messaging.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <ol>
+      <li>Name the three parts of a JMS message.</li>
+      <li>Why put the data you filter on into a property instead of the body?</li>
+      <li>In request-reply, what is <code>JMSReplyTo</code> for, and what is
+        <code>JMSCorrelationID</code> for?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Headers, Properties, Body.</strong></li>
+        <li>So a <strong>message selector</strong> can filter messages by that value at the broker,
+          without opening and parsing every body.</li>
+        <li><code>JMSReplyTo</code> tells the responder <strong>where to send the answer</strong>;
+          <code>JMSCorrelationID</code> lets the sender <strong>match the answer to its original
+          request</strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       QUIZ
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 7 · Knowledge Check</h3>
+    <h3>Check yourself — Session 7</h3>
     <script type="application/json">
     [
-      {
-        "q": "What is the primary difference between a Queue and a Topic in Jakarta Messaging?",
-        "opts": [
-          "Queues are for text; Topics are for numbers",
-          "A Queue delivers each message to exactly one consumer; a Topic broadcasts to all subscribers",
-          "Topics run in RAM; Queues run on disk",
-          "Queues require passwords; Topics do not"
-        ],
-        "a": 1,
-        "why": "Point-to-Point (Queue) guarantees single-consumer delivery; Publish/Subscribe (Topic) broadcasts to all active subscribers."
-      },
-      {
-        "q": "Which modern class in JMS 2.0+ combines Connection and Session into a single auto-closable interface?",
-        "opts": [
-          "JMSManager",
-          "JMSContext",
-          "MessageDispatcher",
-          "ActiveMQClient"
-        ],
-        "a": 1,
-        "why": "JMSContext simplifies JMS 1.1 code by consolidating Connection and Session creation into one managed object."
-      },
-      {
-        "q": "In the Request-Reply pattern, how does the sender correlate an asynchronous reply with the original request?",
-        "opts": [
-          "By matching the JMSCorrelationID in the reply to the original JMSMessageID",
-          "By opening a direct TCP socket",
-          "By searching the database log",
-          "By restarting the server"
-        ],
-        "a": 0,
-        "why": "The responder copies the request's JMSMessageID into the reply's JMSCorrelationID so the requester can identify the specific answer."
-      },
-      {
-        "q": "What happens if a message consumer is temporarily offline in a Point-to-Point (Queue) domain?",
-        "opts": [
-          "The message is permanently deleted",
-          "The broker holds the message in persistent storage until the consumer comes back online",
-          "The sender's computer crashes",
-          "The message is forwarded to an email address"
-        ],
-        "a": 1,
-        "why": "Queues provide time-independence; the broker retains unconsumed messages until a worker arrives to process them."
-      },
-      {
-        "q": "Which section of a JMS message allows consumers to filter messages using SQL-92 selectors without parsing the payload?",
-        "opts": [
-          "Message Body",
-          "Message Properties",
-          "TCP Header",
-          "JNDI Context"
-        ],
-        "a": 1,
-        "why": "Message Properties store user-defined header attributes that brokers inspect directly for message selector filtering."
-      }
+      {"q":"What does it mean to send a message asynchronously?","opts":["The sender waits on the line until the work is finished","The sender hands the message to the broker and carries on immediately, while the work happens later","The message is encrypted end to end","The message is delivered only on a timer"],"a":1,"why":"Asynchronous means drop-and-go: the broker holds the message and the sender is free at once, no matter how long the work takes."},
+      {"q":"What job does a message broker (MOM) do?","opts":["It compiles your Java code","It receives, stores and delivers messages between programs so they need not run at the same instant","It replaces the database","It is the user's web browser"],"a":1,"why":"The broker is the trusted go-between — the 'post office' — that buffers messages so sender and receiver are decoupled in time."},
+      {"q":"A queue and a topic differ in who receives a message. Which statement is correct?","opts":["A queue broadcasts to all; a topic picks one","A queue delivers each message to exactly one consumer; a topic gives every subscriber its own copy","Both deliver to exactly one consumer","Both broadcast to everyone"],"a":1,"why":"Point-to-Point (queue) delivers one message to one consumer; Publish/Subscribe (topic) gives a copy to every active subscriber."},
+      {"q":"A consumer is offline for an hour. What happens to messages sent to a queue meanwhile?","opts":["They are deleted immediately","The broker holds them safely until a consumer returns to process them","They are emailed to an administrator","The sender crashes"],"a":1,"why":"Queues are time-independent: unconsumed messages wait in the broker's storage until a worker is available."},
+      {"q":"You must charge a customer's card exactly once. Which destination fits?","opts":["A topic, so every subscriber charges it","A queue, so exactly one consumer charges it","Either one works identically","Neither; use a direct call"],"a":1,"why":"Work that must happen once belongs on a queue. A topic would let every subscriber perform the charge, double-billing the customer."},
+      {"q":"Which single modern object combines the classic Connection and Session and closes itself?","opts":["JMSManager","JMSContext","MessageDispatcher","ConnectionPool"],"a":1,"why":"JMSContext is the Simplified API (JMS 2.0+): it rolls Connection and Session into one auto-closable object."},
+      {"q":"What are a ConnectionFactory and a Queue examples of?","opts":["Database tables","Administered objects the server sets up in advance and registers in JNDI by name","Classes you must write yourself","HTTP endpoints"],"a":1,"why":"Both are administered objects: an administrator configures them in the server and your code looks them up by name."},
+      {"q":"What is a message-driven bean, and how is it called?","opts":["A @Stateless bean that a client reaches through a @Remote interface","A bean with no client interface at all — the container watches a destination and calls its onMessage method when a message arrives","A bean that sends messages on a timer","A bean that stores messages in a database"],"a":1,"why":"An MDB declares @MessageDriven with a destinationLookup, implements MessageListener, and is driven entirely by the container. Nothing looks it up in JNDI and nothing calls it directly — which is why it needs no business interface."},
+      {"q":"Why place filterable data in a message's Properties rather than its Body?","opts":["Properties are encrypted","So a consumer can filter with a SQL-style message selector without opening and parsing the body","The body cannot hold text","Properties are delivered faster"],"a":1,"why":"Message selectors inspect properties directly, letting the broker hand over only matching messages without deserializing each payload."},
+      {"q":"In the Request-Reply pattern, how does the sender match an answer to its original request?","opts":["By opening a direct TCP socket","By comparing the reply's JMSCorrelationID to the request's JMSMessageID","By searching the database log","By restarting the broker"],"a":1,"why":"The responder copies the request's JMSMessageID into the reply's JMSCorrelationID, so the sender can pick out the matching answer."}
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the session. It is here because exam questions and the
+    textbook use these exact terms, and you will want somewhere to check them. Open only what you
+    need.</p>
+
+  <details>
+    <summary><strong>🎓 The exact learning objectives (from the Presenter's Manual)</strong></summary>
+    <ol>
+      <li>Define Jakarta Messaging and Message-Oriented Middleware (MOM).</li>
+      <li>Compare synchronous calls (RMI / RPC) with asynchronous messaging.</li>
+      <li>Contrast the two primary messaging domains: Point-to-Point (Queue) and Publish/Subscribe (Topic).</li>
+      <li>Explain Administered Objects, Connection Factories, and Destinations.</li>
+      <li>Differentiate between the Classic API (JMS 1.1) and the Simplified API (JMS 2.0 / Jakarta Messaging), i.e. <code>JMSContext</code>.</li>
+      <li>Structure JMS Messages (Headers, Properties, Body) and apply acknowledgement modes.</li>
+      <li>Implement the Request-Reply pattern using <code>JMSReplyTo</code> and <code>JMSCorrelationID</code>.</li>
+    </ol>
+  </details>
+
+  <details>
+    <summary><strong>🔧 Classic API (JMS 1.1) vs Simplified API (JMS 2.0+)</strong></summary>
+    <p>Both APIs still work, and both still start from an injected <code>ConnectionFactory</code>. The
+      difference is how many objects you juggle after that.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Classic API (JMS 1.1)</th><th>Simplified API (JMS 2.0+)</th><th>What changed</th></tr></thead>
+      <tbody>
+        <tr><td><code>ConnectionFactory</code></td><td><code>ConnectionFactory</code></td><td>Unchanged — still the starting point, usually injected.</td></tr>
+        <tr><td><code>Connection</code> + <code>Session</code> (created separately)</td><td><code>JMSContext</code></td><td>One object now does the job of both.</td></tr>
+        <tr><td><code>MessageProducer</code></td><td><code>JMSProducer</code></td><td>Created from the context; supports fluent method-chaining.</td></tr>
+        <tr><td><code>MessageConsumer</code></td><td><code>JMSConsumer</code></td><td>Created from the context.</td></tr>
+        <tr><td>Call <code>connection.start()</code> by hand</td><td>Automatic</td><td>The context starts delivery for you.</td></tr>
+        <tr><td>Close each object in a <code>finally</code> block</td><td><code>AutoCloseable</code></td><td>Use try-with-resources, or let the container close it.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>📦 The five message body types</strong></summary>
+    <p>The <em>body</em> is the payload. JMS defines five shapes for it; pick the one that matches your
+      data. <code>TextMessage</code> is by far the most common.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Body type</th><th>Carries</th><th>Use it for</th></tr></thead>
+      <tbody>
+        <tr><td><code>TextMessage</code></td><td>A single <code>String</code></td><td>Plain text, JSON or XML payloads. The usual choice.</td></tr>
+        <tr><td><code>MapMessage</code></td><td>Name/value pairs, like a <code>Map</code></td><td>A handful of named fields without defining a class.</td></tr>
+        <tr><td><code>ObjectMessage</code></td><td>A serialized Java object</td><td>Sending a whole <code>Serializable</code> Java object.</td></tr>
+        <tr><td><code>BytesMessage</code></td><td>A stream of raw bytes</td><td>Binary data — images, files, custom formats.</td></tr>
+        <tr><td><code>StreamMessage</code></td><td>A sequence of primitive values</td><td>Reading values back in the exact order they were written.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🏷️ Standard message headers</strong></summary>
+    <p>Headers are routing and tracking fields. The broker sets most of them; a few you set yourself
+      (notably <code>JMSReplyTo</code>). These are the ones named in this session:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Header</th><th>What it holds</th></tr></thead>
+      <tbody>
+        <tr><td><code>JMSMessageID</code></td><td>A unique id the broker assigns to every message — the “reference number” used in request-reply.</td></tr>
+        <tr><td><code>JMSDeliveryMode</code></td><td><code>PERSISTENT</code> (saved to disk, survives a broker restart) or <code>NON_PERSISTENT</code> (faster, kept in memory, can be lost).</td></tr>
+        <tr><td><code>JMSTimestamp</code></td><td>The time the broker accepted the message.</td></tr>
+        <tr><td><code>JMSReplyTo</code></td><td>A destination where the receiver should send its reply. You set this.</td></tr>
+        <tr><td><code>JMSCorrelationID</code></td><td>Links a reply back to the request it answers — usually a copy of the request's <code>JMSMessageID</code>.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Other standard headers exist too — <code>JMSDestination</code>, <code>JMSPriority</code>,
+      <code>JMSExpiration</code> and <code>JMSRedelivered</code> among them — but the five above are the
+      ones this session uses.</p>
+  </details>
+
+  <details>
+    <summary><strong>🔎 Message properties &amp; selectors</strong></summary>
+    <p><strong>Properties</strong> are your own key/value labels on a message, such as
+      <code>region = "EMEA"</code> or <code>amount = 450.00</code>. A consumer can tell the broker to
+      deliver only the messages whose properties match a filter, called a <strong>message
+      selector</strong>, written in a SQL-92-like syntax:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Selector example</th><th>Means “deliver only messages where…”</th></tr></thead>
+      <tbody>
+        <tr><td><code>amount &gt; 400</code></td><td>the <code>amount</code> property is over 400.</td></tr>
+        <tr><td><code>region = 'EMEA' AND priorityLevel = 'HIGH'</code></td><td>both named properties match.</td></tr>
+        <tr><td><code>JMSCorrelationID = 'ID:123'</code></td><td>the correlation id equals that value (as used in request-reply).</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>✅ Acknowledgement modes</strong></summary>
+    <p>An <strong>acknowledgement</strong> is the consumer confirming it has handled a message, so the
+      broker can stop tracking it. The mode decides <em>when and how</em> that confirmation happens:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Mode</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>AUTO_ACKNOWLEDGE</code></td><td>The session acknowledges automatically once the message has been received and handled. The common default.</td></tr>
+        <tr><td><code>CLIENT_ACKNOWLEDGE</code></td><td>Your code decides, by calling <code>message.acknowledge()</code> explicitly.</td></tr>
+        <tr><td><code>DUPS_OK_ACKNOWLEDGE</code></td><td>Lazy acknowledgement — faster, but a message may occasionally be delivered twice, so the consumer must tolerate duplicates.</td></tr>
+        <tr><td>Transacted session</td><td>Acknowledgement is tied to a transaction: messages are confirmed only when the transaction commits, and redelivered if it rolls back.</td></tr>
+      </tbody>
+    </table></div>
+    <p>If a consumer fails before acknowledging, the broker <strong>redelivers</strong> the message —
+      which is why messaging can promise that work is not silently lost.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>MOM</strong></td><td>Message-Oriented Middleware decouples systems asynchronously via a central broker.</td></tr>
-    <tr><td><strong>Queue vs Topic</strong></td><td>Queue = 1:1 worker consumption; Topic = 1:N broadcast to all subscribers.</td></tr>
-    <tr><td><strong>Administered Objects</strong></td><td><code>ConnectionFactory</code> and <code>Destination</code> configured in WildFly JNDI.</td></tr>
-    <tr><td><strong><code>JMSContext</code></strong></td><td>Modern simplified API reducing connection/session boilerplate to fluent one-liners.</td></tr>
-    <tr><td><strong>Request-Reply</strong></td><td>Uses <code>JMSReplyTo</code> temporary queue + <code>JMSCorrelationID</code> matching.</td></tr>
+    <tr><td>Messaging</td><td>One program leaves a message and moves on; another handles it later. The sender never waits.</td></tr>
+    <tr><td>Synchronous vs asynchronous</td><td>Synchronous = wait right here for the answer. Asynchronous = drop it off and carry on.</td></tr>
+    <tr><td>Broker / MOM</td><td>The “post office” in the middle that stores and delivers messages. WildFly bundles Apache ActiveMQ Artemis.</td></tr>
+    <tr><td>Jakarta Messaging (JMS)</td><td>The standard Java API for talking to a broker; classes live in <code>jakarta.jms</code>.</td></tr>
+    <tr><td>Queue (Point-to-Point)</td><td>Each message goes to <strong>exactly one</strong> consumer. For work that must happen once.</td></tr>
+    <tr><td>Topic (Publish/Subscribe)</td><td>Every subscriber gets its own copy. For news and notifications. Offline readers need a durable subscription.</td></tr>
+    <tr><td>Administered objects</td><td><code>ConnectionFactory</code> (your line to the broker) and <code>Destination</code> (the queue/topic), set up by the server and found by JNDI name.</td></tr>
+    <tr><td><code>JMSContext</code></td><td>The modern Simplified API: one self-closing object replaces the classic <code>Connection</code> + <code>Session</code>.</td></tr>
+    <tr><td><strong>Producer</strong></td><td>An ordinary <code>@Stateless</code> bean that injects a <code>JMSContext</code> and a destination, then sends. Frees its thread immediately.</td></tr>
+    <tr><td><strong>Consumer — the message-driven bean</strong></td><td><code>@MessageDriven</code> + <code>destinationLookup</code>, implementing <code>MessageListener</code>. No client, no interface: the container watches the destination and calls <code>onMessage</code> once per message.</td></tr>
+    <tr><td>Message parts</td><td>Headers (routing), Properties (your labels, for selectors), Body (the payload).</td></tr>
+    <tr><td>Acknowledgement</td><td>The consumer's “got it” that lets the broker forget a message; unacknowledged messages are redelivered.</td></tr>
+    <tr><td>Request-Reply</td><td><code>JMSReplyTo</code> says where to answer; <code>JMSCorrelationID</code> matches the answer to the request.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Using a <strong>topic</strong> for work that must happen once (e.g. charging a card)</td><td>Use a <strong>queue</strong> — exactly one consumer handles each message.</td></tr>
+      <tr><td>Expecting a plain topic to hold messages for an offline subscriber</td><td>A topic drops messages for absent subscribers. Use a <strong>durable subscription</strong>, or a queue.</td></tr>
+      <tr><td>Writing classic JMS 1.1 boilerplate — <code>Connection</code>, <code>Session</code>, manual <code>close()</code></td><td>Inject a <code>JMSContext</code> and let it (and the container) handle creation and closing.</td></tr>
+      <tr><td>Creating a <code>ConnectionFactory</code> or queue with <code>new</code></td><td>They are administered objects — inject them (<code>@Inject</code>, <code>@Resource</code>) or look them up by JNDI name.</td></tr>
+      <tr><td>Burying filterable data inside the message body</td><td>Put it in a <strong>property</strong> so a message selector can filter on it without parsing the body.</td></tr>
+      <tr><td>Blocking on a reply by holding a synchronous call open</td><td>Use <strong>Request-Reply</strong>: a temporary reply queue plus <code>JMSReplyTo</code> and <code>JMSCorrelationID</code>.</td></tr>
+      <tr><td>Assuming a message is safe the moment it is received</td><td>It is safe once <strong>acknowledged</strong>. Until then the broker may redeliver it — design consumers to cope.</td></tr>
+      <tr><td>Trying to give a message-driven bean a business interface or a JNDI name</td><td>Nobody calls an MDB. It has no client — the container watches the destination and calls <code>onMessage</code>. The only two things that must match are <code>destinationLookup</code> here and the destination the producer sends to.</td></tr>
+      <tr><td>Swallowing an exception inside <code>onMessage</code></td><td>Let it propagate. Throwing is how you tell the container the message was <em>not</em> handled, which is what triggers redelivery instead of silent data loss.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Messaging connects to several other sessions:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>The background workers that consume a queue (message-driven beans)</td><td><a href="session-01-02-intro-and-beans.html">Sessions 1 &amp; 2 — Enterprise Beans</a> (Part 3.7)</td></tr>
+      <tr><td>Looking things up by JNDI name (<code>@Resource</code>, <code>java:/…</code>)</td><td><a href="session-03-resource-creation.html">Session 3 — Resource Creation</a></td></tr>
+      <tr><td>Connecting to outside systems and message providers</td><td><a href="session-08-connectors.html">Session 8 — Connectors</a></td></tr>
+      <tr><td>Making a message send part of an all-or-nothing transaction</td><td><a href="session-10-ejb-transactions.html">Session 10 — EJB Transactions</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/messaging/" target="_blank" rel="noopener">Jakarta Messaging Specification</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly — official documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

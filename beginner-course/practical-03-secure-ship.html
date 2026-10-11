@@ -1,0 +1,2240 @@
+<title>Practical 3 — Secure &amp; Ship (GlobalBank)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Practical 3 of the GlobalBank practicum: put a real login in front of the bank, decide who may do what with @RolesAllowed, wire configuration, notifiers, an interceptor and an after-commit event with CDI, and see what a multi-module EAR changes — on WildFly.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "p3";</script>
+
+<main class="page">
+
+  <h1>Practical 3 · Secure &amp; Ship</h1>
+  <p class="lede">The bank works and it has a front door. It also lets <em>anyone</em> move
+    <em>anyone's</em> money, and it tells nobody when it does. This practical fixes both. You will put a
+    real login in front of the bank, decide in one annotation who may do what, wire up the CDI features
+    you read about in Sessions 11 and 12 — a configuration value, two notifiers behind one interface, an
+    interceptor, and an event that <em>waits for the commit</em> — and then look honestly at what
+    packaging the whole thing as an EAR would change.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>Nothing from Practical 2 is thrown away.</strong> Same entities, same
+          <code>AccountService</code>, same page, same queue, same remote interface. This project is the
+          last one plus more files.</li>
+        <li><strong>There is still nothing to install.</strong> No identity server, no LDAP, no realm to
+          configure in the admin console. The users live in the same in-memory database as the accounts.</li>
+        <li><strong>You will be locked out, on purpose, and then let in.</strong> The first thing this
+          application does is refuse to show you the bank. Understanding exactly who refused, and what
+          would have happened if one line were missing, is Part 3.</li>
+        <li><strong>You will watch a notification wait.</strong> Money moves, and the customer is told
+          about it only once the database has agreed it really moved. Part 6 is about the annotation that
+          causes that, and what goes wrong without it.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Six concrete things, not a list copied from a manual:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say which half of a security setup decides <em>how</em> a person signs in, and which half decides <em>who they are</em></td><td>Part 3</td></tr>
+      <tr><td>Explain why a bean method with no security annotation at all is a hole, not a safe default</td><td>Part 4</td></tr>
+      <tr><td>Write a <code>@Produces</code> field and a <code>@Produces</code> method, and say why one of them may not carry a scope</td><td>Part 5</td></tr>
+      <tr><td>Have two beans implement one interface and pick between them at an injection point, without an <code>if</code></td><td>Part 5</td></tr>
+      <tr><td>Explain why a customer must not be told about a transfer at the moment it is made</td><td>Part 6</td></tr>
+      <tr><td>Say what changes — and what breaks — when the same application becomes a multi-module EAR</td><td>Part 7</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// lab</code> — a numbered step with something to type and something to check.</li>
+        <li><code>// terminal</code> — a fake shell. Type the commands yourself and see realistic output,
+          with no server and no risk.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch a real deployment replay.</li>
+        <li><code>// checkpoint</code> — a self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      If you have not set up Java, Maven and WildFly yet, do
+      <a href="01-setup.html">Set up your workshop</a> first. And do
+      <a href="practical-02-front-door.html">Practical 2</a> before this one — this project starts from
+      its finished state, and every step assumes you have already watched a war deploy and a page answer
+      a request.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · What you are building</h2>
+
+  <p>Two things are wrong with the bank as Practical 2 left it, and they are the two things that separate
+    a coursework exercise from something you would let a stranger near.</p>
+
+  <p>The first is that <strong>there is no idea of a person</strong>. The page, the servlet, the remote
+    interface and the queue all reach the same <code>AccountService</code>, and it will move money out of
+    any account for anyone who asks. There is no <em>who</em> anywhere in the application.</p>
+
+  <p>The second is that <strong>nothing happens after a transfer except the transfer</strong>. In a real
+    bank, moving £25 is not one event, it is one event and four consequences: the customer is emailed,
+    the customer is texted, the branch's audit trail is written, and somebody's fraud rule takes a look.
+    Practical 2's code would have to call all four by hand, from inside the transfer, and know about every
+    one of them.</p>
+
+  <p>So this practical adds two ideas, and a third that is really a question about shape:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>The idea</th><th>What it answers</th><th>Part</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Authentication</strong></td><td>"Who is this?"</td><td>Part 3</td></tr>
+      <tr><td><strong>Authorization</strong></td><td>"And what are they allowed to do?"</td><td>Part 4</td></tr>
+      <tr><td><strong>CDI, used properly</strong></td><td>"How does the code around the bank plug into it without the bank knowing?"</td><td>Parts 5–6</td></tr>
+      <tr><td><strong>Packaging</strong></td><td>"Should all of this still be one war?"</td><td>Part 7</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><strong>Authentication</strong> is proving who you are. A user name and a password. A fingerprint.
+      A card and a PIN. The point is that it is a claim you have to <em>back up</em> — saying "I am Ada" is
+      not authentication; saying "I am Ada and here is the thing only Ada knows" is.</p>
+    <p><strong>Authorization</strong> is a different question, asked afterwards: now that we know who you
+      are, what may you do? Ada may move her own money. The branch manager may see everybody's. Those are
+      two separate decisions and mixing them up is the single most common security bug there is.</p>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>role</strong> is a name for a group of permissions, so that you can write rules about
+      people you have never met. You do not write "Ada may see the audit log". You write "a
+      <code>BANK_MANAGER</code> may see the audit log", and then you say Ada <em>is</em> one. When a new
+      manager joins, the rule does not change — one row in a table does.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🛂</span>
+    <div class="callout__b"><b>The analogy: the bank gets a door</b>
+      <p>Practical 2's bank had a lobby, a counter, and clerks — and no door. Anyone who walked in off the
+        street could ask a clerk to move money.</p>
+      <p>This practical installs an entrance with a person on it (<strong>the login form</strong>), a list
+        of who is allowed in and what they are (<strong>the <code>bank_users</code> table</strong>), a
+        printed rulebook by each clerk's desk saying which jobs require which badge
+        (<strong><code>@RolesAllowed</code></strong>), and a bell on the wall that rings in the back
+        office whenever a job is finished (<strong>the event</strong>).</p>
+      <p>And notice the bit that is easy to miss: the rulebook is <em>separate from the clerks</em>. The
+        clerk who can move money does not know or care who you are. Somebody at the door checked your
+        badge, and the container compares it to the rulebook before the clerk is even woken up. That
+        separation is why the security in this practical is four annotations and not four hundred lines.</p>
+    </div>
+  </div>
+
+  <h3>What is in the project folder</h3>
+  <p>Practical 3's lab is at <code>lab/practical-3-secure-ship/</code> — the war in <code>app/</code>, and
+    a run guide in <code>README.md</code>. Files marked <b>NEW</b> did not exist in Practical 2:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>File</th><th>What it is</th><th>Session</th></tr></thead>
+    <tbody>
+      <tr><td><code>entity/BankUser.java</code></td><td><b>NEW</b> — one row per person who may sign in</td><td>13</td></tr>
+      <tr><td><code>ejb/UserInitializer.java</code></td><td><b>NEW</b> — creates the two demo users at deploy time, with <em>hashed</em> passwords</td><td>13</td></tr>
+      <tr><td><code>security/ApplicationConfig.java</code></td><td><b>NEW</b> — an empty class carrying the two security annotations</td><td>13</td></tr>
+      <tr><td><code>security/LoginBean.java</code></td><td><b>NEW</b> — the bean that actually performs the login</td><td>13</td></tr>
+      <tr><td><code>webapp/login.xhtml</code></td><td><b>NEW</b> — the sign-in form</td><td>13</td></tr>
+      <tr><td><code>webapp/login-error.xhtml</code></td><td><b>NEW</b> — the page the mechanism names as its failure page</td><td>13</td></tr>
+      <tr><td><code>config/BankConfiguration.java</code></td><td><b>NEW</b> — a <code>@Produces</code> field and a <code>@Produces</code> method</td><td>11–12</td></tr>
+      <tr><td><code>qualifiers/</code> — <code>BankName</code>, <code>AuditDepth</code>, <code>Email</code>, <code>Sms</code></td><td><b>NEW</b> — four labels, two for values and two for notifiers</td><td>11–12</td></tr>
+      <tr><td><code>notify/</code> — <code>Notifier</code>, <code>EmailNotifier</code>, <code>SmsNotifier</code></td><td><b>NEW</b> — one interface, two implementations</td><td>12</td></tr>
+      <tr><td><code>interceptors/</code> — <code>Logged</code>, <code>BankAuditInterceptor</code></td><td><b>NEW</b> — a binding and the code behind it</td><td>12</td></tr>
+      <tr><td><code>events/</code> — <code>TransferCompletedEvent</code>, <code>TransferNotifier</code></td><td><b>NEW</b> — an announcement, and the listener that waits for the commit</td><td>12</td></tr>
+      <tr><td><code>ejb/AuditService.java</code></td><td><b>CHANGED</b> — writing is open, reading is manager-only</td><td>10, 13</td></tr>
+      <tr><td><code>ejb/AccountService.java</code></td><td><b>CHANGED</b> — declares roles, guards every method, announces transfers</td><td>1–3, 12–13</td></tr>
+      <tr><td><code>web/AccountsBean.java</code></td><td><b>CHANGED</b> — now asks who is looking at the page</td><td>5, 13</td></tr>
+      <tr><td><code>webapp/accounts.xhtml</code></td><td><b>CHANGED</b> — a "signed in as" header, and a manager-only section</td><td>5, 13</td></tr>
+      <tr><td><code>webapp/WEB-INF/web.xml</code></td><td><b>CHANGED</b> — which URLs need a signed-in user</td><td>5, 13</td></tr>
+      <tr><td><code>dao/RawAccountDao.java</code></td><td><b>CHANGED</b> — manager-only</td><td>8, 13</td></tr>
+      <tr><td><code>resources/META-INF/persistence.xml</code></td><td><b>CHANGED</b> — <code>BankUser</code> registered</td><td>3</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>What changed in Practical 2's files</h3>
+  <p>Sixteen new Java files, two new Facelets, and <b>ten existing files touched</b> — in twelve changes, most
+    of them one line long. It is worth seeing exactly how small they are, because "the same project plus
+    more" is only true if you can see the joins:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>File</th><th>Change</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>AccountService</code></td><td><code>@DeclareRoles({"CUSTOMER","BANK_MANAGER"})</code></td><td>Names the roles this class uses, so a typo is a role nobody holds rather than a rule that quietly never matches</td></tr>
+      <tr><td><code>AccountService</code></td><td>An annotation on <em>every</em> public method</td><td>An unannotated method on a secured bean is open to everybody. Part 4 is this sentence, in detail</td></tr>
+      <tr><td><code>AccountService</code></td><td>New <code>private moveMoney(…)</code></td><td>So <code>transfer</code> and <code>transferOrRefuse</code> cannot accidentally inherit each other's rules</td></tr>
+      <tr><td><code>AccountService</code></td><td><code>@Inject Event&lt;TransferCompletedEvent&gt;</code></td><td>The bean now announces what happened, and knows nothing about who is listening</td></tr>
+      <tr><td><code>AuditService</code></td><td><code>record()</code> is <code>@PermitAll</code>; <code>recent(int)</code> is <code>@RolesAllowed("BANK_MANAGER")</code></td><td>Writing a log line is not a privilege. Reading everybody's is</td></tr>
+      <tr><td><code>AuditService</code></td><td>The no-argument <code>recent()</code> was <b>deleted</b></td><td>It had no annotation, and an unannotated overload of a guarded method is a way in</td></tr>
+      <tr><td><code>RawAccountDao</code></td><td><code>@RolesAllowed("BANK_MANAGER")</code> on both public methods</td><td>Raw SQL over HTTP is a capability, not a convenience</td></tr>
+      <tr><td><code>AccountsBean</code></td><td><code>@Inject SecurityContext</code>, <code>@AuditDepth int</code>, <code>@BankName String</code></td><td>The page now depends on who is looking, and on a value produced somewhere else</td></tr>
+      <tr><td><code>AccountServlet</code></td><td>An <code>isCallerInRole</code> check on <code>?action=raw</code></td><td>So a refusal arrives as a sentence and a 403 rather than as a raw container exception</td></tr>
+      <tr><td><code>accounts.xhtml</code></td><td>A header with the caller's name and a sign-out button; the audit section wrapped in <code>rendered="#{bank.manager}"</code></td><td>The visible payoff of a role — and a trap explained in Part 4</td></tr>
+      <tr><td><code>web.xml</code></td><td><code>&lt;security-constraint&gt;</code> and two <code>&lt;security-role&gt;</code> entries</td><td>Which <em>URLs</em> need a signed-in user is not a property of any class</td></tr>
+      <tr><td><code>persistence.xml</code></td><td>One new <code>&lt;class&gt;</code> line</td><td>JPA only creates entities it has been told about — without this, <code>bank_users</code> never exists</td></tr>
+      <tr><td><code>beans.xml</code></td><td>Comment only — it is still empty</td><td>An interceptor is switched on by <code>@Priority</code> now, so there is nothing to list. Part 5 explains why that is the interesting part</td></tr>
+      <tr><td><code>LedgerInitializer</code></td><td>Comment only — and the longest comment in the project</td><td>It explains why the seeder cannot call <code>AccountService.open()</code> any more. See the callout in Part 4; it is the first thing that breaks when you add security to a working application</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you build anything</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Practical 2's <code>AccountService</code> had no security annotations and worked fine. What was
+        actually wrong with it?</li>
+      <li>Two different questions are involved in letting somebody use this bank. Name both, and say which
+        one the login page answers.</li>
+      <li>The audit log is manager-only. Which file do you expect to hold that rule — the bean, the page,
+        or <code>web.xml</code>?</li>
+      <li>There is a file called <code>ApplicationConfig.java</code> in the new list. It is completely
+        empty apart from annotations. Why would anybody write a class like that?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Nothing about the <em>code</em> — it did exactly what it was told. What was missing was any
+          notion of a person. Every method was reachable by anyone who could form the request, and nothing
+          in the application could tell one caller from another.</li>
+        <li><strong>Authentication</strong> ("who are you?") and <strong>authorization</strong> ("what may
+          you do?"). The login page is authentication. It answers the first question and none of the
+          second — which is why Part 4 is a separate part.</li>
+        <li>The bean. <code>web.xml</code> answers "may an anonymous visitor reach this URL", which is a
+          different question, and it cannot know that the audit table is inside the page. The rule belongs
+          where the data is: on <code>AuditService.recent()</code>.</li>
+        <li>Because a class is the smallest thing an annotation can be attached to. The container reads
+          annotations off classes at deploy time, so "the security configuration of this application" needs
+          somewhere to live — and an empty class with the configuration on it is clearer than the same
+          annotations scattered over classes that do other jobs.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Build it and put it on a server</h2>
+
+  <p>If WildFly is still running from Practical 2, leave it. This is the same server.</p>
+
+  <div class="callout callout--warn"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b>Remove Practical 2's war first</b>
+      This project builds an artefact called <code>globalbank-web.war</code> — <em>the same name</em> as
+      Practical 2's, deploying to <em>the same URL</em>. That is deliberate: it is how you upgrade a real
+      application, and it keeps every URL and JNDI name you have already written down working.
+      <p style="margin:.5rem 0 0">But it means the two cannot coexist. If
+        <code>globalbank-web.war</code> and its <code>.deployed</code> marker are still in
+        <code>standalone/deployments/</code>, delete them before you deploy this one. Two deployments with
+        the same runtime name is a conflict, and WildFly will tell you so in a way you will not enjoy
+        reading.</p>
+    </div>
+  </div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Build the project</h4>
+      <p>Open a terminal in the project folder — the one containing <code>pom.xml</code>, which is
+        <code>lab/practical-3-secure-ship/app</code>:</p>
+      <pre><code>cd beginner-course/lab/practical-3-secure-ship/app
+mvn clean package</code></pre>
+      <p><strong>You should see</strong> <code>BUILD SUCCESS</code>, and above it:</p>
+      <pre><code>[INFO] Compiling 31 source files to target/classes
+[INFO] Building war: target/globalbank-web.war</code></pre>
+      <p>Thirty-one source files, up from fifteen in Practical 2. <strong>And the
+        <code>pom.xml</code> did not change at all</strong> — no new dependency was needed to get security
+        or CDI, because both are already in the one API jar WildFly provides. That is worth pausing on:
+        sixteen new classes and zero new libraries.</p>
+      <div class="callout callout--mistake" style="margin:.8rem 0"><span class="callout__i">⚠️</span>
+        <div class="callout__b">Note the folder. Practical 3's build file is <em>one level down</em>, inside
+          <code>app/</code>, because the <code>README.md</code> sits beside it. Running
+          <code>mvn clean package</code> in <code>lab/practical-3-secure-ship/</code> will fail with "no
+          POM in this directory".</div>
+      </div>
+    </li>
+
+    <li>
+      <h4>Deploy it</h4>
+      <pre><code>copy target\globalbank-web.war  c:\wildfly\standalone\deployments\      REM  Windows
+cp target/globalbank-web.war    ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> <code>Deployed "globalbank-web.war"</code> — and this time, look
+        for four new things in the server log:</p>
+      <ul>
+        <li>JPA creating <strong>three</strong> tables — <code>accounts</code>, <code>audit_log</code> and
+          <code>bank_users</code>;</li>
+        <li>a <code>[Users]</code> line reporting two seeded users;</li>
+        <li>a line naming the <strong>login page</strong> the authentication mechanism will send people
+          to;</li>
+        <li>a line naming the <strong>interceptor</strong> that was switched on — without a
+          <code>beans.xml</code> entry.</li>
+      </ul>
+      <p>If the window has scrolled too far, use the management CLI in a third terminal:</p>
+      <pre><code>jboss-cli.bat --connect                    REM  Windows
+./jboss-cli.sh --connect                   #    macOS / Linux
+[standalone@localhost:9990 /] deployment-info --name=globalbank-web.war</code></pre>
+      <p><strong>You should see</strong> the deployment listed with runtime status <code>OK</code>. When a
+        deployment fails it shows <code>FAILED</code> here, and the reason is in the
+        <code>.failed</code> marker file next to the war.</p>
+    </li>
+
+    <li>
+      <h4>See the whole deployment, replayed</h4>
+      <p>Before you touch your real server, the terminal below is a safe one. Type <code>help</code> to see
+        what it knows.</p>
+
+      <div class="terminal" data-terminal="practicum3"></div>
+
+      <p>Try <code>deploy target/globalbank-web.war</code> — the output is worth reading in full, because
+        it is a summary of everything in this practical: three tables, two users, two annotation-driven
+        definitions, one interceptor, and a list of which method needs which role.</p>
+
+      <p>Then press <strong>Run</strong> below to replay the same thing as a server log, in order.</p>
+
+      <div class="bench" data-run="canned">
+        <div class="bench__head">
+          <span class="dot"></span>
+          <span class="kind">interactive simulation</span>
+          <span class="mode">GlobalBank Secure Deployment Replay</span>
+        </div>
+        <pre class="bench__code"><code>copy target\globalbank-web.war  c:\wildfly\standalone\deployments\
+WildFly creates accounts, audit_log AND bank_users, seeds two users with hashed
+passwords, wires a login mechanism to /login.xhtml, and enables an interceptor
+through @Priority — with no &lt;interceptors&gt; entry in beans.xml</code></pre>
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Replay the deployment</button>
+          <span class="bench__hint">Simulated WildFly server log — offline, no server needed.</span>
+        </div>
+        <script type="text/plain" class="bench__canned">
+[10:44:01,004 INFO] [org.jboss.as.server] WFLYSRV0010: Deployed "globalbank-web.war" (runtime-name: "globalbank-web.war")
+[10:44:01,012 INFO] [org.hibernate] HHH000204: Processing PersistenceUnitInfo [name: globalbankPU]
+[10:44:01,020 INFO] [org.hibernate] create table accounts (id integer not null, holder varchar(60) not null, balance decimal(12,2) not null, version integer not null, primary key (id))
+[10:44:01,026 INFO] [org.hibernate] create table audit_log (id bigint generated by default as identity, action varchar(40) not null, outcome varchar(20) not null, detail varchar(255) not null, happened_at timestamp(6) not null, primary key (id))
+[10:44:01,031 INFO] [org.hibernate] <span class='g'>create table bank_users (username varchar(80) not null, password_hash varchar(160) not null, group_name varchar(40) not null, primary key (username))</span>  <span class='y'>&lt;-- NEW: the identity store reads this</span>
+[10:44:01,048 INFO] [org.jboss.as.messaging] AMQ122005: Deployed queue "TransferQueue"
+[10:44:01,062 INFO] [org.jboss.weld] CDI container started (bean-discovery-mode="annotated")
+[10:44:01,063 INFO] [org.jboss.weld] <span class='y'>BankConfiguration.bankName      -&gt; @Produces @BankName String   (@Dependent: String cannot be proxied)</span>
+[10:44:01,064 INFO] [org.jboss.weld] <span class='y'>BankConfiguration.auditDepth    -&gt; @Produces @AuditDepth int     (a method, because it is computed)</span>
+[10:44:01,065 INFO] [org.jboss.weld] <span class='y'>Notifier: 2 beans -&gt; EmailNotifier @Email, SmsNotifier @Sms</span>
+[10:44:01,066 INFO] [org.jboss.weld] <span class='g'>BankAuditInterceptor            -&gt; @Logged, enabled by @Priority(2000)  APPLICATION</span>
+[10:44:01,067 INFO] [org.jboss.weld] <span class='y'># No &lt;interceptors&gt; entry in beans.xml. @Priority is the whole switch.</span>
+[10:44:01,070 INFO] [org.jboss.as.ejb3] Starting EJB module globalbank-web.war
+[10:44:01,074 INFO] [org.jboss.as.ejb3] <span class='g'>AccountService</span>   @DeclareRoles({"CUSTOMER","BANK_MANAGER"})
+[10:44:01,075 INFO] [org.jboss.as.ejb3]   transfer()            @RolesAllowed({"CUSTOMER","BANK_MANAGER"})
+[10:44:01,076 INFO] [org.jboss.as.ejb3]   open() / deposit() / withdraw()   @RolesAllowed("CUSTOMER")
+[10:44:01,077 INFO] [org.jboss.as.ejb3]   transferOrRefuse()    <span class='y'>@PermitAll   &lt;-- the MDB has no caller</span>
+[10:44:01,078 INFO] [org.jboss.as.ejb3] <span class='g'>AuditService</span>     record() @PermitAll, recent(int) @RolesAllowed("BANK_MANAGER")
+[10:44:01,079 INFO] [org.jboss.as.ejb3] <span class='g'>RawAccountDao</span>    allAccountsByHand() @RolesAllowed("BANK_MANAGER")
+[10:44:01,080 INFO] [org.jboss.as.ejb3] <span class='g'>TransferMDB</span>      -&gt; listening on java:/jms/queue/TransferQueue
+[10:44:01,090 INFO] [com.globalbank.ejb.LedgerInitializer] [Ledger] seeded 3 accounts: 1001, 1002, 1003
+[10:44:01,102 INFO] [com.globalbank.ejb.UserInitializer] [Users] seeded 2 users: ada@globalbank.test (CUSTOMER), manager@globalbank.test (BANK_MANAGER)
+[10:44:01,104 INFO] [com.globalbank.ejb.UserInitializer] [Users] created ada@globalbank.test in group CUSTOMER
+[10:44:01,106 INFO] [com.globalbank.ejb.UserInitializer] [Users] created manager@globalbank.test in group BANK_MANAGER
+[10:44:01,107 INFO] [com.globalbank.ejb.UserInitializer] <span class='y'># Pbkdf2PasswordHash.generate() chose a fresh random salt - the stored hash</span>
+[10:44:01,108 INFO] [com.globalbank.ejb.UserInitializer] <span class='y'># differs on every deployment, and every one of them is correct.</span>
+[10:44:01,120 INFO] [org.jboss.as.security] <span class='y'>CustomFormAuthenticationMechanism -&gt; login page /login.xhtml, error page /login-error.xhtml</span>
+[10:44:01,121 INFO] [org.jboss.as.security] <span class='y'>DatabaseIdentityStore -&gt; java:jboss/datasources/ExampleDS, hashAlgorithm Pbkdf2PasswordHash</span>
+[10:44:01,130 INFO] [org.jboss.as.web] WFLYUT0021: Registered web context: '/globalbank-web'
+[10:44:01,131 INFO] [org.jboss.as.web] <span class='y'>security-constraint: /accounts.xhtml, /account -&gt; CUSTOMER, BANK_MANAGER</span>
+[10:44:01,132 INFO] [org.jboss.as.web] <span class='y'>/login.xhtml and /login-error.xhtml are deliberately NOT protected</span>
+[10:44:01,140 INFO] [org.jboss.as.server] globalbank-web.war.deployed created  <span class='g'>&lt;-- green light</span>
+        </script>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+    </li>
+
+  </ol>
+
+  <h3>Troubleshooting: if it did not work</h3>
+  <p>Find your symptom in this table before changing anything. The first four rows are specific to this
+    practical and are the ones people actually hit.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>You are never sent to the login page</td>
+        <td>The URL is not inside a <code>&lt;security-constraint&gt;</code></td>
+        <td>A bean annotation cannot protect a URL. Add <code>/accounts.xhtml</code> to
+          <code>web.xml</code></td>
+      </tr>
+      <tr>
+        <td>The browser says <code>too many redirects</code></td>
+        <td>The login page is itself protected</td>
+        <td><code>web.xml</code> must protect <code>/accounts.xhtml</code> and <code>/account</code> and
+          must <strong>not</strong> protect <code>/login.xhtml</code></td>
+      </tr>
+      <tr>
+        <td>The login page renders with no styling</td>
+        <td>Faces' own resources are being protected</td>
+        <td>Do not use <code>/*</code> as the url-pattern in the constraint</td>
+      </tr>
+      <tr>
+        <td>The login page redisplays, silently, forever, and nothing is logged</td>
+        <td><b>The classic failure.</b> <code>LoginBean.login()</code> is not being called, so nothing ever
+          asks to authenticate</td>
+        <td>Check the button is <code>action="#{login.login}"</code>. Then read the warning in
+          <code>ApplicationConfig</code> — a <em>custom</em> form mechanism does nothing on its own</td>
+      </tr>
+      <tr>
+        <td><code>That user name and password combination was not recognised.</code></td>
+        <td>Wrong password, or no such user</td>
+        <td>Both give one message on purpose. Check the <code>[Users] created …</code> lines appeared at
+          deploy time</td>
+      </tr>
+      <tr>
+        <td><code>PropertyNotFoundException: login</code></td>
+        <td>The login bean is not reachable by name</td>
+        <td><code>LoginBean</code> needs both <code>@Named("login")</code> and a scope</td>
+      </tr>
+      <tr>
+        <td><code>Table "BANK_USERS" not found</code> when you submit the login</td>
+        <td><code>BankUser</code> is not in <code>persistence.xml</code></td>
+        <td>JPA only creates entities it has been told about. Add the
+          <code>&lt;class&gt;</code> line</td>
+      </tr>
+      <tr>
+        <td>A customer sees a page error instead of a hidden audit log</td>
+        <td><code>getAuditLines()</code> was called for a customer</td>
+        <td>Guard the bean method <em>and</em> the <code>rendered=</code> — JSF still evaluates
+          expressions inside <code>rendered="false"</code></td>
+      </tr>
+      <tr>
+        <td><code>Ambiguous dependencies for type Notifier</code></td>
+        <td>A qualifier was removed, so two beans both fit one injection point</td>
+        <td>Both <code>@Email</code> and <code>@Sms</code> are needed on the two fields in
+          <code>TransferNotifier</code></td>
+      </tr>
+      <tr>
+        <td>Deployment fails and mentions <code>String</code> and a producer</td>
+        <td>A normal scope was put on a producer of a type that cannot be proxied</td>
+        <td>Remove the scope. <code>String</code> is <code>final</code>; Part 5 explains why that matters</td>
+      </tr>
+      <tr>
+        <td>Nothing survives a restart — <em>or</em> a redeploy</td>
+        <td>Two things at once: <code>ExampleDS</code> is an in-memory database, and <code>persistence.xml</code> says <code>drop-and-create</code></td>
+        <td>Both make this certain rather than likely. A restart empties the in-memory database; a redeploy drops the tables and rebuilds them even on a running server. Your accounts and users come back from the two <code>@Startup</code> seeders; your audit log does not, because nothing re-seeds that. Start again from Part 3</td>
+      </tr>
+      <tr>
+        <td>Red <code>WFLYSRV0021</code> or <code>Failed to deploy</code></td>
+        <td>The deployment was rejected</td>
+        <td>Open the <code>.failed</code> marker file and read the <em>deepest</em>
+          <code>Caused by:</code> — the last one. That is the root cause</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you open the page</b>
+    <ol>
+      <li>Predict: what will happen when you open <code>http://localhost:8080/globalbank-web/</code>?</li>
+      <li>Three tables are created. Which one did Practical 2 not have, and what is in it?</li>
+      <li>You are about to be redirected to <code>/login.xhtml</code>. Which file caused that redirect —
+        the page, the bean, or <code>web.xml</code>?</li>
+      <li>Two users are seeded with different role names. Where does the container read the role name
+        from when you sign in?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>You will be sent to the login page rather than the bank.
+          <code>/accounts.xhtml</code> is inside a <code>&lt;security-constraint&gt;</code> naming both
+          roles, and you have no identity yet, so the container refuses and hands you to the authentication
+          mechanism — which is configured to send you to <code>/login.xhtml</code>.</li>
+        <li><code>bank_users</code>. It holds a user name, a <em>hash</em> of a password, and the role name
+          — one row per person, three columns.</li>
+        <li><code>web.xml</code>. A bean annotation can say who may <em>call a method</em>, but it cannot
+          say that a URL needs a signed-in visitor, because at that point nothing has called anything yet.</li>
+        <li>From the <code>groupsQuery</code> in <code>@DatabaseIdentityStoreDefinition</code>, which reads
+          <code>group_name</code> from the row. Whatever string comes back is compared, as exact text,
+          against the strings in <code>@RolesAllowed</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 3 · A login that actually logs you in</h2>
+
+  <p>This is the part of the practical where the course earns its keep, so read this next paragraph
+    carefully — it is the single most commonly broken thing in all of Jakarta Security.</p>
+
+  <div class="callout callout--warn"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b>The half of the configuration that is easy to leave out</b>
+      <p>Session 13 shows you <code>@CustomFormAuthenticationMechanismDefinition</code> and
+        <code>@DatabaseIdentityStoreDefinition</code>. Those two annotations describe a complete vault: a
+        door, and a list of who is allowed through it.</p>
+      <p><strong>And with that pair alone, nobody can ever log in.</strong> Not "it is insecure" — it does
+        not work. No exception, no warning, no log line. The form submits, the page redisplays, and the
+        user is exactly as anonymous as before.</p>
+      <p>The reason is a difference you cannot see from the annotation. The <em>standard</em> form
+        mechanism, <code>@FormAuthenticationMechanismDefinition</code>, makes the container perform the
+        login for you: it publishes a <code>j_security_check</code> endpoint and does the work. The
+        <em>custom</em> one hands that job back to you. Nothing happens unless your own code asks.</p>
+      <p>So this practical ships <code>LoginBean</code> — the code that asks. It contains the one line
+        that makes the whole thing function, and the file the course's Session 13 page does not show you.</p>
+    </div>
+  </div>
+
+  <p>Open <code>lab/practical-3-secure-ship/app/src/main/java/com/globalbank/security/LoginBean.java</code>
+    and find this. Everything else in the class exists to produce those three arguments:</p>
+
+  <pre><code>Credential credential =
+        new UsernamePasswordCredential(username, new Password(password));
+
+AuthenticationParameters params =
+        AuthenticationParameters.withParams().credential(credential);
+
+AuthenticationStatus status =
+        securityContext.authenticate(request, response, params);</code></pre>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Read the third argument, and then read it again</b>
+      <p>It is <strong>not</strong> the credential. <code>authenticate()</code> takes an
+        <code>AuthenticationParameters</code> — a small wrapper whose job is to carry the credential
+        <em>plus</em> two switches: "is this a fresh login or a re-authentication?" and "should this be
+        remembered?". Writing it from memory as
+        <code>authenticate(request, response, credential)</code> does not compile, and the error message
+        ("<code>Credential cannot be converted to AuthenticationParameters</code>") is not obvious about
+        what to do instead.</p>
+      <p>This is a fine moment to learn how to settle an API question rather than guess at it. The Jakarta
+        EE API jar is already on your disk in your Maven repository, and the JDK ships a tool that prints
+        signatures:</p>
+      <pre style="margin:.5rem 0"><code>javap -cp jakarta.jakartaee-api-10.0.0.jar jakarta.security.enterprise.SecurityContext</code></pre>
+      <p>One second, and you have the real signature in front of you. Reading the API is faster than being
+        wrong — and it is a habit worth having for the rest of your career.</p>
+    </div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An <strong>authentication status</strong> is the container's answer, and it is one of four words,
+      which is why the code is a <code>switch</code> and not an <code>if</code>:</p>
+    <ul>
+      <li><code>SUCCESS</code> — they are who they say they are. Send them into the bank.</li>
+      <li><code>SEND_CONTINUE</code> — the mechanism is mid-redirect and has already written the response.
+        Return nothing; anything else would try to navigate a response that is already gone.</li>
+      <li><code>SEND_FAILURE</code> — wrong password, or no such person. One message for both, on purpose:
+        telling an attacker "no such user" is telling them which user names are real.</li>
+      <li><code>NOT_DONE</code> — the mechanism declined to decide. That is a <em>developer</em> problem, so
+        it is logged as one rather than blamed on the user.</li>
+    </ul>
+  </div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Open the front door and be turned away</h4>
+      <pre><code>http://localhost:8080/globalbank-web/</code></pre>
+      <p><strong>You should see</strong> the sign-in page, not the bank. The address bar says
+        <code>/login.xhtml</code>, and there is a box explaining the two demo accounts.</p>
+      <p>Press <b>Sign in</b> with both boxes empty first. <strong>You should see</strong> "Enter your user
+        name and password." — that sentence comes from the first <code>if</code> in
+        <code>LoginBean.login()</code>, and it exists so that a blank form gets a sentence rather than a
+        generic failure.</p>
+    </li>
+
+    <li>
+      <h4>Sign in as the customer</h4>
+      <pre><code>ada@globalbank.test  /  secret</code></pre>
+      <p><strong>You should see</strong> the bank. Two things are different from Practical 2:</p>
+      <ul>
+        <li>the header now reads <b>Signed in as ada@globalbank.test · CUSTOMER</b>, with a
+          <b>Sign out</b> button beside it;</li>
+        <li><b>there is no audit log</b> — only a short note saying it belongs to
+          <code>BANK_MANAGER</code>.</li>
+      </ul>
+      <p>That absence is not styling, and Part 4 is about what it really is. For now, note the shape of
+        it: <em>the same page, rendered differently, because of one word in a database column.</em></p>
+    </li>
+
+    <li>
+      <h4>Try a wrong password</h4>
+      <p>Sign out, then sign in as <code>ada@globalbank.test</code> with the password
+        <code>wrong</code>, and then as <code>nobody@globalbank.test</code> with
+        <code>secret</code>.</p>
+      <p><strong>You should see the same message both times</strong>: <i>That user name and password
+        combination was not recognised.</i></p>
+      <p>That is deliberate, and it is worth being able to defend. Two different messages would be more
+        helpful to an honest user who mistyped their user name — and would also be a free tool for
+        anyone enumerating your user list. Real systems accept the small inconvenience.</p>
+    </li>
+
+    <li>
+      <h4>Sign in as the manager</h4>
+      <p>Sign out, then sign in as:</p>
+      <pre><code>manager@globalbank.test  /  manager</code></pre>
+      <p><strong>You should see</strong> the header read <b>· BANK_MANAGER</b> — and the audit section
+        appear where Ada's page had a note saying it was not hers.</p>
+      <div class="callout callout--mistake" style="margin:.8rem 0"><span class="callout__i">⚠️</span>
+        <div class="callout__b"><b>The table will be empty, and that is not a bug</b>
+          <p><code>persistence.xml</code> uses
+            <code>schema-generation.database.action = drop-and-create</code>, so <b>every deployment drops
+            the tables and builds them again.</b> Anything Practical 2 wrote to the audit log was destroyed
+            the moment you deployed this war — as were its accounts, which is why
+            <code>LedgerInitializer</code> re-seeds the same three every time.</p>
+          <p>That is deliberate: it means the numbers in this lab are the same on every machine and after
+            every redeploy. The cost is that "restart the server and look at yesterday's activity" does not
+            work here, and would need a real database rather than <code>ExampleDS</code>.</p>
+          <p>So the section should be showing <em>no rows at all</em> right now. Make one transfer as the
+            manager — <code>25</code> from <code>1001</code> to <code>1002</code> — and reload.
+            <strong>You should then see exactly one <code>TRANSFER · OK</code> row.</strong> That row comes
+            from <code>AccountsBean</code>, which records the attempt after the transfer returns.</p>
+        </div>
+      </div>
+      <p>Same war, same beans, same page. One different value in the <code>group_name</code> column of
+        <code>bank_users</code>. That is role-based security, and Part 4 shows you the three files that
+        enforce it.</p>
+    </li>
+
+    <li>
+      <h4>Look at what the login page is not allowed to know</h4>
+      <p>Open <code>webapp/login-error.xhtml</code>. Ignore the comment at the top — that is for you, not
+        for the visitor — and look at what actually renders: a heading, one sentence, and a link back.</p>
+      <p><strong>You should notice</strong> that it does not say "wrong password", or "user not found", or
+        anything that would distinguish the two. The container can send a visitor here;
+        <code>@LoginToContinue</code> names it as the mechanism's failure page. The reason it stays empty
+        of information is the same reason <code>LoginBean</code> merges its two failure messages: a page
+        that explains <em>why</em> a login failed is a page that tells an attacker something.</p>
+    </li>
+
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 3 · the login</b>
+    <ol>
+      <li>Which two annotations describe the vault, and which class is the handle?</li>
+      <li>The login page redisplays and nothing happens. Nothing is in the log. What is the first thing you
+        check?</li>
+      <li>What is the difference between <code>@FormAuthenticationMechanismDefinition</code> and
+        <code>@CustomFormAuthenticationMechanismDefinition</code>?</li>
+      <li>Why does <code>LoginBean</code> use <code>@RequestScoped</code> when
+        <code>AccountsBean</code> uses <code>@ViewScoped</code>?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>@CustomFormAuthenticationMechanismDefinition</code> (how a person proves who they are)
+          and <code>@DatabaseIdentityStoreDefinition</code> (given a name and password, who are they and
+          what may they do). Both live on <code>ApplicationConfig</code>. The handle is
+          <code>LoginBean</code> — the code that calls <code>authenticate(…)</code>.</li>
+        <li>Whether <code>LoginBean.login()</code> is being called at all. With a custom mechanism, silence
+          is the signature of "nobody asked". Check the button's <code>action</code> attribute.</li>
+        <li>The standard one has the container do the login for you, through a built-in
+          <code>j_security_check</code> endpoint and with no Java of yours involved. The custom one gives
+          you the page and the Java — and therefore requires you to call
+          <code>SecurityContext.authenticate(…)</code> yourself. Less work versus more control.</li>
+        <li>Because <code>LoginBean</code> holds a password in a field. A request-scoped bean is created
+          for the submit and gone immediately; a view-scoped bean would hold that password in memory for as
+          long as the page stayed open. <strong>Lifetime is a security decision, not only a convenience
+          one.</strong></li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 4 · Who is allowed to do what</h2>
+
+  <p>You are signed in. Now the second question — and the first thing to understand about it is that
+    answers live in <em>three different places</em>, because there are three different things being
+    asked.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>The question</th><th>Where the answer goes</th><th>Why there</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>May an anonymous visitor reach this <b>URL</b>?</td>
+        <td><code>web.xml</code>'s <code>&lt;security-constraint&gt;</code></td>
+        <td>It is a property of the web application, not of any class — and it has to be answered before
+          any of your code runs</td>
+      </tr>
+      <tr>
+        <td>May this caller invoke this <b>bean method</b>?</td>
+        <td><code>@RolesAllowed</code> on the method</td>
+        <td>The container checks it at the EJB boundary, before the method body executes, whatever route
+          the call came in by</td>
+      </tr>
+      <tr>
+        <td>Should this <b>page section</b> be shown?</td>
+        <td><code>rendered="#{…}"</code> in the Facelet</td>
+        <td>Presentation. It decides what is drawn, and it is <em>not</em> a security check</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>The rule that catches everybody: there is no deny-by-default</b>
+      <p>On a bean that has security annotations <em>anywhere</em> — on the class or on any method — a
+        method with <strong>no</strong> <code>@RolesAllowed</code>, <code>@PermitAll</code> or
+        <code>@DenyAll</code> is <strong>unchecked</strong>. Reachable by anybody, including a caller with
+        no identity at all.</p>
+      <p>It is not "denied because nobody said allow". It is "allowed because nobody said deny". This
+        surprises almost everyone, and it means that the dangerous operation is the one you
+        <em>forgot</em>, not the one you wrote.</p>
+      <p>That is why every public method in <code>AccountService</code>, <code>AuditService</code> and
+        <code>RawAccountDao</code> carries an annotation — <em>including the ones that are obviously meant
+        to be open</em>. <code>@PermitAll</code> on <code>transferOrRefuse</code> behaves identically to no
+        annotation at all, and means something completely different to the next person reading the file.</p>
+    </div>
+  </div>
+
+  <p>Here is the whole security surface of the application, in one table. Read the third column — every
+    line of it is a decision somebody made on purpose:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Method</th><th>Annotation</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><code>AccountService.find(int)</code></td><td><code>@RolesAllowed({"CUSTOMER","BANK_MANAGER"})</code></td><td>Both roles bank, so both may look at an account</td></tr>
+      <tr><td><code>AccountService.findAll()</code></td><td><code>@RolesAllowed({"CUSTOMER","BANK_MANAGER"})</code></td><td>Same</td></tr>
+      <tr><td><code>AccountService.transfer(…)</code></td><td><code>@RolesAllowed({"CUSTOMER","BANK_MANAGER"})</code></td><td>The operation the bank exists for</td></tr>
+      <tr><td><code>AccountService.open(…)</code>, <code>deposit(…)</code>, <code>withdraw(…)</code></td><td><code>@RolesAllowed("CUSTOMER")</code></td><td>Day-to-day banking. A manager role is an <em>observer</em> role here, so it is deliberately excluded — and Part 4's last step lets you watch that refusal happen</td></tr>
+      <tr><td><code>AccountService.transferOrRefuse(…)</code></td><td><code>@PermitAll</code></td><td>Called by the message-driven bean, which has <em>no caller at all</em>. See the warning below</td></tr>
+      <tr><td><code>AuditService.record(…)</code></td><td><code>@PermitAll</code></td><td>Writing a log line is not a privilege — and it is called from inside other people's transactions</td></tr>
+      <tr><td><code>AuditService.recent(int)</code></td><td><code>@RolesAllowed("BANK_MANAGER")</code></td><td>Reading everybody's activity <em>is</em> a privilege. This is the line that hides the audit log from Ada</td></tr>
+      <tr><td><code>RawAccountDao.allAccountsByHand()</code></td><td><code>@RolesAllowed("BANK_MANAGER")</code></td><td>Raw SQL over HTTP is a capability, not a convenience</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Why <code>@PermitAll</code> on <code>transferOrRefuse</code> is safe here —
+      and what specifically makes it safe</b>
+      <p>Read that row again and it should worry you. There is a method that moves money, on a bank, open
+        to anyone.</p>
+      <p>Three things make it acceptable, and all three have to be true:</p>
+      <ol style="margin:.5rem 0 0;padding-left:1.2rem">
+        <li>It is <strong>not on <code>AccountServiceRemote</code></strong>. A remote caller cannot reach
+          it — the interface is the list of what the outside world may ask for, and this is not on it.</li>
+        <li>It is <strong>not on the web page</strong> and not on the servlet. Nothing a browser can do
+          reaches it.</li>
+        <li>Its only caller is <code>TransferMDB</code>, which runs on a container thread with no user, no
+          session and no request — so there is no identity for a role check to test against.</li>
+      </ol>
+      <p>And the reason the code was <em>restructured</em> for this — a new
+        <code>private moveMoney(…)</code> that both entry points call — is so that the two doors cannot
+        accidentally inherit each other's rules. In Practical 2 there was only one door and the question
+        never came up. Here it does, and "the check is on the other method" is exactly the kind of thing
+        that stops being true six months later.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The first thing that breaks when you add security to a working application</b>
+      <p>Practical 2's <code>LedgerInitializer</code> creates the three demo accounts with
+        <code>em.persist(…)</code>, straight to the database. The moment you see that
+        <code>AccountService.open()</code> carries <code>@RolesAllowed("CUSTOMER")</code>, the obvious
+        tidy-up is to rewrite those three lines to call it — the service already validates the holder name
+        and the opening balance, so you would delete duplicated code rather than keep it.</p>
+      <p><strong>Do that, and the application will not start.</strong></p>
+      <p><code>LedgerInitializer</code> is <code>@Singleton @Startup</code>: it runs while the application is
+        deploying. At that moment there is no request, no session, and no signed-in user. The container
+        compares <em>nobody's</em> roles against a rule that requires <code>CUSTOMER</code>, refuses the
+        call, the <code>@Startup</code> bean fails — and the whole deployment fails with it, before a single
+        page can be served.</p>
+      <p>So the rule, and it generalises well beyond this project: <strong>setup code runs before there is
+        anybody to authorize, and must therefore never call secured code.</strong> Seeding goes to the
+        <code>EntityManager</code> directly. <code>LedgerInitializer</code> keeps its three
+        <code>persist</code> calls, and the duplicated validation stops looking like laziness the moment you
+        know why it is there.</p>
+      <p>This is worth dwelling on for a second reason. Nothing about <code>LedgerInitializer</code> changed
+        except an <em>annotation on a different class in a different package</em> — and that was enough to
+        break it. Security annotations are not local: they change what the whole application is allowed to
+        do, including code you were not thinking about when you added them.</p>
+    </div>
+  </div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Watch the audit log be two different things</h4>
+      <p>Sign in as <code>ada@globalbank.test</code> / <code>secret</code>. Look at the bottom of the page,
+        then sign out and sign in as <code>manager@globalbank.test</code> / <code>manager</code> and look
+        again.</p>
+      <p><strong>You should see</strong> the audit table appear and disappear. Now open
+        <code>AccountsBean.getAuditLines()</code> and read the first line:</p>
+      <pre><code>public List&lt;AuditEntry&gt; getAuditLines() {
+    if (!isManager()) return List.of();
+    if (auditLines == null) auditLines = audit.recent(auditDepth);
+    return auditLines;
+}</code></pre>
+      <p>Now open <code>accounts.xhtml</code> and find the audit section. It is wrapped in
+        <code>rendered="#{bank.manager}"</code>.</p>
+      <div class="callout callout--warn" style="margin:.8rem 0"><span class="callout__i">🚨</span>
+        <div class="callout__b"><b>Why both checks are needed — this is the JSF trap</b>
+          <p>It is tempting to think the <code>rendered</code> attribute is the security and the bean check
+            is belt-and-braces. It is the other way round.</p>
+          <p><strong>JSF still evaluates the expressions inside a <code>rendered="false"</code> block.</strong>
+            It has to — the value of the attribute is what tells it whether to render, and everything
+            inside is evaluated first, then thrown away. So for a customer, <code>rendered="#{bank.manager}"</code>
+            is <code>false</code>, <em>and</em> <code>#{bank.auditLines}</code> was still asked for.</p>
+          <p>Without the guard in the bean, that call would reach
+            <code>AuditService.recent()</code> — which is <code>@RolesAllowed("BANK_MANAGER")</code> — and
+            the container would throw <code>EJBAccessException</code> <em>into the middle of the page
+            render</em>. Ada would not see a missing table. She would see an error page.</p>
+          <p>So the bean and the page check the same thing in the same words, and the bean's check is the
+            one that stops it breaking. <strong>"Hidden in the page" is not a security control, and it is
+            not always even hidden.</strong></p>
+        </div>
+      </div>
+    </li>
+
+    <li>
+      <h4>Try to read the raw SQL view as a customer, and be refused</h4>
+      <p>Still signed in as Ada, open:</p>
+      <pre><code>http://localhost:8080/globalbank-web/account?action=raw</code></pre>
+      <p><strong>You should see</strong> a readable sentence and an HTTP status of <b>403</b>:</p>
+      <pre><code>REFUSED: the raw SQL view is for BANK_MANAGER only.
+You are signed in as ada@globalbank.test. The same rows are on accounts.xhtml.</code></pre>
+      <p><strong>Two refusals happened, one behind the other, and both are worth seeing.</strong></p>
+      <ol>
+        <li><code>AccountServlet</code> asked <code>security.isCallerInRole("BANK_MANAGER")</code> and
+          answered with a sentence.</li>
+        <li>Even if that check had not been there, <code>RawAccountDao.allAccountsByHand()</code> carries
+          <code>@RolesAllowed("BANK_MANAGER")</code>, and the container would have thrown
+          <code>EJBAccessException</code> before the method body ran.</li>
+      </ol>
+      <p>The first one exists purely so that a human gets an explanation instead of a stack trace.
+        <strong>The second one is the security.</strong> Never let the friendly check be the only check —
+        and notice that you can prove this to yourself: delete the servlet's check, rebuild, redeploy, and
+        you will still be refused, just less pleasantly.</p>
+      <p>One more thing to notice, because it is the kind of gap that only shows up when you go looking:
+        <strong>neither refusal writes anything to the audit log.</strong> The servlet returns 403 and stops;
+        the container's <code>EJBAccessException</code> never reaches your code at all. Sign in as the
+        manager afterwards and there will be no trace of the attempt in the table — only in the server log.
+        An audit trail built from business methods cannot see refusals that happen before the business
+        method runs.</p>
+      <p>Then sign in as the manager and open the same URL. <strong>You should see</strong> the accounts as
+        plain text, read by hand-written SQL.</p>
+    </li>
+
+    <li>
+      <h4>Prove the one <code>@PermitAll</code> is safe, instead of taking it on trust</h4>
+      <p>There is a button on the page you have not been told about yet: the transfer form has
+        <b>Transfer now</b> and, beside it, <b>Queue it instead</b>. Sign in as Ada and press the second
+        one — <code>25</code> from <code>1001</code> to <code>1002</code>.</p>
+      <p><strong>You should see</strong> the balances change just as before, so it is tempting to think
+        nothing interesting happened. Read the console:</p>
+      <pre><code>GlobalBank: -&gt; transferOrRefuse
+GlobalBank: &lt;- transferOrRefuse (12 ms)
+[email] GlobalBank: 25 moved from account 1001 (Ada Lovelace) to account 1002 (Grace Hopper) (simulated — no mail server is configured)
+[sms]   GlobalBank: 25 moved from account 1001 (Ada Lovelace) to account 1002 (Grace Hopper) (simulated — no gateway is configured)</code></pre>
+      <p>The first line names a <b>different method</b>. That button did not call <code>AccountService</code>
+        from the page. It handed a message to <code>TransferQueueSender</code>, which put it on
+        <code>java:/jms/queue/TransferQueue</code>; the message-driven bean <code>TransferMDB</code> picked it
+        up on its own thread and called <code>transferOrRefuse</code>.</p>
+      <p>And <code>transferOrRefuse</code> is the <code>@PermitAll</code> method from the table above — open
+        to every caller, on a bank. <strong>This is how you check that claim rather than believing it:</strong>
+        a message-driven bean runs with no request, no session and no user, so there is no identity for a role
+        check to test against, and the only way in is the queue. If that method were reachable from a URL,
+        <code>@PermitAll</code> would be a hole; because it is not on <code>AccountServiceRemote</code> and not
+        on any page, it is the correct annotation.</p>
+      <p>Two details in the output are worth catching:</p>
+      <ul>
+        <li><strong>The email and SMS still appear, and still come after <code>&lt;- transferOrRefuse</code>.</strong>
+          The observer does not know or care which door the transfer came in by. <code>AFTER_SUCCESS</code>
+          waits for whatever transaction was in progress — here the message-driven bean's, not the page's.
+          Same annotation, same guarantee, a different transaction.</li>
+        <li><strong>The audit row says <code>QUEUED-TRANSFER</code>, not <code>TRANSFER</code>.</strong> Sign in
+          as the manager and you will see both kinds side by side. That is not the service recording itself:
+          <code>AccountsBean</code> writes <code>TRANSFER</code> for the direct path and
+          <code>TransferMDB</code> writes <code>QUEUED-TRANSFER</code> for this one. The audit trail is written
+          by the two callers, not by the bank — a design worth noticing, and worth improving in a real system.</li>
+      </ul>
+    </li>
+
+    <li>
+      <h4>Let the container refuse the manager, and notice what does not happen</h4>
+      <p>This is the step that shows you where the check lives. Open
+        <code>ejb/AccountService.java</code> and change one annotation so that <code>transfer</code> is
+        customer-only:</p>
+      <pre><code>@RolesAllowed("CUSTOMER")            // was: {"CUSTOMER", "BANK_MANAGER"}
+public String transfer(int fromId, int toId, BigDecimal amount) …</code></pre>
+      <p>Rebuild, redeploy, sign in as the <b>manager</b>, and try to make a transfer.</p>
+      <p><strong>You should see</strong> a refusal — and now look at the console for the two things that
+        did <em>not</em> happen:</p>
+      <ul>
+        <li>the interceptor's <code>GlobalBank: -&gt; transfer</code> line <strong>never appears</strong>,
+          and neither does <code>&lt;- transfer</code>;</li>
+        <li>no audit line was written for the attempt.</li>
+      </ul>
+      <p>Not a single line of your code ran. The container compared the manager's roles to the rulebook,
+        found no match, and refused — before the interceptor, before the transaction, before the method
+        body. <strong>That is what "the check is at the boundary" means</strong>, and it is why this kind
+        of security is worth having: it is not a check you can forget to call, or route around, or
+        reorder.</p>
+      <p><strong>Put the annotation back</strong> before you continue.</p>
+    </li>
+
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 4 · authorization</b>
+    <ol>
+      <li>A bean has <code>@RolesAllowed("BANK_MANAGER")</code> on <code>recent()</code>. A second method
+        on the same bean has no annotation at all. Who may call the second one?</li>
+      <li>Ada is refused the audit log. Was that <code>web.xml</code>, the Facelet, or
+        <code>@RolesAllowed</code>?</li>
+      <li>Why does <code>getAuditLines()</code> check <code>isManager()</code> when the page already has
+        <code>rendered="#{bank.manager}"</code>?</li>
+      <li>Which of the three places in the table at the top of this part is <em>not</em> a security
+        control, and what is it for?</li>
+      <li>Why did a refused transfer leave no audit line?</li>
+      <li><code>LedgerInitializer</code> seeds the demo accounts with <code>em.persist(…)</code> rather than
+        calling <code>AccountService.open(…)</code>. Why can it not call the service now?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><b>Everybody</b> — including callers with no identity at all. On a bean that has security
+          annotations anywhere, an unannotated method is unchecked. There is no deny-by-default.</li>
+        <li><code>@RolesAllowed("BANK_MANAGER")</code> on <code>AuditService.recent()</code>. The page
+          hides the table and the bean avoids calling the method, but the rule that would stop it is on the
+          service — where the data is.</li>
+        <li>Because JSF evaluates expressions inside <code>rendered="false"</code> blocks, so
+          <code>#{bank.auditLines}</code> is asked for even for a customer. Without the guard, that call
+          would reach a manager-only method and throw into the middle of the render, turning "no audit
+          table" into an error page.</li>
+        <li>The <code>rendered=</code> attribute. It decides what the page <em>draws</em>, which is a
+          presentation decision. It is not a security control, and in this case it is not even the thing
+          that prevents the failure.</li>
+        <li>Because the refusal happened at the container boundary, before the method body ran. Nothing
+          inside <code>transfer</code> executed — so nothing had a chance to write a log line. This is a
+          real gap worth noticing: an attempt to call a method you are not allowed to call leaves evidence
+          only in the server log, not in the application's own audit trail.</li>
+        <li>Because <code>open()</code> now carries <code>@RolesAllowed("CUSTOMER")</code>, and
+          <code>LedgerInitializer</code> runs at deploy time — <code>@Singleton @Startup</code> — when there
+          is no request, no session and no signed-in user. There is no identity for the check to pass, so the
+          container refuses, the startup bean fails, and the deployment fails with it. Setup code must never
+          call secured code. The three <code>persist</code> calls stay.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 5
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 5 · CDI: one value, two notifiers, one interceptor</h2>
+
+  <p>Sessions 11 and 12 describe CDI's features one at a time. This part shows them doing a job in a real
+    application, which is a different experience — because the interesting question is never "what does
+    <code>@Produces</code> do", it is "why would I want one".</p>
+
+  <h3>One value, in one place</h3>
+
+  <p>Search the project's <em>Java</em> for the string <code>"GlobalBank"</code>. It appears in exactly one
+    place — <code>BankConfiguration</code> — and yet the bank's name is printed by the page header, by the
+    audit interceptor and by both notifiers:</p>
+
+  <pre><code>@Produces @BankName
+String bankName = "GlobalBank";</code></pre>
+
+  <p>Three different classes write <code>bankName</code> in their code and none of them knows where the
+    value comes from. They do not look it up, read a properties file, or hold a copy. They each declare
+    <em>what kind of thing they need</em>, and CDI hands it to them.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The exception, and it is worth noticing rather than tidying away</b>
+      <p>Open <code>login.xhtml</code> and search it for <code>GlobalBank</code>. You will find
+        <code>&lt;h1&gt;GlobalBank&lt;/h1&gt;</code> — <em>spelled out in the markup</em>, not injected.
+        <code>login-error.xhtml</code> does the same in its heading and its title.</p>
+      <p>So the claim "one place" is true of the Java and false of the project as a whole, and this
+        practical does not pretend otherwise. Change the producer to <code>"Ada's Bank"</code> and the bank
+        page, the interceptor and the notifiers all follow — while the sign-in page and the failure page
+        still say <code>GlobalBank</code>.</p>
+      <p>Why leave it? Because the sign-in page is rendered <em>before anybody is signed in</em>, and it is
+        deliberately kept standing on its own: it needs no backing bean beyond the one holding the two
+        fields, and it must keep working even if something else in the application is broken. Depending on
+        it for a display string is a coupling that buys very little.</p>
+      <p>The general lesson is the one worth keeping: <strong>a producer removes duplication in code, not
+        duplication in markup.</strong> A hard-coded string in a Facelet is a copy, and copies drift —
+        which is exactly why the step-2 exercise below asks you to change the value and then go and
+        <em>look</em> at every page, rather than trusting that they agreed.</p>
+    </div>
+  </div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>producer</strong> is a method or field whose job is to make something injectable. The
+      container reads <code>@Produces</code> and treats whatever comes out as a thing that can be injected
+      — including types it could never have built itself, like <code>String</code> or <code>int</code>.
+      CDI cannot construct a <code>String</code>; it has no idea which string you want. So you tell it.</p>
+  </div>
+
+  <p>The project has one of each shape, on purpose:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th><code>@Produces</code> field</th><th><code>@Produces</code> method</th></tr></thead>
+    <tbody>
+      <tr><td>Here</td><td><code>bankName</code></td><td><code>auditDepth()</code></td></tr>
+      <tr><td>Use it when</td><td>the value is simply <em>known</em></td><td>the value has to be <em>worked out</em></td></tr>
+      <tr><td>Example</td><td><code>= "GlobalBank"</code></td><td>read a system property, validate it, fall back to a default</td></tr>
+      <tr><td>Bonus</td><td>—</td><td>A method can take <em>parameters</em>, so a producer can depend on other injected things</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--warn"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b>Neither producer has a scope annotation — and that is not an oversight</b>
+      <p>When a bean has a normal scope — <code>@ApplicationScoped</code>, <code>@RequestScoped</code>,
+        anything except <code>@Dependent</code> — CDI hands injection points a <strong>proxy</strong>: a
+        stand-in object that looks up the real instance on each call. That is how a request-scoped bean can
+        be injected into an application-scoped one without the wrong instance leaking across requests.</p>
+      <p>And a proxy works by <em>subclassing</em>. <code>String</code> is <code>final</code>, and
+        <code>int</code> is a primitive. Neither can be subclassed.</p>
+      <p>So writing</p>
+      <pre style="margin:.5rem 0"><code>@ApplicationScoped @Produces @BankName String bankName = "GlobalBank";</code></pre>
+      <p>is not a warning you can ignore. It is a <strong>definition error</strong>: CDI refuses to deploy
+        the application, and the message says something about proxying that you will only understand once
+        you have read this paragraph. Try it once, on purpose — step 4 below walks you through it — and you
+        will recognise that error for the rest of your career.</p>
+    </div>
+  </div>
+
+  <h3>Two beans, one interface, no <code>if</code></h3>
+
+  <p>The bank now tells customers about transfers by email and by SMS. Both are simulations — they print
+    a line — because the point is the wiring, not the mail server.</p>
+
+  <pre><code>public interface Notifier {
+    void send(String message);
+}</code></pre>
+
+  <p>There are two implementations, and both are perfectly good candidates for
+    <code>@Inject Notifier</code>. So which one gets injected?</p>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>The answer is: neither. The application will not deploy.</b>
+      <p>Two beans that both satisfy one injection point is an <strong>ambiguous dependency</strong>, and
+        CDI refuses to guess. You get a deployment error naming <em>both</em> candidates — which is
+        genuinely helpful, and is how you find this class of problem quickly.</p>
+      <p>The fix is not an <code>if</code> in the calling code, and it is not a <code>@Named</code> string
+        looked up at run time. It is a <strong>qualifier</strong>: a custom annotation that acts as a
+        label, so that the injection point can say which one it means.</p>
+    </div>
+  </div>
+
+  <p>A qualifier is a tiny annotation. Here is <code>@Email</code> in full — <code>@Sms</code> is the same
+    file with two words changed:</p>
+
+  <pre><code>@Qualifier
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.FIELD, ElementType.PARAMETER})
+public @interface Email { }</code></pre>
+
+  <p>Three lines of meaning, and each one is load-bearing:</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Line</th><th>What it does</th><th>What happens if you get it wrong</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>@Qualifier</code></td>
+        <td>Tells CDI this annotation is a label, not just documentation</td>
+        <td>Without it the annotation is ignored — and you are back to an ambiguous dependency, with no
+          hint that the annotation you wrote is the reason</td>
+      </tr>
+      <tr>
+        <td><code>@Retention(RUNTIME)</code></td>
+        <td>Keeps the annotation on the class at run time, which is when CDI reads it</td>
+        <td>The default is <code>CLASS</code>, which throws it away before anything can read it. The
+          qualifier silently stops working. This is the quietest failure in the whole practical</td>
+      </tr>
+      <tr>
+        <td><code>@Target({TYPE, FIELD, PARAMETER})</code></td>
+        <td>Says where the label may legally be written: on a bean class, on a field to inject, or on a
+          method parameter</td>
+        <td>Too narrow and the compiler stops you (good). Also note there is no <code>@Inherited</code> —
+          unlike <code>@RolesAllowed</code>, a qualifier is not passed down to subclasses</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p>Now the two beans, and the injection points that pick between them:</p>
+
+  <pre><code>@Email @ApplicationScoped
+public class EmailNotifier implements Notifier { … }
+
+@Sms @ApplicationScoped
+public class SmsNotifier implements Notifier { … }
+
+// …and in TransferNotifier:
+@Inject @Email Notifier email;
+@Inject @Sms   Notifier sms;</code></pre>
+
+  <p>Read the last two lines as English: <em>"give me the <code>Notifier</code> labelled
+    <code>Email</code>"</em>. There is no lookup, no string, no cast, and no branch anywhere in the
+    application that decides between them. If somebody adds a <code>PushNotifier</code> next month, not one
+    existing file changes.</p>
+
+  <h3>An interceptor, and the file it is not in</h3>
+
+  <p>Every transfer, deposit and withdrawal now prints two lines to the server log — one before the method
+    runs and one after, with how long it took. Look for the code that does this in
+    <code>AccountService</code> and you will not find it. There is one word: <code>@Logged</code>.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An <strong>interceptor</strong> is code that wraps a method call — it runs before, decides whether to
+      let the call proceed, and can run after. In this project it is used for timing and logging; the same
+      mechanism is what a framework uses for transactions and security, which is why it is worth
+      understanding rather than treating as magic.</p>
+    <p>The <strong>binding</strong> is the annotation you put on your code (<code>@Logged</code>) that says
+      "wrap this". The <strong>interceptor</strong> is the class that does the wrapping. One binding can be
+      applied to a whole class in one word, which is why <code>@Logged</code> sits on the class and not on
+      ten methods.</p>
+  </div>
+
+  <pre><code>@Interceptor
+@Logged
+@Priority(Interceptor.Priority.APPLICATION)
+public class BankAuditInterceptor {
+
+    @AroundInvoke
+    public Object audit(InvocationContext ctx) throws Exception {
+        String method = ctx.getMethod().getName();
+        long start = System.nanoTime();
+        try {
+            return ctx.proceed();               // run the real method
+        } finally {
+            long ms = (System.nanoTime() - start) / 1_000_000;
+            LOG.info(() -&gt; bankName + ": &lt;- " + method + " (" + ms + " ms)");
+        }
+    }
+}</code></pre>
+
+  <ul>
+    <li><code>@Interceptor</code> — this class is one.</li>
+    <li><code>@Logged</code> — it is bound to that annotation. A class carrying <code>@Interceptor</code>
+      without a binding is never called.</li>
+    <li><code>@AroundInvoke</code> — this is the method that wraps. <code>ctx.proceed()</code> runs the
+      real method, and its return value is the real method's answer. <strong>Forget to call
+      <code>proceed()</code> and the method never runs</strong> — which is exactly how a security
+      interceptor refuses a call.</li>
+    <li>The <code>try/finally</code> matters: the "<-" line is printed even when the method throws, which
+      is what you want from a timer.</li>
+  </ul>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b><code>@Priority</code> versus <code>&lt;interceptors&gt;</code> in
+      <code>beans.xml</code></b>
+      <p>Most material you will find online — and a great deal of it is still current — insists that an
+        interceptor must be listed in <code>beans.xml</code>:</p>
+      <pre style="margin:.5rem 0"><code>&lt;interceptors&gt;
+    &lt;class&gt;com.globalbank.interceptors.BankAuditInterceptor&lt;/class&gt;
+&lt;/interceptors&gt;</code></pre>
+      <p>That works, and this project's <code>beans.xml</code> is empty anyway — so open it and see. Both
+        routes switch the interceptor on:</p>
+      <div class="tablewrap" style="margin:.6rem 0"><table>
+        <thead><tr><th></th><th><code>@Priority</code></th><th><code>&lt;interceptors&gt;</code> XML</th></tr></thead>
+        <tbody>
+          <tr><td>Where</td><td>On the interceptor class</td><td>In <code>beans.xml</code></td></tr>
+          <tr><td>Effect</td><td>On for the whole application</td><td>On for that deployment</td></tr>
+          <tr><td>To disable it</td><td>Change the code and rebuild</td><td>Edit one line of XML, no rebuild</td></tr>
+          <tr><td>The catch</td><td>—</td><td>A file that can be forgotten</td></tr>
+        </tbody>
+      </table></div>
+      <p>This project uses <code>@Priority</code> because there is then no file to forget. It is also worth
+        knowing what the number means: <code>APPLICATION</code> is <code>2000</code>, and <strong>lower
+        numbers run further out</strong>. Platform interceptors sit below it, which means by the time this
+        interceptor runs, the transaction is already open — so timing a method here includes the
+        transaction, which is what you would want it to mean.</p>
+    </div>
+  </div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>See the interceptor run</h4>
+      <p>Signed in as Ada, transfer <code>25</code> from <code>1001</code> to <code>1002</code>. Now look at
+        the <b>WildFly console</b>, not the page:</p>
+      <pre><code>GlobalBank: -&gt; transfer
+GlobalBank: &lt;- transfer (7 ms)</code></pre>
+      <p><strong>You should see</strong> those two lines, and the string <code>GlobalBank</code> in them.
+        Neither line was written by <code>AccountService</code>. Open
+        <code>BankAuditInterceptor</code> and read them, then open <code>AccountService</code> and confirm
+        that the word <code>GlobalBank</code> does not appear in it at all — only <code>bankName</code>,
+        injected.</p>
+    </li>
+
+    <li>
+      <h4>Change one line and watch the whole application change</h4>
+      <p>In <code>config/BankConfiguration.java</code>, change:</p>
+      <pre><code>String bankName = "GlobalBank";      →      String bankName = "Ada's Bank";</code></pre>
+      <p>Rebuild, redeploy, make a transfer, and look at the console and at the page header.</p>
+      <p><strong>You should see</strong> the new name in the interceptor's two log lines, in both notifier
+        lines, and in the header of <code>accounts.xhtml</code>. Four classes, one edit, and none of those
+        four classes knows that the other three exist.</p>
+      <p><strong>Now sign out and look at the sign-in page</strong>, which still says
+        <code>GlobalBank</code> — the exception the callout above explains. Seeing it yourself is the point
+        of the exercise: the producer changed three classes' <em>output</em> without touching any of their
+        code, and could not change a string somebody typed into a Facelet.</p>
+      <p><strong>Change the value back</strong> before you continue.</p>
+    </li>
+
+    <li>
+      <h4>Pull the qualifier off and read the error</h4>
+      <p>In <code>events/TransferNotifier.java</code>, delete <code>@Email</code> from the
+        <code>email</code> field so it reads <code>@Inject Notifier email;</code>. Rebuild and redeploy.</p>
+      <p><strong>You should see the deployment refused</strong>, with a message naming both candidates:</p>
+      <pre><code>Ambiguous dependencies for type Notifier with qualifiers @Default
+  - com.globalbank.notify.EmailNotifier
+  - com.globalbank.notify.SmsNotifier</code></pre>
+      <p>Read it properly, because this error is a gift. It tells you the type, the qualifiers on the
+        injection point, and every bean that matches — which is the whole diagnosis. Then put
+        <code>@Email</code> back.</p>
+    </li>
+
+    <li>
+      <h4>Break the producer, on purpose, and read that error too</h4>
+      <p>In <code>config/BankConfiguration.java</code>, add a normal scope to the bank-name producer:</p>
+      <pre><code>@ApplicationScoped
+@Produces @BankName
+String bankName = "GlobalBank";</code></pre>
+      <p>Rebuild, redeploy, and read what comes back.</p>
+      <p><strong>You should see</strong> the deployment refused, and the word <code>proxy</code> somewhere
+        in the deepest <code>Caused by:</code>. That is the whole explanation: a normal scope means a proxy,
+        a proxy means subclassing, and <code>String</code> is <code>final</code>. <strong>Remove the
+        scope</strong> — which is what the file has, and why it is commented the way it is.</p>
+      <p>Now do the same to <code>auditDepth()</code>, which produces an <code>int</code>. Same refusal,
+        different wording, because a primitive cannot be subclassed either.</p>
+    </li>
+
+    <li>
+      <h4>Change the audit depth without touching the code</h4>
+      <p>Restart WildFly with a system property:</p>
+      <pre><code>standalone.bat -Dglobalbank.auditDepth=5        REM  Windows
+./standalone.sh -Dglobalbank.auditDepth=5       #    macOS / Linux</code></pre>
+      <p>Sign in as the manager and make a few transfers. <strong>You should see</strong> the audit table
+        show five lines instead of twenty-five. Remove the property and it returns to the default.</p>
+      <p>Read <code>BankConfiguration.auditDepth()</code> — this is the <code>@Produces</code>
+        <em>method</em>, and the reason it is a method rather than a field is in the twelve lines of its
+        body: read the property, parse it, and fall back to <code>25</code> if it is missing or
+        nonsense. A field cannot do that. A method can, and can also take injected parameters if the
+        decision needs them.</p>
+    </li>
+
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 5 · CDI</b>
+    <ol>
+      <li>Why can't you write <code>@ApplicationScoped @Produces String</code>?</li>
+      <li>You write <code>@Inject Notifier notifier;</code> with no qualifier. What happens, and how do you
+        know which two beans are involved?</li>
+      <li>Which of the three lines in the <code>@Email</code> annotation does nothing visible if you get it
+        wrong — and what is the symptom?</li>
+      <li><code>BankAuditInterceptor</code> is not mentioned in <code>beans.xml</code>. Why does it run?</li>
+      <li>What happens if you forget <code>ctx.proceed()</code> in <code>@AroundInvoke</code>?</li>
+      <li>Where is the string <code>"GlobalBank"</code> written in this project?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because a normal scope means CDI creates a proxy, and a proxy is made by subclassing.
+          <code>String</code> is <code>final</code>. The application refuses to deploy — it is a definition
+          error, not a warning.</li>
+        <li>The deployment fails with an ambiguous dependency error naming <code>EmailNotifier</code> and
+          <code>SmsNotifier</code>. The error itself tells you both candidates, which is why this takes
+          seconds to diagnose rather than hours.</li>
+        <li><code>@Retention(RUNTIME)</code>. The default retention is <code>CLASS</code>, which discards
+          the annotation before anything can read it at run time. The symptom is the worst kind: everything
+          compiles, the qualifier appears to do nothing, and you are back to an ambiguous dependency with
+          no indication that the annotation you wrote is the problem.</li>
+        <li>Because of <code>@Priority(Interceptor.Priority.APPLICATION)</code> on the interceptor class.
+          <code>@Priority</code> enables an interceptor for the whole application; the
+          <code>&lt;interceptors&gt;</code> XML entry is the older, per-deployment switch. Both work.</li>
+        <li>The real method never runs. <code>proceed()</code> <em>is</em> the call — an interceptor that
+          does not call it silently swallows the operation. That is a bug in a logging interceptor and the
+          entire mechanism behind a security one.</li>
+        <li>In exactly one place: the <code>@Produces @BankName</code> field in
+          <code>BankConfiguration</code>. Everywhere else writes <code>bankName</code> and receives it by
+          injection.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 6
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 6 · The event that waits for the commit</h2>
+
+  <p>When a transfer succeeds, the bank now emails the customer, texts the customer, and writes a line
+    saying it did. Look at <code>AccountService.moveMoney()</code> and find where any of that happens.</p>
+
+  <p><strong>It does not.</strong> The method ends with one line:</p>
+
+  <pre><code>transfers.fire(new TransferCompletedEvent(fromId, toId, amount,
+                                          from.getHolder(), to.getHolder()));</code></pre>
+
+  <p>That is the whole of what the service knows. It does not know that a notifier exists, how many there
+    are, what they do, or whether any of them works. It <em>announces</em>, and stops.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An <strong>event</strong> is an announcement with no addressee. <code>fire()</code> says "this
+      happened"; it does not say who should care, and it does not wait to find out. Anything that has
+      registered an interest is called by the container, on the same thread, before <code>fire()</code>
+      returns.</p>
+    <p>This is the difference between telling two people and <em>publishing a notice</em>. Telling means
+      you need their names. Publishing means you need a noticeboard — and adding a third interested party
+      later requires no change to the person who put the notice up.</p>
+  </div>
+
+  <p>An <strong>observer</strong> registers that interest. It is a method with a parameter annotated
+    <code>@Observes</code>, and it is never called by your code — the container calls it:</p>
+
+  <pre><code>public void onTransfer(
+        @Observes(during = TransactionPhase.AFTER_SUCCESS) TransferCompletedEvent event) {
+
+    String message = event.amount().toPlainString()
+            + " moved from account " + event.fromId() + " (" + event.fromHolder() + ")"
+            + " to account " + event.toId() + " (" + event.toHolder() + ")";
+
+    email.send(message);
+    sms.send(message);
+}</code></pre>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b><code>during = AFTER_SUCCESS</code> — the most important three words in this
+      practical</b>
+      <p><code>fire()</code> is called <em>inside</em> the transfer's transaction, before the commit. If
+        the observer ran at that moment, the bank would tell a customer "£25 has moved" while the database
+        still had the option of rolling the whole thing back. The customer would have been told about
+        money that then failed to move.</p>
+      <p><code>during = TransactionPhase.AFTER_SUCCESS</code> tells the container to <em>hold the event
+        until the transaction has committed</em>. If the transaction rolls back, the observer is never
+        called at all.</p>
+      <p>And the default is not that. The default is <code>IN_PROGRESS</code> — fire immediately, inside
+        the transaction. It is the right default for an observer that is doing more work <em>on</em> the
+        transaction; it is exactly the wrong one for a notification. <strong>An absent <code>during</code>
+        is a silent bug, not a neutral choice.</strong></p>
+      <div class="tablewrap" style="margin:.6rem 0"><table>
+        <thead><tr><th>Phase</th><th>The observer runs…</th><th>Right for</th></tr></thead>
+        <tbody>
+          <tr><td><code>IN_PROGRESS</code> <span class="hint">(the default)</span></td><td>immediately, inside the transaction</td><td>more work that belongs to the transaction, and should roll back with it</td></tr>
+          <tr><td><code>AFTER_SUCCESS</code></td><td>after the commit, only if it committed</td><td><b>notifications</b>, printing, anything the outside world can see</td></tr>
+          <tr><td><code>AFTER_FAILURE</code></td><td>after a rollback</td><td>alerting somebody that something failed</td></tr>
+          <tr><td><code>AFTER_COMPLETION</code></td><td>after either</td><td>cleanup that must happen regardless</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <p>Two more details in that observer are deliberate, and both are worth noticing.</p>
+
+  <p><strong>The payload is a <code>record</code>, not an entity.</strong> An event carrying a live JPA
+    <code>Account</code> would hand the observer an object still tied to a persistence context that, by
+    the time <code>AFTER_SUCCESS</code> fires, has already been closed. A record holding values — two ids,
+    an amount, two names — is immutable, and freezing the values is the honest thing to do. The
+    announcement describes <em>what happened</em>, not the current state of the database.</p>
+
+  <p><strong>Both notifiers are injected by qualifier</strong> — the same <code>@Email</code> and
+    <code>@Sms</code> from Part 5. So this one class is where the two ideas meet: an event says
+    <em>when</em> to notify, and qualifiers say <em>which</em> notifiers to use.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Move money, and read the console in order</h4>
+      <p>Signed in as Ada, transfer <code>25</code> from <code>1001</code> to <code>1002</code>. Now read
+        the WildFly console carefully, in sequence:</p>
+      <pre><code>GlobalBank: -&gt; transfer
+GlobalBank: &lt;- transfer (7 ms)
+[email] GlobalBank: 25 moved from account 1001 (Ada Lovelace) to account 1002 (Grace Hopper) (simulated — no mail server is configured)
+[sms]   GlobalBank: 25 moved from account 1001 (Ada Lovelace) to account 1002 (Grace Hopper) (simulated — no gateway is configured)
+Notified the customer about: 25 moved from account 1001 (Ada Lovelace) to account 1002 (Grace Hopper)</code></pre>
+      <p><strong>Stop and look at the order.</strong> The interceptor's closing line — which fires when
+        <code>transfer()</code> returns — comes <em>before</em> the email. The event was fired inside the
+        method, and the notification still arrived afterwards. That is
+        <code>AFTER_SUCCESS</code>: the container held the event until the transaction had committed, and
+        only then ran the observer.</p>
+      <p>If you had written <code>@Observes TransferCompletedEvent event</code> with no
+        <code>during</code>, the email line would appear <em>between</em> <code>-&gt; transfer</code> and
+        <code>&lt;- transfer</code> instead. Step 2 lets you watch exactly that.</p>
+    </li>
+
+    <li>
+      <h4>Break it: notify before the money is safe</h4>
+      <p>In <code>events/TransferNotifier.java</code>, remove
+        <code>during = TransactionPhase.AFTER_SUCCESS</code>, leaving just
+        <code>@Observes TransferCompletedEvent event</code>. Rebuild, redeploy, and make a transfer.</p>
+      <p><strong>You should see</strong> the email and SMS lines move — they now appear <em>before</em>
+        <code>&lt;- transfer</code>, i.e. before the transaction committed.</p>
+      <p>Now make a transfer the bank <em>refuses</em> — more than the account holds. Balances do not
+        change, the refusal is reported… and <strong>no notification is sent either</strong>, because the
+        exception is thrown before <code>fire()</code> is reached.</p>
+      <p>Which is the reassuring half. The dangerous case is subtler, and worth constructing in your head:
+        a transfer that fires the event, notifies the customer, and <em>then</em> rolls back — because
+        something later in the same transaction failed. The customer has been told about money that did
+        not move, and nothing in the log looks wrong.</p>
+      <p><strong>Put <code>during = TransactionPhase.AFTER_SUCCESS</code> back</strong> before you
+        continue.</p>
+    </li>
+
+    <li>
+      <h4>Watch a refusal notify nobody</h4>
+      <p>With the annotation restored, make a transfer that fails — try to move <code>99999</code> out of
+        account <code>1003</code>.</p>
+      <p><strong>You should see</strong> the refusal, and <em>no</em> email or SMS lines at all. The
+        transaction rolled back, so <code>AFTER_SUCCESS</code> never fired, so the observer was never
+        called.</p>
+      <p>That is a rule you can state in one sentence and would find very hard to enforce by hand: <em>the
+        customer is told about a transfer if and only if it committed.</em> Twenty lines of explicit code
+        would struggle to be that reliable, and would need revisiting every time somebody added a new way
+        for a transfer to fail.</p>
+    </li>
+
+    <li>
+      <h4>Add a third listener without touching anything that exists</h4>
+      <p>This is the step that shows you why the design is worth the indirection. Create a new file beside
+        <code>TransferNotifier</code>:</p>
+      <pre><code>package com.globalbank.events;
+
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
+import jakarta.enterprise.event.TransactionPhase;
+
+@ApplicationScoped
+public class LargeTransferWatch {
+
+    public void onTransfer(
+            @Observes(during = TransactionPhase.AFTER_SUCCESS) TransferCompletedEvent event) {
+
+        if (event.amount().compareTo(new java.math.BigDecimal("1000")) &gt;= 0) {
+            System.out.println("[fraud]  Large transfer flagged for review: "
+                    + event.amount().toPlainString() + " from account " + event.fromId());
+        }
+    }
+}</code></pre>
+      <p>Rebuild, redeploy, and make a transfer of <code>1200</code>. Then make one of <code>5</code>.</p>
+      <p><strong>You should see</strong> the fraud line only for the large one — and, more importantly,
+        <strong>you did not edit <code>AccountService</code>, <code>TransferNotifier</code>, or any other
+        file</strong>. The bank announced what happened; a new interested party appeared; nobody who was
+        already there had to know.</p>
+      <p>That is the answer to "why would I use an event instead of just calling the notifier". You would
+        not, for one listener. You would for the fifth.</p>
+    </li>
+
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 6 · events</b>
+    <ol>
+      <li>What does <code>AccountService</code> know about the notifiers?</li>
+      <li>The email line appears <em>after</em> the interceptor's closing <code>&lt;- transfer</code> line.
+        What does that tell you?</li>
+      <li>What is the default if you write <code>@Observes</code> with no <code>during</code>, and why is
+        that wrong for a notification?</li>
+      <li>Why is the event payload a <code>record</code> of values rather than the <code>Account</code>
+        entities?</li>
+      <li>You add a fifth listener. How many existing files change?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Nothing. It fires one event and does not know whether anybody listens, how many listeners
+          there are, or what they do.</li>
+        <li>That the observer did not run when <code>fire()</code> was called inside the method. The
+          container held the event until the transaction committed — after <code>transfer()</code> had
+          already returned — which is exactly what <code>during = AFTER_SUCCESS</code> asks for.</li>
+        <li><code>IN_PROGRESS</code>: the observer runs immediately, inside the transaction, before the
+          commit. For a notification that means telling a customer about money that the database may still
+          roll back — and a silent bug, because the code looks right and the log shows nothing wrong.</li>
+        <li>Because by the time an <code>AFTER_SUCCESS</code> observer runs, the transaction is over and
+          the persistence context is closed. An <code>Account</code> entity would be a detached object
+          whose lazy fields could not be read. A record of plain values is immutable, safe, and says what
+          happened rather than what the database currently holds.</li>
+        <li>None. That is the entire argument for events over direct calls.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 7
+       ===================================================================== -->
+
+  <span class="eyebrow">reference</span>
+  <h2>Part 7 · Ship it: what an EAR would change (Session 14)</h2>
+
+  <div class="callout callout--warn"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b>Read this before the rest of the part</b>
+      <p>Everything up to here is a war, and it runs. <strong>This part is reference material, not a
+        build instruction.</strong> The multi-module EAR below is shown in full so that you can see its
+        shape — and build it yourself if you want to — but the thing this practical's folder guarantees to
+        produce is <code>globalbank-web.war</code>.</p>
+      <p>That is a deliberate decision and not a gap. An EAR is four Maven projects with a parent, and
+        every extra module is another place for a beginner's build to fail before they have seen the
+        application work even once. <strong>Get the war running first.</strong> That is now done. So:
+        what is an EAR for?</p>
+    </div>
+  </div>
+
+  <p>A war bundles <em>web</em> components. An <code>ejb-jar</code> bundles <em>enterprise beans</em>. An
+    EAR bundles them together, plus any plain libraries they share. You move to one when you want the
+    beans and the pages to be separately deployable, or when more than one module needs the same library
+    and you are tired of copying it into each.</p>
+
+  <h3>The layout</h3>
+  <pre><code>globalbank-ear/                 &lt;packaging&gt;pom&lt;/packaging&gt;   ← the parent
+├── pom.xml                     &lt;modules&gt; lists the three below
+├── globalbank-ejb/             &lt;packaging&gt;ejb&lt;/packaging&gt;   ← the beans move here
+│   └── src/main/java/com/globalbank/{ejb,entity,messaging,dao,notify,events,…}
+├── globalbank-web/             &lt;packaging&gt;war&lt;/packaging&gt;   ← the pages stay here
+│   └── src/main/{java/com/globalbank/{web,security},webapp}
+└── globalbank-ear/             &lt;packaging&gt;ear&lt;/packaging&gt;   ← the package itself
+    └── src/main/application/META-INF/application.xml</code></pre>
+
+  <p><strong>Note how little moves.</strong> The entities, the service beans, the queue, the notifiers, the
+    events and the interceptors all belong to <code>globalbank-ejb</code>. The page, its backing bean, the
+    servlet and the <code>security</code> package belong to <code>globalbank-web</code>. Not one line of
+    Java changes — this is a question about where files live, and about what Maven produces from them.</p>
+
+  <div class="callout callout--warn"><span class="callout__i">🚨</span>
+    <div class="callout__b"><b><code>persistence.xml</code> moves with the entities</b>
+      <p>A persistence unit belongs to the module that owns the entities, not to the war. Leave the file
+        behind and you get <i>"no persistence unit named globalbankPU"</i> at deploy time, which reads like
+        a typo and is really a packaging mistake.</p>
+      <p>This is the single most common thing to get wrong when splitting a war in two.</p>
+    </div>
+  </div>
+
+  <h3>The three poms</h3>
+
+  <p><strong>The parent</strong> — this is the file that makes four projects build as one. It builds
+    nothing itself; it declares the modules and the versions:</p>
+
+  <pre><code>&lt;packaging&gt;pom&lt;/packaging&gt;          &lt;!-- pom, not war: this builds nothing itself --&gt;
+
+&lt;modules&gt;
+  &lt;module&gt;globalbank-ejb&lt;/module&gt;
+  &lt;module&gt;globalbank-web&lt;/module&gt;
+  &lt;module&gt;globalbank-ear&lt;/module&gt;
+&lt;/modules&gt;
+
+&lt;dependencyManagement&gt;          &lt;!-- declare each version ONCE --&gt;
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+      &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+      &lt;version&gt;10.0.0&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/dependencyManagement&gt;</code></pre>
+
+  <p><code>&lt;dependencyManagement&gt;</code> is the section that stops you repeating a version number in
+    four places. It declares a version once; each module then lists the dependency with no
+    <code>&lt;version&gt;</code> at all.</p>
+
+  <p><strong>The EJB module</strong> — one line matters:</p>
+
+  <pre><code>&lt;artifactId&gt;globalbank-ejb&lt;/artifactId&gt;
+&lt;packaging&gt;ejb&lt;/packaging&gt;      &lt;!-- builds a jar the container treats as a bean archive --&gt;</code></pre>
+
+  <p><strong>The web module</strong> — and this is the line everybody misses:</p>
+
+  <pre><code>&lt;dependency&gt;
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;globalbank-ejb&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+  &lt;type&gt;ejb&lt;/type&gt;              &lt;!-- `ejb`, not `jar` — an EJB module's type --&gt;
+  &lt;scope&gt;provided&lt;/scope&gt;       &lt;!-- the EAR supplies it; do not nest a copy in the war --&gt;
+&lt;/dependency&gt;</code></pre>
+
+  <p>The war does not get the beans from the classpath. Without this dependency the page's Java compiles
+    against nothing and the classes are not visible at run time either. And <code>provided</code> matters
+    for a reason worth understanding: <strong>a second copy of those classes inside
+    <code>WEB-INF/lib</code> is how you end up with two different <code>Account</code> classes and a
+    <code>ClassCastException</code> that makes no sense.</strong></p>
+
+  <p><strong>The EAR module</strong> — this is where <code>&lt;library-directory&gt;</code> comes from:</p>
+
+  <pre><code>&lt;artifactId&gt;globalbank-ear&lt;/artifactId&gt;
+&lt;packaging&gt;ear&lt;/packaging&gt;
+
+&lt;plugin&gt;
+  &lt;artifactId&gt;maven-ear-plugin&lt;/artifactId&gt;
+  &lt;configuration&gt;
+    &lt;version&gt;10&lt;/version&gt;                                &lt;!-- Jakarta EE 10 --&gt;
+    &lt;defaultLibBundleDir&gt;lib&lt;/defaultLibBundleDir&gt;       &lt;!-- &lt;library-directory&gt; --&gt;
+    &lt;modules&gt;
+      &lt;ejbModule&gt;
+        &lt;artifactId&gt;globalbank-ejb&lt;/artifactId&gt;
+        &lt;bundleFileName&gt;globalbank-ejb.jar&lt;/bundleFileName&gt;
+      &lt;/ejbModule&gt;
+      &lt;webModule&gt;
+        &lt;artifactId&gt;globalbank-web&lt;/artifactId&gt;
+        &lt;contextRoot&gt;/globalbank&lt;/contextRoot&gt;           &lt;!-- the URL changes too --&gt;
+      &lt;/webModule&gt;
+    &lt;/modules&gt;
+  &lt;/configuration&gt;
+&lt;/plugin&gt;</code></pre>
+
+  <p><code>&lt;defaultLibBundleDir&gt;lib&lt;/defaultLibBundleDir&gt;</code> is the
+    <code>&lt;library-directory&gt;</code> Session 14 talks about: shared jars go in the EAR's
+    <code>lib/</code> folder, which is on the classpath of every module, instead of being duplicated inside
+    the war.</p>
+
+  <h3>Watch it, rather than read it</h3>
+  <p>This terminal is a separate one from Part 2's, because it simulates a <em>different</em> build — four
+    projects instead of one. Type <code>help</code>, then work through it.</p>
+
+  <div class="terminal" data-terminal="practicum3ear"></div>
+
+  <p>The command to try first is <code>mvn clean package</code>, which shows a <em>reactor</em> build: the
+    parent builds the three modules in order, in one command. Then try
+    <code>deploy globalbank-ear-1.0.0.ear</code> and read every line of it.</p>
+
+  <h3>What actually changes for you</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th></th><th>The war (what you built)</th><th>The EAR</th></tr></thead>
+    <tbody>
+      <tr><td>Artefact</td><td><code>globalbank-web.war</code></td><td><code>globalbank-ear-1.0.0.ear</code></td></tr>
+      <tr><td>URL</td><td><code>http://localhost:8080/globalbank-web/</code></td><td><code>http://localhost:8080/globalbank/</code></td></tr>
+      <tr><td>JNDI module name</td><td><code>globalbank-web</code></td><td><code>globalbank-ejb</code></td></tr>
+      <tr><td>Maven projects</td><td>1</td><td>4</td></tr>
+      <tr><td>Where the beans live</td><td>the same war as the pages</td><td>their own jar</td></tr>
+      <tr><td>What <code>RemoteClient</code> needs on its classpath</td><td><code>target/classes</code></td><td><code>globalbank-ejb/target/globalbank-ejb.jar</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>The two rows that break things</b>
+      <p><strong>The JNDI name.</strong> In Practical 2 you looked up:</p>
+      <pre style="margin:.4rem 0"><code>ejb:/globalbank-web/AccountService!com.globalbank.ejb.AccountServiceRemote</code></pre>
+      <p>In the EAR it becomes:</p>
+      <pre style="margin:.4rem 0"><code>ejb:/globalbank-ejb/AccountService!com.globalbank.ejb.AccountServiceRemote</code></pre>
+      <p>Read the middle segment of each. The module name is the <em>artefact the bean lives in</em> — not
+        the one that deployed it. <code>RemoteClient</code> will fail with a <code>NamingException</code>
+        until you change that string, and nothing about the failure will point at packaging.</p>
+      <p><strong>The URL.</strong> <code>&lt;contextRoot&gt;/globalbank&lt;/contextRoot&gt;</code> moves
+        the whole application. Every address in this course's notes changes with it — including the login
+        page, which is now at <code>/globalbank/login.xhtml</code>.</p>
+      <p>Neither of these is a defect. They are the honest cost of splitting an application, and knowing
+        they are coming is most of what Session 14 is for.</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 7 · packaging</b>
+    <ol>
+      <li>Which files move to <code>globalbank-ejb</code>, and which stay in <code>globalbank-web</code>?</li>
+      <li>How many lines of Java change when you split the war into four Maven projects?</li>
+      <li>The web module declares a dependency on <code>globalbank-ejb</code> with
+        <code>&lt;scope&gt;provided&lt;/scope&gt;</code>. Why not a normal compile dependency?</li>
+      <li><code>persistence.xml</code> goes with the entities. What happens if it does not?</li>
+      <li>Name the two things that break, and neither of them is a bug.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>ejb</code>, <code>entity</code>, <code>messaging</code>, <code>dao</code>,
+          <code>notify</code>, <code>events</code>, <code>interceptors</code>, <code>qualifiers</code>,
+          <code>config</code> and <code>persistence.xml</code> move. <code>web</code>,
+          <code>security</code> and everything under <code>webapp/</code> stay.</li>
+        <li>None. It is entirely a question of where files live and what Maven produces from them — which
+          is precisely why it is worth doing once, by hand, and understanding.</li>
+        <li>Because the EAR already supplies the jar. A compile-scope dependency would also be copied into
+          <code>WEB-INF/lib</code>, and two copies of the same class on two different classloaders is how
+          you get a <code>ClassCastException</code> for a class that "is obviously the right type".</li>
+        <li>Deployment fails with "no persistence unit named globalbankPU" — an error that reads like a
+          typo and is really a packaging mistake.</li>
+        <li>The URL (from <code>&lt;contextRoot&gt;</code>) and the JNDI module name (which is now the
+          artefact the bean lives in). Both are consequences of the split, not defects in it.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE
+       ===================================================================== -->
+
+  <span class="eyebrow">reference</span>
+  <h2>Reference · everything on one screen</h2>
+
+  <h3>The address cheat-sheet</h3>
+  <p>The application has three front doors now, and only two of them let you in without signing in.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Address</th><th>What it does</th><th>Sign-in needed?</th></tr></thead>
+    <tbody>
+      <tr><td><code>/globalbank-web/</code></td><td>Redirects to the login page</td><td>—</td></tr>
+      <tr><td><code>/globalbank-web/login.xhtml</code></td><td>The sign-in form</td><td><b>No</b> — deliberately</td></tr>
+      <tr><td><code>/globalbank-web/login-error.xhtml</code></td><td>The mechanism's failure page</td><td><b>No</b></td></tr>
+      <tr><td><code>/globalbank-web/accounts.xhtml</code></td><td>The bank, as a page</td><td>Yes — <code>CUSTOMER</code> or <code>BANK_MANAGER</code></td></tr>
+      <tr><td><code>/globalbank-web/account?action=all</code></td><td>The accounts as plain text</td><td>Yes</td></tr>
+      <tr><td><code>/globalbank-web/account?action=raw</code></td><td><b>NEW</b> — the same rows via hand-written SQL</td><td>Yes, <b>and</b> <code>BANK_MANAGER</code> only</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The demo users</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>User name</th><th>Password</th><th>Role</th><th>What they can do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>ada@globalbank.test</code></td><td><code>secret</code></td><td><code>CUSTOMER</code></td>
+        <td>Open, deposit, withdraw, transfer, look at accounts. <b>No audit log, no raw SQL view</b></td>
+      </tr>
+      <tr>
+        <td><code>manager@globalbank.test</code></td><td><code>manager</code></td><td><code>BANK_MANAGER</code></td>
+        <td>Everything Ada can do, plus the audit log and the raw SQL view</td>
+      </tr>
+    </tbody>
+  </table></div>
+  <p>The passwords are in the source because this is a demo you have to be able to run offline.
+    <code>UserInitializer</code> says so in a comment, and says what a real application does instead:
+    the user supplies the password, and the application hashes it on the way to the database.</p>
+
+  <h3>The annotations, one line each</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>What it tells the container</th><th>Seen on</th></tr></thead>
+    <tbody>
+      <tr><td><code>@CustomFormAuthenticationMechanismDefinition</code></td><td>"People sign in through a form of mine, not yours."</td><td><code>ApplicationConfig</code></td></tr>
+      <tr><td><code>@LoginToContinue(loginPage=…, errorPage=…)</code></td><td>"Send an unauthenticated visitor here, and a failed one there."</td><td><code>ApplicationConfig</code></td></tr>
+      <tr><td><code>@DatabaseIdentityStoreDefinition</code></td><td>"Check passwords against these two queries in this datasource."</td><td><code>ApplicationConfig</code></td></tr>
+      <tr><td><code>hashAlgorithm = Pbkdf2PasswordHash.class</code></td><td>"The stored value is a PBKDF2 hash, not the password."</td><td><code>ApplicationConfig</code></td></tr>
+      <tr><td><code>@DeclareRoles</code></td><td>"These are the role names this class uses."</td><td><code>AccountService</code>, <code>AuditService</code>, <code>RawAccountDao</code></td></tr>
+      <tr><td><code>@RolesAllowed</code></td><td>"Only a caller holding one of these roles may invoke this."</td><td>Every public method on the secured beans</td></tr>
+      <tr><td><code>@PermitAll</code></td><td>"Anyone may call this" — and it would behave the same if omitted, which is exactly why it is written</td><td><code>transferOrRefuse</code>, <code>AuditService.record</code></td></tr>
+      <tr><td><code>SecurityContext</code> (<code>@Inject</code>)</td><td>"Give me the object that authenticates callers and answers questions about them."</td><td><code>LoginBean</code>, <code>AccountsBean</code>, <code>AccountServlet</code></td></tr>
+      <tr><td><code>@Produces</code></td><td>"What this field or method returns is injectable."</td><td><code>BankConfiguration</code>, and the four qualifiers' users</td></tr>
+      <tr><td><code>@Qualifier</code></td><td>"This annotation is a label for choosing among candidates."</td><td><code>BankName</code>, <code>AuditDepth</code>, <code>Email</code>, <code>Sms</code></td></tr>
+      <tr><td><code>@Interceptor</code> + <code>@AroundInvoke</code></td><td>"This class wraps methods, and this is the wrapping method."</td><td><code>BankAuditInterceptor</code></td></tr>
+      <tr><td><code>@Priority(APPLICATION)</code></td><td>"Switch this interceptor on for the whole application, no XML needed."</td><td><code>BankAuditInterceptor</code></td></tr>
+      <tr><td><code>@Observes(during = AFTER_SUCCESS)</code></td><td>"Call me with this event — but only once the transaction has committed."</td><td><code>TransferNotifier</code></td></tr>
+      <tr><td><code>Event&lt;T&gt;</code> (<code>@Inject</code>)</td><td>"Give me the thing I announce with."</td><td><code>AccountService</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <details>
+    <summary><strong>📄 The code, in full — click any file to read it</strong></summary>
+
+    <p><strong><code>security/LoginBean.java</code></strong> — the piece Session 13 does not show you, and
+      the reason a login can silently do nothing.</p>
+    <pre><code>@Named("login")
+@RequestScoped
+public class LoginBean {
+
+    @Inject
+    private SecurityContext securityContext;
+
+    private String username;
+    private String password;
+    private String message;
+
+    public String login() {
+        if (username == null || username.isBlank() || password == null || password.isEmpty()) {
+            message = "Enter your user name and password.";
+            return null;
+        }
+
+        FacesContext faces = FacesContext.getCurrentInstance();
+        ExternalContext external = faces.getExternalContext();
+        HttpServletRequest request = (HttpServletRequest) external.getRequest();
+        HttpServletResponse response = (HttpServletResponse) external.getResponse();
+
+        Credential credential =
+                new UsernamePasswordCredential(username, new Password(password));
+
+        AuthenticationParameters params =
+                AuthenticationParameters.withParams().credential(credential);
+
+        AuthenticationStatus status =
+                securityContext.authenticate(request, response, params);
+
+        password = null;                 // out of the heap as soon as it is no longer needed
+
+        return switch (status) {
+            case SUCCESS -&gt; "/accounts.xhtml?faces-redirect=true";
+            case SEND_CONTINUE -&gt; null;  // the mechanism is mid-redirect; say nothing
+            case SEND_FAILURE -&gt; {       // one message for "wrong password" and "no such user"
+                message = "That user name and password combination was not recognised.";
+                yield null;
+            }
+            case NOT_DONE -&gt; {           // a developer problem, so log it as one
+                LOG.warning("Authentication was not attempted - check the mechanism definition.");
+                message = "Sign-in could not be completed. See the server log.";
+                yield null;
+            }
+            default -&gt; { message = "Sign-in could not be completed."; yield null; }
+        };
+    }
+
+    public String logout() {
+        FacesContext.getCurrentInstance().getExternalContext().invalidateSession();
+        return "/login.xhtml?faces-redirect=true";
+    }
+}</code></pre>
+    <p>Read the switch as a list of the four things the container can say back. And read the
+      <code>password = null</code> line as the habit it is: a password that is no longer needed should not
+      be sitting in memory waiting for a heap dump.</p>
+
+    <p><strong><code>security/ApplicationConfig.java</code></strong> — the whole configuration, in a class
+      with no code.</p>
+    <pre><code>@CustomFormAuthenticationMechanismDefinition(
+        loginToContinue = @LoginToContinue(
+                loginPage = "/login.xhtml",
+                errorPage = "/login-error.xhtml",
+                useForwardToLogin = false))
+@DatabaseIdentityStoreDefinition(
+        dataSourceLookup = "java:jboss/datasources/ExampleDS",
+        callerQuery = "SELECT password_hash FROM bank_users WHERE username = ?",
+        groupsQuery = "SELECT group_name    FROM bank_users WHERE username = ?",
+        hashAlgorithm = Pbkdf2PasswordHash.class)
+@ApplicationScoped
+public class ApplicationConfig { }</code></pre>
+    <p>Two annotations, two questions: <em>how does a person prove who they are</em> (the mechanism) and
+      <em>given a name and password, who are they and what may they do</em> (the identity store). The
+      <code>?</code> in those queries is a bind parameter, not string concatenation — and here that is
+      load-bearing rather than merely good practice, because these queries are reachable by anyone who can
+      reach the login form.</p>
+
+    <p><strong><code>entity/BankUser.java</code></strong> — one table, three columns.</p>
+    <pre><code>@Entity
+@Table(name = "bank_users")
+public class BankUser {
+
+    @Id
+    @Column(name = "username", length = 80)
+    private String username;
+
+    @Column(name = "password_hash", length = 160, nullable = false)
+    private String passwordHash;
+
+    @Column(name = "group_name", length = 40, nullable = false)
+    private String groupName;
+
+    // …
+    @Override
+    public String toString() {
+        return "BankUser[" + username + " in " + groupName + "]";
+        // note what is NOT printed: the hash. A toString that prints a credential
+        // is how secrets reach log files.
+    }
+}</code></pre>
+    <p>The hash column is 160 characters because a PBKDF2 value is a four-part string —
+      <code>PBKDF2WithHmacSHA256:27500:&lt;salt&gt;:&lt;hash&gt;</code> — and it needs room. And one table
+      rather than three: this is a demo, and a real deployment would separate users from group membership
+      the moment one person could hold two roles.</p>
+
+    <p><strong><code>ejb/UserInitializer.java</code></strong> — making a hash the only correct way.</p>
+    <pre><code>@Singleton
+@Startup
+public class UserInitializer {
+
+    @PersistenceContext private EntityManager em;
+    @Inject private Pbkdf2PasswordHash hasher;
+
+    @PostConstruct
+    public void seed() {
+        hasher.initialize(new java.util.HashMap&lt;&gt;());   // state the defaults, do not assume them
+
+        Long existing = em.createQuery("SELECT COUNT(u) FROM BankUser u", Long.class)
+                          .getSingleResult();
+        if (existing &gt; 0) return;
+
+        addUser("ada@globalbank.test",     "secret",  "CUSTOMER");
+        addUser("manager@globalbank.test", "manager", "BANK_MANAGER");
+    }
+
+    private void addUser(String username, String password, String groupName) {
+        String hash = hasher.generate(password.toCharArray());
+        em.persist(new BankUser(username, hash, groupName));
+    }
+}</code></pre>
+    <p><strong>Generate the hash; never assemble it.</strong> That four-part string has an iteration
+      count, Base64 encoding and padding, and a salt that must be fresh every time — hand-writing one is
+      how you get a password that cannot be verified. And <code>generate()</code> takes a
+      <code>char[]</code> rather than a <code>String</code> on purpose: a <code>String</code> sits in
+      memory until the garbage collector happens to reclaim it, and a <code>char[]</code> can be
+      overwritten the moment you are done.</p>
+
+    <p><strong><code>ejb/AccountService.java</code></strong> — the boundary, in annotations.</p>
+    <pre><code>@Stateless
+@Logged
+@DeclareRoles({"CUSTOMER", "BANK_MANAGER"})
+public class AccountService implements AccountServiceRemote {
+
+    @Inject private Event&lt;TransferCompletedEvent&gt; transfers;
+
+    @RolesAllowed({"CUSTOMER", "BANK_MANAGER"})
+    public String transfer(int fromId, int toId, BigDecimal amount)
+            throws InsufficientFundsException {
+        return moveMoney(fromId, toId, amount);
+    }
+
+    /** The MDB has no caller, so there is no identity for a role check to test. */
+    @PermitAll
+    public String transferOrRefuse(int fromId, int toId, BigDecimal amount) {
+        try {
+            return moveMoney(fromId, toId, amount);
+        } catch (InsufficientFundsException | IllegalArgumentException e) {
+            return "REFUSED: " + e.getMessage();
+        }
+    }
+
+    /** Private, so neither entry point can accidentally inherit the other's rules. */
+    private String moveMoney(int fromId, int toId, BigDecimal amount)
+            throws InsufficientFundsException {
+        // …balance check, two setBalance calls, then:
+        transfers.fire(new TransferCompletedEvent(fromId, toId, amount,
+                                                  from.getHolder(), to.getHolder()));
+        return "Transferred " + amount.toPlainString() + " …";
+    }
+}</code></pre>
+    <p>Practical 2 had one <code>transfer</code> method and the security question never came up. The
+      refactor into <code>moveMoney</code> is what makes it possible to say, precisely, which door the
+      rule applies to — and to keep it true as the class grows.</p>
+
+    <p><strong><code>config/BankConfiguration.java</code></strong> — both producer shapes, and the rule
+      about proxies.</p>
+    <pre><code>@ApplicationScoped
+public class BankConfiguration {
+
+    /** A @Produces FIELD: for a value that is simply known. */
+    @Produces @BankName
+    String bankName = "GlobalBank";
+
+    /** A @Produces METHOD: for a value that has to be worked out. */
+    @Produces @AuditDepth
+    int auditDepth() {
+        String raw = System.getProperty("globalbank.auditDepth", "25");
+        try {
+            int value = Integer.parseInt(raw.trim());
+            return value &gt; 0 ? value : 25;
+        } catch (NumberFormatException e) {
+            return 25;
+        }
+    }
+}</code></pre>
+    <p><strong>Neither carries a scope, and they must not.</strong> A normal scope means a proxy, a proxy
+      means subclassing, and <code>String</code> is <code>final</code> while <code>int</code> is a
+      primitive. Adding <code>@ApplicationScoped</code> to either of these is a definition error that
+      refuses the deployment.</p>
+
+    <p><strong><code>events/TransferNotifier.java</code></strong> — the two ideas meeting.</p>
+    <pre><code>@ApplicationScoped
+public class TransferNotifier {
+
+    @Inject @Email private Notifier email;      // the qualifier says WHICH notifier
+    @Inject @Sms   private Notifier sms;
+
+    public void onTransfer(
+            @Observes(during = TransactionPhase.AFTER_SUCCESS)
+            TransferCompletedEvent event) {     // …and the phase says WHEN
+
+        String message = event.amount().toPlainString()
+                + " moved from account " + event.fromId() + " (" + event.fromHolder() + ")"
+                + " to account " + event.toId() + " (" + event.toHolder() + ")";
+
+        email.send(message);
+        sms.send(message);
+    }
+}</code></pre>
+    <p>Eight lines. One class that owns <em>when</em> to tell the customer, two qualifiers that decide
+      <em>how</em>, and an <code>AccountService</code> that knows about none of it.</p>
+
+  </details>
+
+  <h3>Debugging: the five things that actually go wrong</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you are looking at</th><th>Where to look first</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>The login page redisplays and nothing happens</td>
+        <td><code>LoginBean.login()</code> is not being called. With a <em>custom</em> form mechanism,
+          nothing authenticates unless your code asks — check the <code>action</code> on the button.</td>
+      </tr>
+      <tr>
+        <td>A customer gets an error page where the audit log should be</td>
+        <td><code>getAuditLines()</code> was reached for a customer. JSF evaluates expressions inside
+          <code>rendered="false"</code>, so the guard in the bean is the one that matters.</td>
+      </tr>
+      <tr>
+        <td><code>Ambiguous dependencies for type Notifier</code></td>
+        <td>A <code>@Email</code> or <code>@Sms</code> is missing from an injection point. The error names
+          both candidates — that is the whole diagnosis.</td>
+      </tr>
+      <tr>
+        <td>Deployment refused, and the message mentions <code>proxy</code></td>
+        <td>A normal scope on a <code>@Produces</code> of <code>String</code> or <code>int</code>. Remove
+          the scope; they are <code>final</code> or primitive.</td>
+      </tr>
+      <tr>
+        <td>The customer is told about a transfer that later failed</td>
+        <td>The observer has no <code>during</code>, so it defaults to <code>IN_PROGRESS</code> and runs
+          inside the transaction. Add
+          <code>during = TransactionPhase.AFTER_SUCCESS</code>.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Practical 3 Assessment</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "You add @CustomFormAuthenticationMechanismDefinition and a working @DatabaseIdentityStoreDefinition, build the login page, and submit a correct user name and password. The page redisplays and you are still not logged in. Nothing is logged. Why?",
+        "opts": [
+          "The database queries are wrong, so the identity store found no user",
+          "The @LoginToContinue login page is itself protected, so the request never reached the bean",
+          "With a CUSTOM form mechanism the container does nothing on its own — some code of yours must call SecurityContext.authenticate(...), and nothing did",
+          "Pbkdf2PasswordHash was not configured, so the stored hash could not be checked"
+        ],
+        "a": 2,
+        "why": "This is the classic failure and it produces no error at all. The standard @FormAuthenticationMechanismDefinition has the container perform the login through a built-in j_security_check endpoint. The custom one hands that job back to you, and does nothing unless your code asks. LoginBean exists precisely to be that code. Option 2 is a real bug but it produces a redirect loop, not silence."
+      },
+      {
+        "q": "AccountService has @RolesAllowed(\"BANK_MANAGER\") on recent(). It also has a second public method with no security annotation at all. Who may call the second method?",
+        "opts": [
+          "Only BANK_MANAGER, because the class is secured",
+          "Nobody — a missing annotation means deny",
+          "Anybody, including a caller with no identity: on a bean with security annotations anywhere, an unannotated method is unchecked",
+          "Only authenticated callers, in any role"
+        ],
+        "a": 2,
+        "why": "There is no deny-by-default in Jakarta EE security. On a bean that carries security annotations anywhere, a method with no @RolesAllowed, @PermitAll or @DenyAll is unchecked — reachable by anyone. This is why every public method on AccountService, AuditService and RawAccountDao carries an annotation, including the ones that are meant to be open, and why the unannotated recent() overload was deleted."
+      },
+      {
+        "q": "Ada is signed in as CUSTOMER and the audit log is not shown to her. Which of these is the actual security rule?",
+        "opts": [
+          "rendered=\"#{bank.manager}\" in accounts.xhtml",
+          "The &lt;security-constraint> in web.xml",
+          "@RolesAllowed(\"BANK_MANAGER\") on AuditService.recent(int)",
+          "The if (!isManager()) check in AccountsBean.getAuditLines()"
+        ],
+        "a": 2,
+        "why": "The rule belongs where the data is: on the service method that reads the audit table. The rendered attribute is presentation and is not a security control. The bean's isManager() check exists for a different reason entirely — JSF evaluates expressions inside a rendered=\"false\" block, so without the guard a customer's page render would call a manager-only method and throw EJBAccessException into the middle of the render."
+      },
+      {
+        "q": "Why must the @Produces @BankName String producer NOT carry a normal scope such as @ApplicationScoped?",
+        "opts": [
+          "Because @Produces fields cannot have scopes at all",
+          "Because a normal scope means CDI creates a proxy, proxies work by subclassing, and String is final — so it is a definition error that refuses the deployment",
+          "Because a scoped producer would be created once per injection point instead of once per application",
+          "Because @BankName is a qualifier, and qualifiers and scopes cannot be combined"
+        ],
+        "a": 1,
+        "why": "CDI hands injection points a proxy for any bean with a normal scope, so that a request-scoped bean can be injected into a longer-lived one safely. A proxy is a subclass. String is final and int is a primitive, so neither can be subclassed — and CDI refuses to deploy rather than guessing. The same applies to the @AuditDepth int producer."
+      },
+      {
+        "q": "Two beans implement Notifier, and you write @Inject Notifier notifier; with no qualifier. What happens?",
+        "opts": [
+          "CDI picks the one whose class name sorts first",
+          "The field is left null and you get a NullPointerException at run time",
+          "The deployment is refused with an ambiguous dependency error naming both candidate beans",
+          "CDI injects both, and calls go to each in turn"
+        ],
+        "a": 2,
+        "why": "Two beans satisfying one injection point is an ambiguous dependency, and CDI will not guess. The error names the type, the qualifiers on the injection point, and every matching bean — which is a complete diagnosis in one message. The fix is a qualifier such as @Email, not an if statement or a @Named lookup."
+      },
+      {
+        "q": "The observer in TransferNotifier is declared @Observes(during = TransactionPhase.AFTER_SUCCESS). What would go wrong with a plain @Observes and no during?",
+        "opts": [
+          "The observer would run twice, once per notifier",
+          "The observer would never run, because an event fired inside a transaction is discarded",
+          "The default is IN_PROGRESS, so the customer would be told about a transfer inside the transaction — before the database had committed, and possibly for money that then rolled back",
+          "Nothing; during only affects the order of multiple observers"
+        ],
+        "a": 2,
+        "why": "The default phase is IN_PROGRESS: the observer runs immediately, inside the caller's transaction. For a notification that is exactly wrong — the customer is emailed about money that may still be rolled back, and when it is, the email cannot be un-sent and nothing in the log looks wrong. AFTER_SUCCESS holds the event until the commit has happened; if the transaction rolls back, the observer is never called."
+      },
+      {
+        "q": "BankAuditInterceptor is not listed anywhere in beans.xml, which is empty apart from a comment. Why does it still run?",
+        "opts": [
+          "Because beans.xml is not actually required in Jakarta EE 10, so CDI enables every interceptor it finds",
+          "Because @Priority(Interceptor.Priority.APPLICATION) on the interceptor class enables it for the whole application",
+          "Because @Logged is on AccountService, and putting a binding on a bean enables the interceptor automatically",
+          "Because Faces registers all interceptors in the web module"
+        ],
+        "a": 1,
+        "why": "In CDI 1.1 and later, @Priority on the interceptor class enables it application-wide. The &lt;interceptors> element in beans.xml still works and is the older switch — it enables the interceptor for that deployment only, which is useful when you want to turn it off without recompiling. This project uses @Priority because there is then no file to forget. Note that a binding alone does not enable anything: @Interceptor without a binding is never called, and a binding without @Priority or an XML entry does nothing."
+      },
+      {
+        "q": "In the multi-module EAR, the JNDI name changes from ejb:/globalbank-web/AccountService!... to ejb:/globalbank-ejb/AccountService!... Why?",
+        "opts": [
+          "Because the context root changed from /globalbank-web to /globalbank",
+          "Because the middle segment names the module the bean lives in — and the bean now lives in globalbank-ejb.jar, not in the war that deploys it",
+          "Because EAR deployments require a different JNDI prefix",
+          "Because the remote interface moved to a different package"
+        ],
+        "a": 1,
+        "why": "The middle segment of an EJB JNDI name is the module containing the bean. Once the beans move out of the war into their own EJB module, that segment changes — which is exactly the inherited breakage Session 14 warns about. RemoteClient fails with a NamingException until the string is updated, and nothing in the failure points at packaging. The context root also changes, but that is a separate consequence of &lt;contextRoot> in the maven-ear-plugin configuration."
+      }
+    ]
+    </script>
+  </section>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="summary">
+    <p>Two annotations on an empty class describe the vault
+      (<strong>@CustomFormAuthenticationMechanismDefinition</strong>,
+      <strong>@DatabaseIdentityStoreDefinition</strong>) and one bean is the handle
+      (<strong>LoginBean</strong>, calling <strong>SecurityContext.authenticate</strong> — and doing nothing
+      at all if you leave it out). <strong>web.xml</strong> decides which URLs need a signed-in visitor,
+      <strong>@RolesAllowed</strong> decides which methods need which role, and a method with neither is
+      open to everyone. <strong>@Produces</strong> puts a configuration value in one place,
+      <strong>@Qualifier</strong> picks between two beans without an <code>if</code>,
+      <strong>@Priority</strong> switches an interceptor on with no XML, and
+      <strong>@Observes(during = AFTER_SUCCESS)</strong> makes sure the customer is told about a transfer
+      only once the database has agreed it happened. Then, if you want it, four Maven projects and a
+      <code>&lt;library-directory&gt;</code> turn all of it into an EAR — for the price of a new URL and a
+      new JNDI name.</p>
+  </div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Configuring a custom form mechanism and expecting the container to perform the login</td>
+        <td>Write the bean that calls <code>SecurityContext.authenticate(request, response, params)</code>.
+          With a custom mechanism, nothing happens unless your code asks — and it fails silently.</td>
+      </tr>
+      <tr>
+        <td>Assuming a method with no security annotation is protected</td>
+        <td>It is <b>unchecked</b>. Annotate every public method on a secured bean, including the ones
+          that are meant to be open — <code>@PermitAll</code> is documentation as much as it is policy.</td>
+      </tr>
+      <tr>
+        <td>Relying on <code>rendered="false"</code> to protect something</td>
+        <td>It draws nothing and protects nothing — and JSF still evaluates the expressions inside it. The
+          rule goes on the bean method; the page attribute is presentation.</td>
+      </tr>
+      <tr>
+        <td>Trusting a friendly check in a servlet as the only check</td>
+        <td>Keep it for the readable message, but let the container be the enforcement. A servlet check
+          only covers the routes through that servlet.</td>
+      </tr>
+      <tr>
+        <td>Putting a normal scope on a producer of <code>String</code> or <code>int</code></td>
+        <td>Leave it <code>@Dependent</code>. A normal scope means a proxy, and a proxy means subclassing
+          something that cannot be subclassed — a definition error that stops the deployment.</td>
+      </tr>
+      <tr>
+        <td>Omitting <code>@Retention(RUNTIME)</code> on a qualifier</td>
+        <td>Add it. The default <code>CLASS</code> retention discards the annotation before CDI can read
+          it, and the qualifier silently stops working with nothing in the log.</td>
+      </tr>
+      <tr>
+        <td>Writing <code>@Observes</code> without <code>during</code> for a notification</td>
+        <td>Use <code>during = TransactionPhase.AFTER_SUCCESS</code>. The default is
+          <code>IN_PROGRESS</code>, which tells the customer about money that may still be rolled back.</td>
+      </tr>
+      <tr>
+        <td>Forgetting <code>ctx.proceed()</code> in an <code>@AroundInvoke</code> method</td>
+        <td>Call it. <code>proceed()</code> <em>is</em> the method call — forgetting it silently swallows
+          the operation. In a security interceptor that is deliberate; anywhere else it is a bug.</td>
+      </tr>
+      <tr>
+        <td>Hand-writing a PBKDF2 hash string</td>
+        <td>Generate it: <code>Pbkdf2PasswordHash.generate(char[])</code>. The iteration count, salt and
+          Base64 padding are not things to reproduce by hand.</td>
+      </tr>
+      <tr>
+        <td>Giving "no such user" and "wrong password" different messages</td>
+        <td>One message for both. The distinction tells an attacker which user names are real, and that is
+          half of what they need.</td>
+      </tr>
+      <tr>
+        <td>Renaming the war when you build the next stage</td>
+        <td>Keep the name. A renamed artefact silently breaks every URL and the JNDI name you have already
+          written down — which is precisely how a real upgrade goes wrong.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you just used</th><th>Where it comes back</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Produces</code>, scopes, the proxy rule</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI part 1</a>. This practical's <code>BankConfiguration</code> is its worked example</td></tr>
+      <tr><td>Qualifiers, interceptors, events, <code>@Priority</code></td><td><a href="session-12-cdi-part2.html">Session 12 — CDI part 2</a>, and its <a href="session-12-tiy.html">review lab</a></td></tr>
+      <tr><td><code>@DatabaseIdentityStoreDefinition</code>, <code>SecurityContext</code>, roles</td><td><a href="session-13-cdi-beans-security.html">Session 13 — CDI beans and security</a>. Read the practical's <code>LoginBean</code> alongside it: the page shows the vault, this project shows the handle</td></tr>
+      <tr><td>Multi-module Maven, <code>&lt;library-directory&gt;</code>, EAR</td><td><a href="session-14-packaging.html">Session 14 — Packaging</a>, and its <a href="session-14-tiy.html">review lab</a></td></tr>
+      <tr><td>Transactions, rollback, <code>REQUIRES_NEW</code></td><td><a href="session-10-ejb-transactions.html">Session 10</a> — <code>AFTER_SUCCESS</code> is a transaction-phase decision, and it only makes sense once you know what a commit is</td></tr>
+      <tr><td>Bean Validation on the form</td><td><a href="session-09-bean-validation.html">Session 9</a> — still doing its job in this project, unchanged</td></tr>
+      <tr><td>A REST front door instead of a page or a servlet</td><td><a href="15-rest-jaxrs.html">REST with JAX-RS</a> — and the security rules you wrote here apply to it unchanged</td></tr>
+      <tr><td>Testing any of this</td><td><a href="16-testing.html">Testing a Jakarta EE Application</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--key"><span class="callout__i">🏁</span>
+    <div class="callout__b"><b>You have finished the practicum</b>
+      Three practicals, one application, and roughly thirty-one source files: entities and service beans,
+      a page and a queue, a remote interface, validation, transactions that survive a rollback, a login, a
+      rulebook of roles, four qualifiers, an interceptor and an event. <strong>Almost none of it was
+      written by hand for this practical</strong> — it is the same bank, growing.
+      <p style="margin:.5rem 0 0">That is what a real application looks like from the inside. Go and read
+        <code>lab/practical-3-secure-ship/README.md</code> for the optional challenges — particularly the
+        one about adding a third role — and then re-read Session 13's security section with
+        <code>LoginBean</code> open beside it. It will read very differently the second time.</p>
+    </div>
+  </div>
+
+  <section class="further-study">
+    <h2>Official Guides for This Practical</h2>
+    <p>These are the primary sources behind every annotation you used. You do not need them to finish the
+      practical — but they are where to look when you want the full rule rather than the summary.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Specifications &amp; documentation:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/security/" target="_blank" rel="noopener">Jakarta Security Specification</a> — the authentication mechanisms, <code>SecurityContext</code>, and the identity store definitions</li>
+          <li><a href="https://jakarta.ee/specifications/cdi/" target="_blank" rel="noopener">Jakarta CDI Specification</a> — producers, qualifiers, interceptors, events, and the rules about proxying</li>
+          <li><a href="https://jakarta.ee/specifications/annotations/" target="_blank" rel="noopener">Jakarta Annotations Specification</a> — the whole of <code>@RolesAllowed</code>, <code>@PermitAll</code>, <code>@DenyAll</code> and <code>@DeclareRoles</code>, which is short</li>
+          <li><a href="https://jakarta.ee/specifications/enterprise-beans/" target="_blank" rel="noopener">Jakarta Enterprise Beans Specification</a> — the EJB security model and where the container's checks sit</li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly Documentation</a> — Elytron, the security subsystem, and deploying EARs</li>
+          <li><a href="https://maven.apache.org/plugins/maven-ear-plugin/" target="_blank" rel="noopener">Maven EAR Plugin</a> — <code>defaultLibBundleDir</code>, <code>ejbModule</code>, <code>webModule</code> and <code>contextRoot</code></li>
+          <li><a href="https://owasp.org/www-project-top-ten/" target="_blank" rel="noopener">OWASP Top Ten</a> — why "one message for both failures" and "hash, never encrypt" are the rules they are</li>
+        </ul>
+        <p style="margin:.6rem 0 0">
+          <a href="index.html">Course index</a> ·
+          <a href="glossary.html">Glossary</a> ·
+          project run guide: <code>lab/practical-3-secure-ship/README.md</code> ·
+          previous practical: <a href="practical-02-front-door.html">Practical 2 — The Front Door</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
+<script src="assets/js/terminal.js"></script>

@@ -1,35 +1,77 @@
-<title>Try It Yourself — Review &amp; Consolidation (Sessions 5 &amp; 6)</title>
+<title>Try It Yourself — Facelets, Local &amp; Remote Clients (Sessions 5 &amp; 6)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Try It Yourself Review for Sessions 5 & 6: Integrating Facelets UI with Local and Remote EJB clients, form lifecycle execution, and distributed client communication.">
+<meta name="description" content="Try It Yourself lab for Sessions 5 & 6: build a currency converter that a Facelets page calls as a Local Client, then call the same bean from a standalone Remote Client — with the exact commands, the output you should see, and the fixes for the errors beginners hit.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s07t";</script>
 
 <main class="page">
 
-  <h1>Try It Yourself · Review &amp; Consolidation (Sessions 5 &amp; 6)</h1>
-  <p class="lede">In Sessions 5 and 6, you moved from backend business logic into client presentation and distributed communication:
-    building rich user interfaces with <strong>Jakarta Server Faces (Facelets)</strong> and mastering the architectural boundary
-    between <strong>Local Clients</strong> (in-memory) and <strong>Remote Clients</strong> (network-distributed).</p>
+  <h1>Try It Yourself · Facelets, Local &amp; Remote Clients</h1>
+  <p class="lede">In Sessions 5 and 6 you left the backend behind and learned how other programs talk to your beans.
+    Session 5 gave you <strong>Facelets</strong> — the server-rendered web pages that make up the presentation tier.
+    Session 6 gave you the two ways a caller can reach a bean: as a <strong>Local Client</strong> (same machine, in memory)
+    or a <strong>Remote Client</strong> (a separate program, over the network).</p>
+  <p class="lede">This page turns both into one lab. You will build a currency converter, drive it from a browser form,
+    then call the very same bean from a standalone Java program — and see for yourself why one call is instant and the
+    other travels down a wire.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Consolidation Objectives (from Presenter's Manual TL7)</b>
+    <div class="callout__b"><b>What you will build and prove on this page</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Integrate a Facelets XHTML front-end directly with a Local EJB service</li>
-        <li>Trace how user inputs flow through JSF's 6-phase lifecycle to invoke an enterprise bean</li>
-        <li>Build and invoke a standalone Java SE remote client connecting over WildFly HTTP-Remoting</li>
-        <li>Identify and resolve common serialization pitfalls (<code>NotSerializableException</code>) and client lookup errors</li>
+        <li>A Facelets page (<code>converter.xhtml</code>) whose form is wired to a CDI backing bean</li>
+        <li>A <code>@Stateless</code> bean that offers the <em>same</em> method through two different interfaces — one <code>@Local</code>, one <code>@Remote</code></li>
+        <li>A working browser round-trip, where you can point at the exact line of output the bean produced</li>
+        <li>A standalone Java SE program that reaches the same bean over HTTP-Remoting and prints the same answer</li>
+        <li>The three integration faults beginners actually hit — and the one-line fix for each</li>
       </ol>
     </div>
   </div>
 
-  <!-- =====================================================================
-       Part 1: The Integrated Presentation & Client Architecture
-       ===================================================================== -->
-  <span class="eyebrow">consolidation</span>
-  <h2>Part 1 · Connecting the Presentation Tier to Enterprise Beans</h2>
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a list from a manual — five things, in plain words, each one something you can check off:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what a Local Client and a Remote Client are, and why the difference matters</td><td>Part 1</td></tr>
+      <tr><td>Wire a Facelets form to a backing bean and a bean method, line by line</td><td>Part 2, steps 1–7</td></tr>
+      <tr><td>Deploy the app and read the real output in the browser</td><td>Part 2, steps 8–9</td></tr>
+      <tr><td>Write a standalone remote client that looks a bean up by JNDI and calls it</td><td>Part 2, steps 10–12</td></tr>
+      <tr><td>Diagnose <code>NotSerializableException</code>, a silent form submit, and a broken lookup</td><td>Part 3</td></tr>
+    </tbody>
+  </table></div>
 
-  <p>In a standard Jakarta EE architecture, the web tier acts as a <strong>Local Client</strong> to your business beans,
-    while remote administrative tools or external microservices act as <strong>Remote Clients</strong>:</p>
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small label on the left of each block tells you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// consolidation</code> — the map: how the pieces connect.</li>
+        <li><code>// lab</code> — a numbered step you actually type and run.</li>
+        <li><code>// troubleshooting</code> — something went wrong; find your symptom here.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers stay hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Every step below tells you <strong>what you should see</strong> when it worked. If your screen does not match,
+      stop there — do not carry a mistake forward into the next step.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — THE MAP
+       ===================================================================== -->
+
+  <span class="eyebrow">consolidation</span>
+  <h2>Part 1 · The map: who calls the bean, and how</h2>
+
+  <p>Before you type anything, hold this picture in your head. There is one bean — the thing that knows how to convert
+    money. Two very different callers want to use it:</p>
+  <ul>
+    <li>A <strong>web page</strong>, served by the same application. That is a <strong>Local Client</strong>.</li>
+    <li>A <strong>partner bank's desktop program</strong>, running on a different machine. That is a <strong>Remote Client</strong>.</li>
+  </ul>
+  <p>Same bean, same method, two totally different journeys. That is the whole of Session 6 in one table:</p>
 
   <div class="tablewrap"><table>
     <thead><tr><th>Client Type</th><th>Component</th><th>How It Accesses EJB</th><th>Communication Boundary</th></tr></thead>
@@ -49,30 +91,170 @@
     </tbody>
   </table></div>
 
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>local</strong> call is you shouting across the room to a colleague. A <strong>remote</strong> call is
+      posting them a letter, having them write the answer, and posting it back.</p>
+    <p>Both get the job done. But one is nearly free, and the other has to <em>write your request down</em> first —
+      that writing-down is called <strong>serialization</strong>, and it is where most remote-client bugs live.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏦</span>
+    <div class="callout__b"><b>Analogy</b>
+      A teller at the next window is a local client: you hand them a form and they read it directly. A partner bank
+      in another city is a remote client: you must fax the form, and anything you fax has to be <em>on paper</em> —
+      you cannot fax a person. If your argument is not serializable, it cannot be faxed.</div>
+  </div>
+
+  <div class="callout callout--key"><span class="callout__i">❓</span>
+    <div class="callout__b"><b>The one rule that decides everything</b>
+      <ul style="margin:.6rem 0 0">
+        <li><strong>Same machine, same application</strong> → <code>@EJB</code> injection, a Local Client. Fast, simple, no serialization.</li>
+        <li><strong>Different machine, or a separate program</strong> → JNDI <code>lookup()</code>, a Remote Client. Every argument and return value must implement <code>java.io.Serializable</code>.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Which client type uses <code>@EJB</code> injection, and which uses <code>InitialContext.lookup()</code>?</li>
+      <li>Why does a local call take nanoseconds while a remote call takes milliseconds?</li>
+      <li>You are writing a desktop tool that a partner bank will install on their own machines. Local or remote?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The <strong>Local Client</strong> (web tier) uses <code>@EJB</code>/<code>@Inject</code>; the
+          <strong>Remote Client</strong> (standalone program) uses <code>InitialContext.lookup()</code>.</li>
+        <li>A local call passes a <strong>reference to the object already in memory</strong> — the caller and the bean
+          share the same JVM heap, so it is just a pointer. A remote call has to <strong>serialize the arguments into
+          bytes, send them over the network, and deserialize the reply</strong> — real work with real travel time.</li>
+        <li><strong>Remote.</strong> Different machines means a network boundary, so you need a remote interface and
+          everything passed across must be <code>Serializable</code>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Part 2: End-to-End Walkthrough
+       PART 2 — THE LAB
        ===================================================================== -->
-  <span class="eyebrow">practical walkthrough</span>
-  <h2>Part 2 · The Integrated Currency Converter Lab</h2>
 
-  <p>Let's examine how a Facelet page invokes an enterprise bean that provides both a <code>@Local</code> view
-    for the web interface and a <code>@Remote</code> view for external partner bank integrations.</p>
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Build the converter and call it two ways</h2>
 
-  <div class="code-head">1. The Dual Business Interfaces</div>
-  <pre><code>// Local view for the JSF Web Tier
+  <p>This is the practical half. You will write six small files, deploy one war, and drive it from both a browser and a
+    command line. Follow the steps in order — each one assumes the previous one worked.</p>
+
+  <div class="callout callout--key"><span class="callout__i">🎯</span>
+    <div class="callout__b"><b>What you will have at the end</b>
+      A web page at <code>http://localhost:8080/currency-converter/converter.xhtml</code> that converts 250 USD to EUR
+      using a container-managed bean — and a terminal that prints the <em>same</em> conversion, produced by a program
+      that is not part of the web application at all.</div>
+  </div>
+
+  <h3>Before you begin</h3>
+  <p>You need the same three tools as Session 1. If any is missing, do <a href="01-setup.html">Set up your workshop</a> first.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>#</th><th>What</th><th>Check it with</th><th>You want to see</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>JDK 17</td><td><code>java -version</code></td><td><code>openjdk version "17…</code></td></tr>
+      <tr><td>2</td><td>Maven</td><td><code>mvn -v</code></td><td><code>Apache Maven 3.9…</code></td></tr>
+      <tr><td>3</td><td>WildFly 30+ (running)</td><td>open <code>http://localhost:8080</code></td><td>the WildFly welcome page</td></tr>
+    </tbody>
+  </table></div>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Start WildFly and leave it running</h4>
+      <p>In WildFly's <code>bin</code> folder:</p>
+      <pre><code>standalone.bat          REM  Windows
+./standalone.sh         #    macOS / Linux</code></pre>
+      <p><strong>Leave this window open.</strong> Nothing in this lab works until the console prints:</p>
+      <pre><code>WildFly Full 30.0.1.Final started in 3512ms</code></pre>
+      <p><strong>You should see:</strong> that <code>started in …ms</code> line. If you do not, you are not ready for step 2.</p>
+    </li>
+
+    <li>
+      <h4>Create the project, then open a second terminal in it</h4>
+      <p>Make a folder for the lab and go into it:</p>
+      <pre><code>mkdir currency-converter
+cd currency-converter</code></pre>
+      <p>Create <code>pom.xml</code> with <strong>exactly</strong> this content. Maven will not build a fragment —
+        it needs the whole file, from <code>&lt;project&gt;</code> to <code>&lt;/project&gt;</code>. The two lines
+        that carry the meaning are the packaging and the provided-scope API:</p>
+      <div class="code-head">pom.xml</div>
+      <pre><code>&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;currency-converter&lt;/artifactId&gt;
+  &lt;version&gt;1.0&lt;/version&gt;
+  &lt;packaging&gt;war&lt;/packaging&gt;
+
+  &lt;properties&gt;
+    &lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+  &lt;/properties&gt;
+
+  &lt;dependencies&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+      &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+      &lt;version&gt;10.0.0&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;      &lt;!-- the server already has this — do not ship a copy --&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+&lt;/project&gt;</code></pre>
+      <p><code>&lt;artifactId&gt;currency-converter&lt;/artifactId&gt;</code> is what names the output file:
+        it builds <code>target/currency-converter.war</code> — the exact name you deploy in step 8 and look up in
+        step 10. <code>war</code> tells Maven to build the zip the server understands. <code>provided</code> says
+        “I need the API to compile, but WildFly supplies its own copy at runtime.”</p>
+    </li>
+
+    <li>
+      <h4>Write the two interfaces — the whole point of the lab</h4>
+      <p>This is the design decision the session is really about. One bean, two doorways in. Put both files in
+        <code>src/main/java/com/globalbank/ejb/</code>. Each is a <strong>complete file</strong> — the
+        <code>package</code> line and the annotation import are not optional, because the bean and the backing bean
+        both refer to them by their fully-qualified name, <code>com.globalbank.ejb.CurrencyLocal</code> and
+        <code>com.globalbank.ejb.CurrencyRemote</code>.</p>
+      <div class="code-head">src/main/java/com/globalbank/ejb/CurrencyLocal.java</div>
+      <pre><code>package com.globalbank.ejb;
+
+import jakarta.ejb.Local;
+
+// Local view for the JSF Web Tier
 @Local
 public interface CurrencyLocal {
     double convert(double amount, String from, String to);
-}
+}</code></pre>
+      <div class="code-head">src/main/java/com/globalbank/ejb/CurrencyRemote.java</div>
+      <pre><code>package com.globalbank.ejb;
 
-// Remote view for Partner Banks & Desktop Terminals
+import jakarta.ejb.Remote;
+
+// Remote view for Partner Banks &amp; Desktop Terminals
 @Remote
 public interface CurrencyRemote {
     double convert(double amount, String from, String to);
 }</code></pre>
+      <p><strong>Why two?</strong> A single interface <em>cannot</em> be both. Local and remote have incompatible
+        rules: local passes an object reference, remote must copy the object as bytes. So you declare two separate
+        interfaces and let one class implement both.</p>
+      <p><strong>You should see:</strong> two tiny files, each with a package line, one import and one method. That
+        is all an interface needs to be here.</p>
+    </li>
 
-  <div class="code-head">2. CurrencyConverterBean.java — Stateless Bean implementing both views</div>
-  <pre><code>package com.globalbank.ejb;
+    <li>
+      <h4>Write the bean that implements both</h4>
+      <div class="code-head">2. CurrencyConverterBean.java — Stateless Bean implementing both views</div>
+      <pre><code>package com.globalbank.ejb;
 
 import jakarta.ejb.Stateless;
 
@@ -82,14 +264,21 @@ public class CurrencyConverterBean implements CurrencyLocal, CurrencyRemote {
     @Override
     public double convert(double amount, String from, String to) {
         // Simplified exchange rate calculation
-        if ("USD".equalsIgnoreCase(from) && "EUR".equalsIgnoreCase(to)) return amount * 0.92;
-        if ("EUR".equalsIgnoreCase(from) && "USD".equalsIgnoreCase(to)) return amount * 1.09;
+        if ("USD".equalsIgnoreCase(from) &amp;&amp; "EUR".equalsIgnoreCase(to)) return amount * 0.92;
+        if ("EUR".equalsIgnoreCase(from) &amp;&amp; "USD".equalsIgnoreCase(to)) return amount * 1.09;
         return amount; // default 1:1
     }
 }</code></pre>
+      <p>Notice there is no <code>new</code>, no threads, no database. The business rule and one annotation. The
+        <code>implements CurrencyLocal, CurrencyRemote</code> clause is what makes the same method reachable both ways.</p>
+    </li>
 
-  <div class="code-head">3. ConverterBackingBean.java — CDI Backing Bean for JSF</div>
-  <pre><code>package com.globalbank.web;
+    <li>
+      <h4>Write the CDI backing bean the web page will talk to</h4>
+      <p>A Facelets page cannot call a bean directly. It binds to a <strong>backing bean</strong> — an ordinary CDI
+        bean that holds the form fields and calls the EJB. Put it in <code>src/main/java/com/globalbank/web/</code>.</p>
+      <div class="code-head">3. ConverterBackingBean.java — CDI Backing Bean for JSF</div>
+      <pre><code>package com.globalbank.web;
 
 import jakarta.ejb.EJB;
 import jakarta.enterprise.context.RequestScoped;
@@ -114,9 +303,23 @@ public class ConverterBackingBean {
 
     // Getters and setters for amount, from, to, result...
 }</code></pre>
+      <div class="plainwords"><b>In plain words</b>
+        <p><code>@Named("currencyBean")</code> gives this bean a name the page can use in expressions:
+          <code>#{currencyBean.amount}</code>.</p>
+        <p><code>@RequestScoped</code> means the container makes a fresh one for every request — so the form starts
+          clean each time, and nothing leaks between users.</p>
+        <p><code>@EJB</code> on the field is the Local Client call in action: the container fills in a ready bean, and
+          <code>currencyService.convert(...)</code> is a direct in-memory call.</p>
+      </div>
+      <p><strong>Note:</strong> the comment at the bottom is not decoration — JSF needs the getters and setters to read
+        and write those fields. Generate them in your IDE (or write them out). Without them the form binds to nothing.</p>
+    </li>
 
-  <div class="code-head">4. converter.xhtml — Facelets Form</div>
-  <pre><code>&lt;!DOCTYPE html&gt;
+    <li>
+      <h4>Write the Facelets page</h4>
+      <p>Put <code>converter.xhtml</code> in <code>src/main/webapp/</code>. This is the file the browser actually opens.</p>
+      <div class="code-head">4. converter.xhtml — Facelets Form</div>
+      <pre><code>&lt;!DOCTYPE html&gt;
 &lt;html xmlns="http://www.w3.org/1999/xhtml"
       xmlns:h="jakarta.faces.html"&gt;
 &lt;h:head&gt;&lt;title&gt;Currency Exchange&lt;/title&gt;&lt;/h:head&gt;
@@ -133,35 +336,74 @@ public class ConverterBackingBean {
     &lt;/h:panelGroup&gt;
 &lt;/h:body&gt;
 &lt;/html&gt;</code></pre>
+      <p>Three things carry all the meaning:</p>
+      <ul>
+        <li><code>h:inputText value="#{currencyBean.amount}"</code> — the text box is bound to the bean's
+          <code>amount</code> field. Type 250 and the field becomes 250.</li>
+        <li><code>h:commandButton action="#{currencyBean.calculate}"</code> — the button's action is a
+          <strong>method call</strong>, not a link. That is the local call into the bean.</li>
+        <li><code>h:panelGroup rendered="#{currencyBean.result gt 0}"</code> — <code>gt</code> means “greater than”.
+          The result paragraph is simply not rendered until there is a result to show.</li>
+      </ul>
+    </li>
 
-  <!-- =====================================================================
-       Part 3: Common Pitfalls & Debugging
-       ===================================================================== -->
-  <span class="eyebrow">troubleshooting</span>
-  <h2>Part 3 · Top 3 Integration Gotchas for Sessions 5 &amp; 6</h2>
+    <li>
+      <h4>Add an <code>&lt;h:messages /&gt;</code> tag now, not later</h4>
+      <p>Beginners skip this and then spend an hour wondering why the button “does nothing”. A validation failure
+        makes JSF <strong>silently skip</strong> your action method and jump straight to rendering — with no error on
+        your page unless you ask for it. Put this line inside the form, just before the button:</p>
+      <div class="code-head">converter.xhtml — add inside &lt;h:form&gt;</div>
+      <pre><code>&lt;h:messages /&gt;</code></pre>
+      <p><strong>You should see:</strong> nothing new when everything is fine — <code>h:messages</code> renders only
+        when there are messages to show. It is your smoke alarm, silent until there is smoke.</p>
+    </li>
 
-  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
-    <div class="callout__b"><b>Trap 1: <code>java.io.NotSerializableException</code> on Remote Calls</b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Remote client call fails with <code>WriteObjectException: NotSerializableException: com.model.Customer</code>.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> When passing custom objects to <code>@Remote</code> methods, <em>every object and every nested member field</em> must implement <code>java.io.Serializable</code>.</p>
-    </div>
-  </div>
+    <li>
+      <h4>Build it</h4>
+      <pre><code>mvn clean package</code></pre>
+      <p>Wait for <code>BUILD SUCCESS</code>.</p>
+      <p><strong>You should see:</strong> a real deployable file at <code>target/currency-converter.war</code>. If the
+        build fails, jump to the troubleshooting table in Part 3 and read the <em>first</em> error line, not the last.</p>
+    </li>
 
-  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
-    <div class="callout__b"><b>Trap 2: Submitting a form without action method firing</b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> Clicking the submit button reloads the page, but the backing bean action method is never executed.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> Check Phase 3 (Process Validation). If an input fails validation or conversion, JSF skips directly to Phase 6. Add an <code>&lt;h:messages /&gt;</code> tag to your view to display the hidden validation error!</p>
-    </div>
-  </div>
+    <li>
+      <h4>Deploy it — by copying one file</h4>
+      <pre><code>copy target\currency-converter.war  &lt;WILDFLY_HOME&gt;\standalone\deployments\   REM  Windows
+cp   target/currency-converter.war  &lt;WILDFLY_HOME&gt;/standalone/deployments/    #    macOS / Linux</code></pre>
+      <p>Replace <code>&lt;WILDFLY_HOME&gt;</code> with the folder you unzipped WildFly into — for example
+        <code>C:\wildfly-30.0.1.Final</code> on Windows or <code>~/wildfly-30.0.1.Final</code> on macOS/Linux.
+        That is the <em>same</em> folder you ran <code>standalone.bat</code> from in step 1; if you are still in
+        that folder, this is <code>standalone\deployments\</code>.</p>
+      <p>Watch the <strong>first</strong> terminal (the server). Within a second or two:</p>
+      <pre><code>Deployed "currency-converter.war"</code></pre>
+      <p><strong>You should see:</strong> that <code>Deployed</code> line. Then, in the same server window, look for
+        the lines WildFly printed while registering your bean. It logs <em>several</em> JNDI names, and they do
+        <strong>not</strong> all start the same way:</p>
+      <pre><code>java:global/currency-converter/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote
+java:app/currency-converter/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote
+java:module/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote
+ejb:/currency-converter/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote</code></pre>
+      <p><strong>Copy the <code>ejb:</code> line — the last one.</strong> The step-10 code calls
+        <code>ctx.lookup()</code> with that <code>ejb:</code>-prefixed form, not with the <code>java:global/…</code>
+        form the log prints most prominently. Copy <code>java:global/…</code> out of habit and the lookup fails with
+        <code>NameNotFoundException</code>. Under the different prefix the two strings carry the same three parts —
+        app name, bean name, fully-qualified <code>@Remote</code> interface — which is why the code can hard-code
+        <code>ejb:/currency-converter/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote</code>.</p>
+    </li>
 
-  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
-    <div class="callout__b"><b>Trap 3: Annotating one interface with both <code>@Local</code> and <code>@Remote</code></b>
-      <p style="margin:.3rem 0"><strong>Symptom:</strong> WildFly deployment fails with an EJB specification violation exception.</p>
-      <p style="margin:.3rem 0"><strong>Fix:</strong> A single Java interface <em>cannot</em> be both local and remote. Declare two separate interfaces (e.g., <code>OrderServiceLocal</code> and <code>OrderServiceRemote</code>) and let the bean implement both.</p>
-    </div>
-  </div>
+    <li>
+      <h4>Use it in the browser</h4>
+      <p>Open:</p>
+      <pre><code>http://localhost:8080/currency-converter/converter.xhtml</code></pre>
+      <p>Type <code>250</code> in the Amount box and press <strong>Convert</strong>.</p>
+      <p><strong>You should see:</strong></p>
+      <pre><code>Converted Value: 230.0</code></pre>
+      <p>Stop for a second and appreciate what just happened. Your click was serialised into an HTTP POST. JSF restored
+        the view, read the amount out of the form, validated it, wrote it into the backing bean, and then — in
+        <strong>Invoke Application</strong> — called <code>calculate()</code>, which called <code>convert(250.0, "USD", "EUR")</code>
+        on the EJB. All three of those calls happened <strong>inside one JVM, by pointer</strong>. That is a Local Client,
+        and the replay below shows the exact same journey step by step:</p>
 
-  <!-- Interactive Simulator Bench -->
   <div class="bench" data-run="canned">
     <div class="bench__head">
       <span class="dot"></span>
@@ -186,6 +428,310 @@ Render updated HTML response with converted sum: $230.00 EUR</code></pre>
 [07:55:04,110] [JSF Phase 6] Re-rendering view with <p>Converted Value: 230.0</p>. HTTP 200 sent.
     </script>
     <pre class="bench__out" aria-live="polite"></pre>
+  </div>
+  </li>
+
+    <li>
+      <h4>Prove the split: break the local call on purpose</h4>
+      <p>The fastest way to understand a division of labour is to remove one side. In
+        <code>ConverterBackingBean.java</code>, delete the <code>@EJB</code> line above
+        <code>currencyService</code>, then rebuild and redeploy:</p>
+      <pre><code>mvn clean package
+copy target\currency-converter.war  &lt;WILDFLY_HOME&gt;\standalone\deployments\   REM  Windows
+cp   target/currency-converter.war  &lt;WILDFLY_HOME&gt;/standalone/deployments/    #    macOS / Linux</code></pre>
+      <p>Use the same <code>&lt;WILDFLY_HOME&gt;</code> path you substituted in step 8.</p>
+      <p>Press <strong>Convert</strong> again.</p>
+      <p><strong>You should see:</strong> it fail — <code>currencyService</code> is now null, so
+        <code>convert(...)</code> throws a <code>NullPointerException</code>. Nothing in the web page
+        <em>created</em> that bean; the container did, and <code>@EJB</code> was the request. Put the line back,
+        rebuild, redeploy, and it works again. That proves the backing bean owns no business logic — it only
+        forwards the request.</p>
+    </li>
+
+    <li>
+      <h4>Now write the Remote Client</h4>
+      <p>Everything so far lived inside the war. A remote client does not — it is an ordinary Java program sitting
+        outside the application, on its own JVM. That means it needs its own small project, and its own build file,
+        because the WildFly <em>client</em> libraries (the ones that make <code>InitialContext.lookup()</code> able to
+        speak HTTP-Remoting to the server) are not on a plain JDK's classpath.</p>
+      <p>Make a second folder <strong>beside</strong> <code>currency-converter</code> — not inside it — called
+        <code>currency-client</code>, and give it this <code>pom.xml</code>:</p>
+      <div class="code-head">currency-client/pom.xml</div>
+      <pre><code>&lt;project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;currency-client&lt;/artifactId&gt;
+  &lt;version&gt;1.0&lt;/version&gt;
+  &lt;packaging&gt;jar&lt;/packaging&gt;
+
+  &lt;properties&gt;
+    &lt;maven.compiler.release&gt;17&lt;/maven.compiler.release&gt;
+    &lt;project.build.sourceEncoding&gt;UTF-8&lt;/project.build.sourceEncoding&gt;
+    &lt;exec.mainClass&gt;com.globalbank.client.RemoteClient&lt;/exec.mainClass&gt;
+  &lt;/properties&gt;
+
+  &lt;dependencies&gt;
+    &lt;!-- Gives us the @Remote annotation used by the interface we copy in below --&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+      &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+      &lt;version&gt;10.0.0&lt;/version&gt;
+      &lt;scope&gt;provided&lt;/scope&gt;
+    &lt;/dependency&gt;
+
+    &lt;!-- The WildFly client stack: JNDI naming, EJB client, HTTP-Remoting --&gt;
+    &lt;dependency&gt;
+      &lt;groupId&gt;org.wildfly&lt;/groupId&gt;
+      &lt;artifactId&gt;wildfly-client-all&lt;/artifactId&gt;
+      &lt;version&gt;30.0.1.Final&lt;/version&gt;
+    &lt;/dependency&gt;
+  &lt;/dependencies&gt;
+
+  &lt;build&gt;
+    &lt;plugins&gt;
+      &lt;plugin&gt;
+        &lt;groupId&gt;org.codehaus.mojo&lt;/groupId&gt;
+        &lt;artifactId&gt;exec-maven-plugin&lt;/artifactId&gt;
+        &lt;version&gt;3.1.1&lt;/version&gt;
+        &lt;configuration&gt;
+          &lt;mainClass&gt;com.globalbank.client.RemoteClient&lt;/mainClass&gt;
+          &lt;!-- include the @Remote interface's compile-time API in the run classpath --&gt;
+          &lt;classpathScope&gt;compile&lt;/classpathScope&gt;
+        &lt;/configuration&gt;
+      &lt;/plugin&gt;
+    &lt;/plugins&gt;
+  &lt;/build&gt;
+&lt;/project&gt;</code></pre>
+      <p>Now the client needs the <strong>interface contract</strong>. The bean implementation stays on the server,
+        but the remote interface is the shared agreement both sides must know. Copy the file you wrote in step 3 into
+        the client project, at the same package path:</p>
+      <div class="code-head">currency-client/src/main/java/com/globalbank/ejb/CurrencyRemote.java</div>
+      <p>That is a straight copy of your <code>CurrencyRemote.java</code> from the server project — same
+        <code>package</code>, same import, same method. Do <strong>not</strong> copy
+        <code>CurrencyConverterBean.java</code>; the client must never see the implementation.</p>
+      <p>Finally, the client class itself. Create it at
+        <code>currency-client/src/main/java/com/globalbank/client/RemoteClient.java</code>:</p>
+      <div class="code-head">RemoteClient.java — standalone Java SE client</div>
+      <pre><code>package com.globalbank.client;
+
+import javax.naming.Context;
+import javax.naming.InitialContext;
+import java.util.Properties;
+import com.globalbank.ejb.CurrencyRemote;
+
+public class RemoteClient {
+
+    public static void main(String[] args) throws Exception {
+
+        // Tell the client how to reach WildFly over HTTP-Remoting.
+        Properties props = new Properties();
+        props.put(Context.INITIAL_CONTEXT_FACTORY,
+                  "org.wildfly.naming.client.WildFlyInitialContextFactory");
+        props.put(Context.PROVIDER_URL, "http-remoting://localhost:8080");
+
+        Context ctx = new InitialContext(props);
+
+        // This is the exact name WildFly printed in its deploy log (step 8).
+        CurrencyRemote service = (CurrencyRemote) ctx.lookup(
+            "ejb:/currency-converter/CurrencyConverterBean!" +
+            "com.globalbank.ejb.CurrencyRemote");
+
+        double result = service.convert(250.0, "USD", "EUR");
+        System.out.println("250.00 USD = " + result + " EUR");
+
+        ctx.close();
+    }
+}</code></pre>
+      <p>Read the lines in order and you can see the difference from the local case. There is no <code>@EJB</code>
+        here — nothing to inject, because this program is not part of the application. Instead it builds an
+        <strong>InitialContext</strong> pointed at <code>http-remoting://localhost:8080</code>, then asks the server
+        by <strong>name</strong> for the bean.</p>
+      <div class="callout callout--warn"><span class="callout__i">⚠️</span>
+        <div class="callout__b"><b>The name must match <em>exactly</em></b>
+          WildFly builds the JNDI name for you out of the app name, the bean name and the fully-qualified interface
+          name: <code>ejb:/&lt;app&gt;/&lt;Bean&gt;!&lt;package.Interface&gt;</code>. A typo anywhere — a capital letter,
+          a missing <code>!</code>, the wrong interface — produces <code>NameNotFoundException</code>. Copy it from the
+          server log. Never type it from memory.</div>
+      </div>
+      <p><strong>Note the cast.</strong> <code>ctx.lookup()</code> returns a plain <code>Object</code>, so you cast it
+        to <code>CurrencyRemote</code>. The client never sees the bean class itself — it only needs the remote
+        <em>interface</em>. That is why the interface had to be <code>@Remote</code>.</p>
+    </li>
+
+    <li>
+      <h4>Give the client its connection settings</h4>
+      <p>WildFly clients read a small properties file from the classpath to know which host to talk to. Create
+        <code>jboss-ejb-client.properties</code> in the client project's resources folder —
+        <code>currency-client/src/main/resources/</code>. Everything under <code>src/main/resources</code> is copied
+        to the classpath root by Maven, which is exactly where the client looks for this file:</p>
+      <div class="code-head">jboss-ejb-client.properties</div>
+      <pre><code>remote.connectionprovider.create.options.org.xnio.Options.SSL_ENABLED=false
+remote.connections=default
+remote.connection.default.host=localhost
+remote.connection.default.port=8080
+remote.connection.default.connect.options.org.xnio.Options.SASL_POLICY_NOANONYMOUS=false</code></pre>
+      <p><strong>You should see:</strong> nothing yet — this file is read silently at connection time. If the host or
+        port is wrong here, the first symptom is <code>Connection refused</code> or a connect timeout in step 12.</p>
+    </li>
+
+    <li>
+      <h4>Run it and compare with the browser</h4>
+      <p>From inside the <code>currency-client</code> folder, run the class with Maven — one command, no IDE and no
+        hand-built classpath needed:</p>
+      <pre><code>cd currency-client
+mvn -q compile exec:java</code></pre>
+      <p>Maven first downloads <code>wildfly-client-all</code>, then <code>exec:java</code> runs
+        <code>RemoteClient.main()</code> with every dependency already on the classpath.</p>
+      <p><strong>You should see:</strong></p>
+      <pre><code>250.00 USD = 230.0 EUR</code></pre>
+      <p>(If you prefer your IDE, that also works — but then you must add <code>wildfly-client-all</code> and the
+        Jakarta EE API to the run configuration's classpath yourself. The Maven command does it for you, which is why
+        it is the one to trust.)</p>
+      <p>Look at that number next to the browser's <code>Converted Value: 230.0</code>. <strong>Same bean, same rule,
+        same answer</strong> — but this time the arguments were serialized into bytes, sent over HTTP, executed on the
+        server, and the result serialized back. You have just proved the difference between a Local Client and a
+        Remote Client with your own two hands.</p>
+    </li>
+
+  </ol>
+
+  <div class="checkpoint"><b>Checkpoint 2 · mid-lab, before you move on</b>
+    <p>Do not run it yet — predict the answer first, out loud, then check.</p>
+    <ol>
+      <li>In <code>converter.xhtml</code>, the button is an <code>h:commandButton</code> with an
+        <code>action="#{currencyBean.calculate}"</code>. Which side — the page or the bean — owns the exchange-rate
+        rule?</li>
+      <li>If you changed <code>return amount * 0.92;</code> to <code>return amount * 0.80;</code>, how many files would
+        you have to edit to change <em>both</em> the browser result and the remote-client result?</li>
+      <li>Why does the remote client not need <code>CurrencyConverterBean.java</code> on its classpath?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The <strong>bean</strong>. The page only collects the number and asks the bean to do the work. The page
+          contains no business rule at all.</li>
+        <li><strong>One</strong> — <code>CurrencyConverterBean.java</code>. Both clients call the same method, so both
+          change together. That is the payoff of putting the rule in the bean instead of the page.</li>
+        <li>Because it calls the bean through the <strong>remote interface</strong>. The client only needs the
+          interface and the Jakarta EE client libraries; the implementation stays on the server and is reached over
+          the wire.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — WHEN IT BREAKS
+       ===================================================================== -->
+
+  <span class="eyebrow">troubleshooting</span>
+  <h2>Part 3 · When it breaks — the three faults beginners hit</h2>
+
+  <p>These are not mistakes you made. They are the three places this integration <em>always</em> goes wrong, and
+    knowing them in advance is most of the skill. Each one gives you the symptom first — so you can recognise it on
+    your own screen — then the cause and the fix.</p>
+
+  <div class="callout callout--mistake"><span class="callout__i">1️⃣</span>
+    <div class="callout__b"><b>Trap 1: <code>java.io.NotSerializableException</code> on Remote Calls</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Remote client call fails with <code>WriteObjectException: NotSerializableException: com.model.Customer</code>.</p>
+      <p style="margin:.3rem 0"><strong>Cause:</strong> to cross a network, every argument and every return value is
+        written into a byte stream. Java can only do that for objects that have agreed to it.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> When passing custom objects to <code>@Remote</code> methods, <em>every object and every nested member field</em> must implement <code>java.io.Serializable</code>.</p>
+      <p style="margin:.3rem 0"><strong>In our lab:</strong> <code>double</code> and <code>String</code> already are,
+        which is exactly why this lab runs clean. The moment you add a <code>Money</code> or <code>Customer</code>
+        class to a remote method, this is waiting for you.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">2️⃣</span>
+    <div class="callout__b"><b>Trap 2: Submitting a form without the action method firing</b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> Clicking the submit button reloads the page, but the backing bean action method is never executed — no output, no error.</p>
+      <p style="margin:.3rem 0"><strong>Cause:</strong> Check Phase 3 (Process Validation). If an input fails validation or conversion, JSF short-circuits straight to Phase 6 and never reaches Invoke Application — so your button's action never runs.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> Add an <code>&lt;h:messages /&gt;</code> tag to your view to display the hidden validation error — the one you added in step 7 of Part 2! It turns a silent nothing into a visible message.</p>
+      <p style="margin:.3rem 0"><strong>Why it feels so bad:</strong> nothing crashed, so nothing appears in the server
+        log either. Without <code>h:messages</code> the failure is genuinely invisible. This is the single most
+        common reason a beginner thinks “JSF is broken”.</p>
+    </div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">3️⃣</span>
+    <div class="callout__b"><b>Trap 3: Annotating one interface with both <code>@Local</code> and <code>@Remote</code></b>
+      <p style="margin:.3rem 0"><strong>Symptom:</strong> WildFly deployment fails with an EJB specification violation exception.</p>
+      <p style="margin:.3rem 0"><strong>Cause:</strong> local means “hand over the reference”; remote means “serialize a copy”. One interface cannot promise both.</p>
+      <p style="margin:.3rem 0"><strong>Fix:</strong> A single Java interface <em>cannot</em> be both local and remote. Declare two separate interfaces (e.g., <code>OrderServiceLocal</code> and <code>OrderServiceRemote</code>) and let the bean implement both — exactly as <code>CurrencyLocal</code> and <code>CurrencyRemote</code> do in step 3.</p>
+    </div>
+  </div>
+
+  <h3>The symptom table — find yours and fix it</h3>
+  <p>Everyone hits these. Locate your exact message, apply the fix, and carry on. This is normal developer work, not
+    failure.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>WriteObjectException: NotSerializableException: com.globalbank.model.X</code></td>
+        <td>You passed a custom object to a <code>@Remote</code> method, and it (or a field inside it) is not serializable</td>
+        <td>Make the class — and every field in it — implement <code>java.io.Serializable</code>, then redeploy</td>
+      </tr>
+      <tr>
+        <td>Clicking <strong>Convert</strong> reloads the page and nothing happens</td>
+        <td>A field failed validation in Phase 3, so JSF jumped straight to Render Response and never called <code>calculate()</code></td>
+        <td>Add <code>&lt;h:messages /&gt;</code> inside the form and reload — the reason will appear</td>
+      </tr>
+      <tr>
+        <td>Deployment fails: <em>“an interface may not have both @Local and @Remote”</em></td>
+        <td>One interface carries both annotations</td>
+        <td>Split it into two interfaces and have the bean <code>implements</code> both</td>
+      </tr>
+      <tr>
+        <td><code>javax.naming.NameNotFoundException</code> on the remote lookup</td>
+        <td>The JNDI string does not match what WildFly registered</td>
+        <td>Copy the exact <code>ejb:/…!…</code> line from the deploy log; check the capital letters and the <code>!</code></td>
+      </tr>
+      <tr>
+        <td><code>ClassNotFoundException: org.wildfly.naming.client.WildFlyInitialContextFactory</code></td>
+        <td>The standalone client has no WildFly client libraries on its classpath</td>
+        <td>Add <code>wildfly-client-all</code> (or the ejb/naming client jars) to the remote project's classpath</td>
+      </tr>
+      <tr>
+        <td><code>Connection refused</code> when the remote client runs</td>
+        <td>WildFly is not running, or the port in the properties file is wrong</td>
+        <td>Start the server (step 1), and confirm <code>http-remoting://localhost:8080</code> matches your setup</td>
+      </tr>
+      <tr>
+        <td>Browser shows <code>404 Not Found</code> for <code>converter.xhtml</code></td>
+        <td>The war has not finished deploying, or the path is wrong</td>
+        <td>Wait for <code>Deployed "currency-converter.war"</code> and check the URL spelling</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before the quiz</b>
+    <p>Three quick diagnoses, then check your answers.</p>
+    <ol>
+      <li>Your form works for a typed number but reloads silently when you enter letters. Which JSF phase is
+        responsible, and what do you add to see the reason?</li>
+      <li>A remote call throws <code>WriteObjectException</code> only after you add a new method taking a
+        <code>Customer</code>. What is the single missing word on the <code>Customer</code> class?</li>
+      <li>WildFly refuses to deploy because one interface has both <code>@Local</code> and <code>@Remote</code>.
+        What is the correct fix — delete one annotation, or split the interface?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><strong>Phase 3, Process Validation.</strong> A bad conversion short-circuits to Render Response. Add
+          <code>&lt;h:messages /&gt;</code> to the form to see the message.</li>
+        <li><code>implements java.io.Serializable</code> — and every object it contains must be serializable too.</li>
+        <li><strong>Split the interface</strong> into two. The bean can implement both; no single interface may declare
+          both.</li>
+      </ol>
+    </details>
   </div>
 
   <!-- =====================================================================
@@ -230,15 +776,15 @@ Render updated HTML response with converted sum: $230.00 EUR</code></pre>
         "why": "Local and remote interfaces have fundamentally incompatible semantics (reference vs. serialization) and must be declared separately."
       },
       {
-        "q": "What tag is used in a composite component to define the attributes that callers can pass in?",
+        "q": "A standalone Java program reaches your EJB with InitialContext.lookup(\"ejb:/currency-converter/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote\"). Why does the client need only the interface — not CurrencyConverterBean.java — on its classpath?",
         "opts": [
-          "<composite:attribute>",
-          "<ui:param>",
-          "<h:attribute>",
-          "<f:param>"
+          "The remote call goes through the @Remote interface contract; the bean implementation stays on the server and is reached over the network",
+          "The JVM downloads the bean class automatically at run time",
+          "The bean class is serialized inside the JNDI name",
+          "Maven always copies the bean class into a client project"
         ],
         "a": 0,
-        "why": "<composite:attribute> declares configurable properties on the composite component's interface."
+        "why": "A remote client depends only on the shared interface contract plus the WildFly client libraries. The container instantiates and runs the bean implementation on the server, so the client never needs it."
       },
       {
         "q": "Which exception is thrown if a custom argument passed to a @Remote EJB does not implement java.io.Serializable?",
@@ -250,6 +796,28 @@ Render updated HTML response with converted sum: $230.00 EUR</code></pre>
         ],
         "a": 0,
         "why": "Remote method calls marshal parameters into byte streams using Java serialization; non-serializable objects cause NotSerializableException."
+      },
+      {
+        "q": "Which JSF lifecycle phase actually invokes the backing bean's action method (for example calculate())?",
+        "opts": [
+          "Phase 1 — Restore View",
+          "Phase 3 — Process Validation",
+          "Phase 5 — Invoke Application",
+          "Phase 6 — Render Response"
+        ],
+        "a": 2,
+        "why": "The button's action is a method call, and method calls happen in Phase 5. If validation fails earlier, Phase 5 is skipped entirely."
+      },
+      {
+        "q": "In a standalone remote client, what is the JNDI name in ctx.lookup(\"ejb:/app/Bean!pkg.Interface\") used for?",
+        "opts": [
+          "It is a file path on disk",
+          "It is the name WildFly registered for that bean's remote interface, used to find it on the server",
+          "It is the name of a database table",
+          "It tells the client which port to open"
+        ],
+        "a": 1,
+        "why": "InitialContext resolves the name against the server's JNDI registry. If it does not match the registered name exactly, you get NameNotFoundException."
       }
     ]
     </script>
@@ -267,6 +835,127 @@ Render updated HTML response with converted sum: $230.00 EUR</code></pre>
     <tr><td><strong>Remote Prerequisite</strong></td><td>All arguments and return values must implement <code>java.io.Serializable</code>.</td></tr>
     <tr><td><strong>Validation Errors</strong></td><td>Always include <code>&lt;h:messages /&gt;</code> to diagnose silent short-circuits.</td></tr>
   </tbody></table></div>
+
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE — optional depth, collapsed by default
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Reference — the parts you can look up later</h2>
+  <p>None of this is needed to follow the lab. It is here because exams and the textbook use these exact terms, and you
+    will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>🔄 The JSF lifecycle, phase by phase</strong></summary>
+    <p>Every button click walks these six phases in order. Knowing the names tells you <em>where</em> a bug is hiding.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Phase</th><th>Name</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>Restore View</td><td>The server rebuilds the page's component tree (or creates it on the first request).</td></tr>
+        <tr><td>2</td><td>Apply Request Values</td><td>Values submitted by the browser are copied into the components.</td></tr>
+        <tr><td>3</td><td>Process Validation</td><td>Each value is converted and validated. <strong>On failure, JSF jumps straight to Phase 6.</strong></td></tr>
+        <tr><td>4</td><td>Update Model</td><td>Valid values are written into your backing bean's fields.</td></tr>
+        <tr><td>5</td><td>Invoke Application</td><td>Your <code>action</code> method runs — this is where <code>calculate()</code> is called.</td></tr>
+        <tr><td>6</td><td>Render Response</td><td>The response HTML is produced and sent back to the browser.</td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout callout--tip"><span class="callout__i">💡</span>
+      <div class="callout__b"><b>The one shortcut worth memorising</b>
+        Anything that fails in Phase 3 skips Phases 4 and 5. That single fact explains “my button does nothing” more
+        often than every other cause put together.</div>
+    </div>
+  </details>
+
+  <details>
+    <summary><strong>🏦 Local vs Remote — the full comparison</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Local Client</th><th>Remote Client</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Where it runs</strong></td><td>Same JVM, same application</td><td>A separate program, possibly another machine</td></tr>
+        <tr><td><strong>How it gets the bean</strong></td><td><code>@EJB</code> or <code>@Inject</code></td><td><code>InitialContext.lookup("ejb:/…")</code></td></tr>
+        <tr><td><strong>How arguments travel</strong></td><td>Pass-by-reference — the object itself</td><td>Serialized copies over the wire</td></tr>
+        <tr><td><strong>Speed</strong></td><td>Nanoseconds</td><td>Milliseconds</td></tr>
+        <tr><td><strong>Arguments must be Serializable?</strong></td><td>No</td><td><strong>Yes — always</strong></td></tr>
+        <tr><td><strong>Interface annotation</strong></td><td><code>@Local</code></td><td><code>@Remote</code></td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🔎 How WildFly builds the JNDI name</strong></summary>
+    <p>The name the deploy log prints follows a fixed pattern. Read it left to right:</p>
+    <pre><code>ejb:/currency-converter/CurrencyConverterBean!com.globalbank.ejb.CurrencyRemote
+ │        │                  │                    │
+ │        │                  │                    └── fully-qualified REMOTE interface name
+ │        │                  └─────────────────────── the bean class name
+ │        └────────────────────────────────────────── the deployed application (war) name
+ └─────────────────────────────────────────────────── the EJB namespace prefix</code></pre>
+    <p>Change the war's build name, rename the bean, or move the interface to a different package and this string
+      changes with it. That is exactly why you copy it from the log instead of trusting memory.</p>
+  </details>
+
+  <details>
+    <summary><strong>📦 Serialization rules for remote calls — the checklist</strong></summary>
+    <ol>
+      <li>The class implements <code>java.io.Serializable</code>.</li>
+      <li>Every field inside it is either a primitive, a known-serializable type (like <code>String</code>), or
+        itself serializable.</li>
+      <li>Fields that cannot be serialized (an open connection, a file handle) are marked <code>transient</code>, so
+        they are skipped rather than breaking the call.</li>
+      <li>The class has an <code>serialVersionUID</code>, so client and server agree on the version of the class.</li>
+    </ol>
+    <p>Miss any of these on a <em>remote</em> call and you meet Trap 1. On a <em>local</em> call, none of them matter.</p>
+  </details>
+
+  <hr>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Annotating one interface with both <code>@Local</code> and <code>@Remote</code></td><td>Declare two interfaces — <code>CurrencyLocal</code> and <code>CurrencyRemote</code> — and let the bean implement both.</td></tr>
+      <tr><td>Passing a plain custom object to a <code>@Remote</code> method</td><td>Make it (and its fields) implement <code>java.io.Serializable</code>, or mark un-serializable fields <code>transient</code>.</td></tr>
+      <tr><td>Forgetting <code>&lt;h:messages /&gt;</code> on a form</td><td>Add it inside the form. Without it, a Phase 3 validation failure is completely silent.</td></tr>
+      <tr><td>Typing the JNDI name from memory</td><td>Copy the exact <code>ejb:/…!…</code> string from WildFly's deploy log.</td></tr>
+      <tr><td>Putting the exchange-rate rule in the XHTML or the backing bean</td><td>Keep it in the EJB. Both the page and the remote client then share one rule and one fix.</td></tr>
+      <tr><td>Forgetting the getters and setters on the backing bean</td><td>JSF binds to fields through them. Without them the form silently binds to nothing.</td></tr>
+      <tr><td>Expecting <code>ctx.lookup()</code> to return your interface type</td><td>It returns <code>Object</code>. Cast it: <code>(CurrencyRemote) ctx.lookup(...)</code>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Everything from Sessions 5 and 6 turns up in the rest of the course:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this page</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>Facelets, backing beans, the JSF lifecycle</td><td>Any later web-tier work; the same binding style reappears with CDI</td></tr>
+      <tr><td><code>@Local</code> vs <code>@Remote</code></td><td><a href="session-06-local-remote.html">Session 6 — Local &amp; Remote Clients</a></td></tr>
+      <tr><td>JNDI <code>lookup()</code> and exact names</td><td><a href="session-03-resource-creation.html">Session 3 — Resource Creation</a></td></tr>
+      <tr><td>Serialization across a boundary</td><td><a href="session-07-messaging.html">Session 7 — Jakarta Messaging</a> (message payloads are serialized too)</td></tr>
+      <tr><td>Backing beans as CDI beans</td><td><a href="session-11-cdi-part1.html">Sessions 11–12 — CDI</a></td></tr>
+      <tr><td>Entities carried over remote calls</td><td><a href="13-jpa-persistence.html">Bonus — JPA: Storing Objects Properly</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/faces/" target="_blank" rel="noopener">Jakarta Server Faces (Faces / Facelets) Specification</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly EJB Client and Remote JNDI Guide</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 

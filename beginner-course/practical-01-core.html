@@ -1,0 +1,1046 @@
+<title>Practical 1 — Build the Core (GlobalBank)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Practical 1 of the GlobalBank practicum: build, deploy and drive a real Jakarta EE banking application with a JPA entity, a stateless service bean, a locked singleton counter and a startup seed bean — on WildFly, with no database to install.">
+<link rel="stylesheet" href="assets/css/styles.css">
+<script>window.PAGE = "p1";</script>
+
+<main class="page">
+
+  <h1>Practical 1 · Build the Core</h1>
+  <p class="lede">You have read about enterprise beans, containers and transactions. Now you build one.
+    <strong>GlobalBank</strong> is a small banking application that you will grow across three practicals —
+    this one is the core: a bank account stored in a database, a service bean that moves money, a counter
+    that hands out account numbers, and a web address you can drive from your browser. Nothing here is
+    simulated. You will build a real <code>.war</code> file, deploy it to a real WildFly, and watch a real
+    transaction refuse to move money that is not there.</p>
+
+  <div class="callout callout--key"><span class="callout__i">✓</span>
+    <div class="callout__b"><b>Four promises before we start</b>
+      <ol style="margin:.6rem 0 0;padding-left:1.2rem">
+        <li><strong>It is already written.</strong> Every file exists in the project folder. You are not
+          typing a hundred lines from a textbook — you are building, running and then reading code that
+          works.</li>
+        <li><strong>There is nothing to install first.</strong> No PostgreSQL. No driver. No database
+          setup. WildFly ships an in-memory database, and this project is configured to use it.</li>
+        <li><strong>Every step is checkable.</strong> Each step gives the exact command and then
+          <em>what you should see</em>. If what you see is different, there is a troubleshooting table.</li>
+        <li><strong>By the end you will have watched a transaction save you.</strong> You will make a
+          transfer fail on purpose, and see that nothing was lost — which is the single most important
+          idea in the whole course.</li>
+      </ol>
+    </div>
+  </div>
+
+  <h2>What you will be able to do by the end</h2>
+  <p>Five concrete things, not a list copied from a manual:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Say what each of the five classes does, and which session it came from</td><td>Part 1</td></tr>
+      <tr><td>Build a Jakarta EE project with Maven and find the <code>.war</code> it produced</td><td>Part 2</td></tr>
+      <tr><td>Deploy that <code>.war</code> to WildFly and confirm the server accepted it</td><td>Part 2</td></tr>
+      <tr><td>Drive the running application from a browser address bar and read what it answers</td><td>Part 3</td></tr>
+      <tr><td>Explain what <code>@Version</code> and <code>rollback = true</code> actually did when you saw them</td><td>Part 3 &amp; 4</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// lab</code> — a numbered step with something to type and something to check.</li>
+        <li><code>// terminal</code> — a fake shell. Type the commands yourself and see realistic output,
+          with no server and no risk.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch a real deployment replay.</li>
+        <li><code>// checkpoint</code> — a self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      If you have not set up Java, Maven and WildFly yet, do
+      <a href="01-setup.html">Set up your workshop</a> first. Everything on this page assumes those three
+      work.
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 1 — WHAT YOU ARE BUILDING
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · What you are building</h2>
+
+  <p>GlobalBank is a deliberately tiny bank. It has accounts, each with a holder's name and a balance, and
+    it can do four things: open an account, deposit, withdraw, and transfer between two accounts. That is
+    the whole business. Everything else in this practical is about <em>how</em> those four things are
+    written — and the "how" is the entire point of Jakarta EE.</p>
+
+  <h3>1.1 The project on disk</h3>
+  <p>Open the folder <code>beginner-course/lab/practical-1-core/</code>. It looks like this:</p>
+
+  <pre><code>practical-1-core/
+├── README.md                                     run guide, troubleshooting, challenges
+├── pom.xml                                       how to build the project
+└── src/main/
+    ├── java/com/globalbank/
+    │   ├── entity/Account.java                   the bank account, a JPA entity
+    │   ├── ejb/AccountService.java               open / deposit / withdraw / transfer
+    │   ├── ejb/AccountNumberGenerator.java       one counter, @Singleton @Lock(WRITE)
+    │   ├── ejb/InsufficientFundsException.java   a refusal that undoes the transaction
+    │   ├── ejb/LedgerInitializer.java            seeds demo data at startup
+    │   └── web/AccountServlet.java               a browser front door for the beans
+    ├── resources/META-INF/persistence.xml        which database, which entities
+    └── webapp/WEB-INF/beans.xml                  CDI marker (used properly in Practical 2)</code></pre>
+
+  <p>Six Java files and two configuration files. That is a complete enterprise application.</p>
+
+  <h3>1.2 The five classes, and the job each one does</h3>
+  <p>Read this table slowly. Every row is one idea from Sessions 1–4, and you will meet each of these
+    classes again later in this page.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Class</th><th>Its one job</th><th>Session it comes from</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>Account</code></td>
+        <td>Be the <strong>shape of a bank account</strong> — id, holder, balance — and let the framework
+          store it in a table without you writing SQL.</td>
+        <td><a href="session-03-resource-creation.html">Session 3</a> +
+          <a href="13-jpa-persistence.html">JPA bonus</a></td>
+      </tr>
+      <tr>
+        <td><code>AccountService</code></td>
+        <td>Be the <strong>bank's business logic</strong>. It knows how to open, deposit, withdraw and
+          transfer, and nothing else in the application is allowed to know that.</td>
+        <td><a href="session-01-02-intro-and-beans.html">Sessions 1–2</a></td>
+      </tr>
+      <tr>
+        <td><code>AccountNumberGenerator</code></td>
+        <td>Hand out <strong>the next account number</strong> — exactly once each, even if a hundred
+          people open accounts in the same second.</td>
+        <td><a href="session-04-working-with-ejb.html">Session 4</a></td>
+      </tr>
+      <tr>
+        <td><code>InsufficientFundsException</code></td>
+        <td>Be the bank's <strong>official refusal</strong>, carrying the rule that a refusal must undo
+          the whole operation.</td>
+        <td><a href="session-10-ejb-transactions.html">Session 10</a></td>
+      </tr>
+      <tr>
+        <td><code>LedgerInitializer</code></td>
+        <td>Put <strong>three demo accounts</strong> in the database the moment the application is
+          deployed, so you have something to play with.</td>
+        <td><a href="session-04-working-with-ejb.html">Session 4</a> (lifecycle)</td>
+      </tr>
+      <tr>
+        <td><code>AccountServlet</code></td>
+        <td>Be the <strong>front door</strong>: turn a web address into a call on
+          <code>AccountService</code> and print the answer.</td>
+        <td><a href="session-01-02-intro-and-beans.html">Sessions 1–2</a></td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>A <strong>JPA entity</strong> is a Java class that a framework has been told to remember. You write
+      <code>@Entity</code> on it and mark one field <code>@Id</code>; from then on, changing an object in
+      memory is enough — the framework works out the SQL.</p>
+    <p>A <strong>stateless session bean</strong> is a class the <em>server</em> creates and reuses. You
+      never call <code>new</code> on it. You ask for one, and the server hands you a ready instance with a
+      database connection and a transaction already attached.</p>
+    <p>A <strong>singleton</strong> is the opposite: the server creates <em>exactly one</em> of it, shared
+      by everybody. That is perfect for a counter and dangerous for almost everything else.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">🍽️</span>
+    <div class="callout__b"><b>Analogy — the restaurant</b>
+      <code>AccountServlet</code> is the waiter: it takes your order and carries it to the kitchen. It
+      cannot cook. <code>AccountService</code> is the kitchen: it does the work and never talks to
+      customers. <code>Account</code> is the ingredients list. <code>AccountNumberGenerator</code> is the
+      single ticket dispenser by the door — one machine, one roll of numbers, so two customers can never
+      get ticket 47. And <code>LedgerInitializer</code> is the staff who unlock the restaurant and set the
+      tables before the first customer arrives.</div>
+  </div>
+
+  <h3>1.3 The one dependency you will not find</h3>
+  <p>Open <code>pom.xml</code> and look at the dependencies section. There is exactly one entry, and it
+    has <code>provided</code> scope. There is no database driver, no connection pool, no Hibernate
+    version to choose.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>&lt;scope&gt;provided&lt;/scope&gt;</code> means "do not ship this inside my application —
+      the server already has it". WildFly is a Jakarta EE server: the API and an implementation of every
+      specification are already there. Your <code>.war</code> stays small, and it does not fight the
+      server's copies.</p>
+    <p>The database comes from the same place. <code>persistence.xml</code> names
+      <code>java:jboss/datasources/ExampleDS</code> — an in-memory database WildFly creates for you at
+      startup. It is empty again every time you stop the server, which is ideal while learning.</p>
+  </div>
+
+  <div class="callout callout--warn"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>In-memory means temporary</b>
+      Everything you create in this practical disappears when you shut WildFly down. That is not a bug
+      and nothing is broken. Restart the server, redeploy, and you are back to the three seeded
+      accounts.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you build anything</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Which class knows that a transfer must debit one account <em>and</em> credit another?</li>
+      <li>Which class would you change if the bank decided account numbers should start at 5000?</li>
+      <li>Why is a <code>@Singleton</code> right for a counter but wrong for a bank account?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li><code>AccountService</code> — it owns the business rules. The servlet only passes the request
+          along; it has no idea a transfer involves two accounts.</li>
+        <li><code>AccountNumberGenerator</code> — the starting value <code>next = 2000</code> lives there
+          and nowhere else. One place to change is the reward for keeping the rule in one class.</li>
+        <li>Because a single instance is <em>shared</em>. For a counter that is exactly what you want:
+          one roll of numbers. For an account you want each account to be its own object with its own
+          balance — sharing one would mean everybody spending the same money.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 2 — BUILD AND DEPLOY IT
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 2 · Build it and put it on a server</h2>
+
+  <p>Four steps: start the server, build the project, look at what you built, hand it to the server. Nothing
+    here is hard, but it is all new, so each step tells you what success looks like.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Start WildFly</h4>
+      <p>Open a terminal in WildFly's <code>bin</code> folder and run:</p>
+      <pre><code>standalone.bat          REM  Windows
+./standalone.sh         #    macOS / Linux</code></pre>
+      <p><strong>Leave this window open</strong> for the whole practical — it is the server's log, and it
+        will tell you things the browser never will. Wait until you see a line like:</p>
+      <pre><code>WildFly Full 30.0.1.Final started in 3512ms</code></pre>
+      <p><strong>You should see</strong> that <code>started in …ms</code> line. If it never appears, jump
+        to the troubleshooting table further down this part — do not guess.</p>
+    </li>
+
+    <li>
+      <h4>Build the project</h4>
+      <p>Open a <strong>second</strong> terminal and move into the project — the folder that contains
+        <code>pom.xml</code>:</p>
+      <pre><code>cd beginner-course/lab/practical-1-core
+mvn clean package</code></pre>
+      <p><strong>You should see</strong> <code>BUILD SUCCESS</code>, and a few lines above it:</p>
+      <pre><code>[INFO] Building war: target/globalbank-core.war</code></pre>
+      <p>Confirm the file is really there:</p>
+      <pre><code>dir target              REM  Windows
+ls target               #    macOS / Linux</code></pre>
+      <p><strong>You should see</strong> <code>globalbank-core.war</code> in the list. That single file
+        contains your six classes, <code>persistence.xml</code> and <code>beans.xml</code>. Everything
+        else in <code>target/</code> is scaffolding.</p>
+    </li>
+
+    <li>
+      <h4>Deploy it</h4>
+      <p>Hand the war to the server by copying it into the folder WildFly watches:</p>
+      <pre><code>copy target\globalbank-core.war  c:\wildfly\standalone\deployments\      REM  Windows
+cp target/globalbank-core.war    ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p>Now watch the <strong>server</strong> window — the first terminal. Within a few seconds it prints
+        several lines, and you should find these among them:</p>
+      <pre><code>Deployed "globalbank-core.war"
+WFLYUT0021: Registered web context: '/globalbank-core'
+[Ledger] seeded 3 accounts: 1001, 1002, 1003</code></pre>
+      <p>That third line is the one worth staring at. <strong>You never ran it.</strong> Nobody clicked
+        anything, and no request has arrived yet. <code>LedgerInitializer</code> is marked
+        <code>@Startup</code>, so the server created it and called its <code>@PostConstruct</code> method
+        the instant your application went live — and that method wrote three rows into the database.</p>
+      <p>You can also do the same job through the management CLI, which is how deployments are done on
+        real servers. Connect and ask WildFly about your application:</p>
+      <pre><code>jboss-cli.bat --connect                  REM  Windows
+./jboss-cli.sh --connect                 #    macOS / Linux
+
+deploy target/globalbank-core.war
+deployment-info --name=globalbank-core.war</code></pre>
+      <p><strong>You should see</strong> a row whose <code>RUNTIME-STATUS</code> reads <code>OK</code>:</p>
+      <pre><code>NAME                     RUNTIME-NAME             PERSISTENT RUNTIME-STATUS
+globalbank-core.war      globalbank-core.war      true       OK</code></pre>
+      <p>That <code>OK</code> is the server's own answer that your application is live. It is worth more
+        than any amount of confidence.</p>
+    </li>
+
+    <li>
+      <h4>Practise the commands safely first</h4>
+      <p>If you would rather try the commands before touching your real machine, the terminal below is a
+        simulation. It runs nothing — but it answers exactly as a real one would, so you can see what
+        <code>BUILD SUCCESS</code> and a successful deploy look like before you go looking for them.</p>
+      <p>Try <code>help</code>, then <code>mvn clean package</code>, then
+        <code>dir c:\wildfly\standalone\deployments</code> — and notice the <code>.deployed</code> marker
+        file next to your war. That file is the server's status light.</p>
+
+      <div class="terminal" data-terminal="practicum"></div>
+    </li>
+
+    <li>
+      <h4>Watch the whole startup play out</h4>
+      <p>Press <strong>Run</strong> below to replay what the server actually logged while you were
+        copying that file. Read it as a sequence: the war is opened, the persistence unit starts and
+        generates the tables, the beans are registered, the startup bean seeds the ledger, the web context
+        is mounted, and the deployment marker flips to green.</p>
+
+      <div class="bench" data-run="canned">
+        <div class="bench__head">
+          <span class="dot"></span>
+          <span class="kind">interactive simulation</span>
+          <span class="mode">GlobalBank Core Deployment Replay</span>
+        </div>
+        <pre class="bench__code"><code>copy target\globalbank-core.war  c:\wildfly\standalone\deployments\
+WildFly unpacks the war, starts the persistence unit, creates the tables
+@Startup LedgerInitializer seeds 1001 / 1002 / 1003, then the web context goes live</code></pre>
+        <div class="bench__controls">
+          <button class="btn-run" type="button">Replay the deployment</button>
+          <span class="bench__hint">Simulated WildFly server log — offline, no server needed.</span>
+        </div>
+        <script type="text/plain" class="bench__canned">
+[10:12:04,110 INFO] [org.jboss.as.server] WFLYSRV0010: Deployed "globalbank-core.war" (runtime-name: "globalbank-core.war")
+[10:12:04,118 INFO] [org.hibernate] HHH000204: Processing PersistenceUnitInfo [name: globalbankPU]
+[10:12:04,126 INFO] [org.hibernate] create table accounts (id integer not null, holder varchar(60) not null, balance decimal(12,2) not null, version integer not null, primary key (id))
+[10:12:04,131 INFO] [org.jboss.as.ejb3] Starting EJB module globalbank-core.war
+[10:12:04,134 INFO] [org.jboss.as.ejb3] <span class='g'>AccountService</span>    -> @Stateless  -> pooled, joined the java:global namespace
+[10:12:04,135 INFO] [org.jboss.as.ejb3] <span class='g'>AccountNumberGenerator</span> -> @Singleton @Lock(WRITE) -> exactly one instance
+[10:12:04,136 INFO] [org.jboss.as.ejb3] <span class='g'>LedgerInitializer</span>   -> @Singleton @Startup -> created now, not on first use
+[10:12:04,140 INFO] [Ledger] seeded 3 accounts: 1001, 1002, 1003
+[10:12:04,143 INFO] [org.jboss.weld] CDI container started (beans.xml, bean-discovery-mode="all")
+[10:12:04,147 INFO] [org.jboss.as.web] WFLYUT0021: Registered web context: '/globalbank-core'
+[10:12:04,151 INFO] [org.jboss.as.server] globalbank-core.war.deployed created  <span class='g'>&lt;-- green light</span>
+        </script>
+        <pre class="bench__out" aria-live="polite"></pre>
+      </div>
+    </li>
+  </ol>
+
+  <h3>Troubleshooting: if it did not work</h3>
+  <p>Find your symptom in this table before changing anything. Every row here is a thing that happens to
+    everybody.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you see</th><th>What it means</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>mvn: command not found</code></td>
+        <td>Maven is not on your PATH</td>
+        <td>Use IntelliJ's bundled Maven, or add Maven's <code>bin</code> folder to PATH</td>
+      </tr>
+      <tr>
+        <td><code>BUILD FAILURE … release version 17 not supported</code></td>
+        <td>Your JDK is older than 17</td>
+        <td>Install Temurin JDK 17 and point <code>JAVA_HOME</code> at it</td>
+      </tr>
+      <tr>
+        <td>Red underlines under <code>@Stateless</code> or <code>@Entity</code></td>
+        <td>Maven has not downloaded the API yet</td>
+        <td>Right-click <code>pom.xml</code> → Maven → Reload project</td>
+      </tr>
+      <tr>
+        <td><code>404 Not Found</code> in the browser</td>
+        <td>Wrong address, or the war is not deployed</td>
+        <td>Look for <code>Deployed "globalbank-core.war"</code> in the server window, then check the path is <code>/globalbank-core/account</code></td>
+      </tr>
+      <tr>
+        <td><code>Connection refused</code></td>
+        <td>WildFly is not running, or the CLI never connected</td>
+        <td>Start it (step 1), wait for <code>started in …ms</code>, then connect with <code>--connect</code></td>
+      </tr>
+      <tr>
+        <td><code>500</code> and <code>Table "ACCOUNTS" not found</code></td>
+        <td>The schema was never generated</td>
+        <td>Check that <code>persistence.xml</code> ended up inside the war at <code>WEB-INF/classes/META-INF/</code>, then <code>mvn clean package</code> again</td>
+      </tr>
+      <tr>
+        <td><code>500</code> and <code>no persistence unit</code></td>
+        <td><code>persistence.xml</code> is in the wrong place</td>
+        <td>It must sit at <code>src/main/resources/META-INF/persistence.xml</code> — not next to the Java files</td>
+      </tr>
+      <tr>
+        <td><code>FAILED: IllegalArgumentException: … required</code></td>
+        <td>You left a parameter off the URL</td>
+        <td>Compare your address with the cheat-sheet in the Reference section</td>
+      </tr>
+      <tr>
+        <td>Port 8080 is already in use</td>
+        <td>Another program owns the port</td>
+        <td>Close it, or start WildFly with <code>-Djboss.socket.binding.port-offset=100</code> and use port <strong>8180</strong></td>
+      </tr>
+      <tr>
+        <td>Everything is <code>404</code> after a restart</td>
+        <td><code>ExampleDS</code> is an in-memory database</td>
+        <td>Restarting WildFly wipes the data <em>and</em> undeploys your app. Redeploy and start again from Part 3</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you touch the browser</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>The build succeeded. Where is your application right now — and is it running?</li>
+      <li>Who put the three accounts into the database, and at what moment?</li>
+      <li>Why does <code>pom.xml</code> have only one dependency?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>In <code>target/globalbank-core.war</code> — one zip file. Building it does <strong>not</strong>
+          run it. Nothing is running until the server deploys it; a build is only the production of the
+          parcel.</li>
+        <li><code>LedgerInitializer</code>, in its <code>@PostConstruct</code> method — and it ran during
+          deployment, before you sent a single request, because the class is <code>@Startup</code>.</li>
+        <li>Because WildFly already provides the whole Jakarta EE API and an implementation of every
+          specification. <code>provided</code> means "the server has this; do not put a second copy in my
+          war". That is also why there is no database driver listed — the datasource belongs to the
+          server.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — DRIVE IT
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 3 · Drive the bank from the address bar</h2>
+
+  <p>The application has no web page yet — that arrives in Practical 2. For now,
+    <code>AccountServlet</code> answers on a web address and prints plain text, which is all you need to
+    see the beans working. Every address looks the same:</p>
+
+  <pre><code>http://localhost:8080/globalbank-core/account?action=&lt;what-to-do&gt;&amp;…</code></pre>
+
+  <p>The <code>?</code> begins the parameters, <code>&amp;</code> separates them, and <code>action</code>
+    says what you want. Leave <code>action</code> off entirely and it lists everything.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Look at the ledger</h4>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=all</code></pre>
+      <p><strong>You should see exactly this</strong> (spacing aside):</p>
+      <pre><code>3 account(s) in the ledger:
+  Account 1001 | Ada Lovelace | balance 1500.00 | @Version 0
+  Account 1002 | Grace Hopper | balance 250.00 | @Version 0
+  Account 1003 | Alan Turing | balance 0.00 | @Version 0</code></pre>
+      <p>Notice what is <em>missing</em> from this output. There is no connection string, no
+        <code>SELECT</code>, no <code>ResultSet</code>, no <code>while (rs.next())</code>. The servlet
+        asked a bean for a list of accounts and got objects back. Remember the last number on each line;
+        it is about to change.</p>
+    </li>
+
+    <li>
+      <h4>Deposit money, and watch a number nobody asked about</h4>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=deposit&amp;id=1001&amp;amount=250.00</code></pre>
+      <p><strong>You should see:</strong></p>
+      <pre><code>Deposited. Now: Account 1001 | Ada Lovelace | balance 1750.00 | @Version 1</code></pre>
+      <p>The balance went from <code>1500.00</code> to <code>1750.00</code>, which you expected. But
+        <code>@Version</code> went from <code>0</code> to <code>1</code>, and you never wrote a line of
+        code that touches it.</p>
+
+      <div class="plainwords"><b>In plain words</b>
+        <p><code>@Version</code> is an <strong>optimistic lock</strong> — a counter the framework keeps
+          beside every row. Every time the row changes, the counter goes up. When it writes an
+          <code>UPDATE</code>, it adds <em>"…and only if the version is still the one I read"</em> to the
+          <code>WHERE</code> clause.</p>
+        <p>Why bother? Imagine two clerks open Ada's account at the same time and both deposit £100.
+          Without the counter, the second <code>UPDATE</code> would overwrite the first and £100 would
+          vanish. With it, the second one fails loudly instead — a refused request is far better than
+          silently losing money.</p>
+      </div>
+    </li>
+
+    <li>
+      <h4>Try to take out money that is not there</h4>
+      <p>Alan Turing's account holds <code>0.00</code>. Ask for £100 anyway:</p>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=withdraw&amp;id=1003&amp;amount=100.00</code></pre>
+      <p><strong>You should see a refusal</strong>, and your browser may also show a
+        <code>400</code> status — that is deliberate:</p>
+      <pre><code>FAILED: InsufficientFundsException: Account 1003 holds 0.00, so 100.00 cannot be withdrawn</code></pre>
+      <p>Read that message carefully and you will learn three things at once. It names the exception
+        class, it says <em>why</em> in the bank's own words, and it includes the numbers involved. Your
+        future self, debugging at midnight, will thank you for writing messages like this.</p>
+      <p>Now check the ledger again with <code>?action=all</code>. Ada still holds
+        <code>1750.00</code>. Nothing was half-applied.</p>
+    </li>
+
+    <li>
+      <h4>Move money between two accounts — the real test</h4>
+      <p>A transfer is the operation that <em>needs</em> a transaction, because it changes two rows. If
+        the debit happened and the credit did not, money would simply disappear.</p>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=transfer&amp;id=1001&amp;to=1002&amp;amount=100.00</code></pre>
+      <p><strong>You should see:</strong></p>
+      <pre><code>Transferred 100.00 from 1001 (Ada Lovelace) to 1002 (Grace Hopper)
+
+Now: Account 1001 | Ada Lovelace | balance 1650.00 | @Version 2
+Now: Account 1002 | Grace Hopper | balance 350.00 | @Version 1</code></pre>
+      <p>Both balances changed, and <strong>both version numbers went up</strong>. One HTTP request, one
+        transaction, two rows. You wrote no <code>begin()</code>, no <code>commit()</code> and no
+        <code>rollback()</code> anywhere — that is what "container-managed" means.</p>
+      <p>Now make it fail. Grace has <code>350.00</code>; ask her to send £9,000:</p>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=transfer&amp;id=1002&amp;to=1001&amp;amount=9000.00</code></pre>
+      <p><strong>You should see</strong> <code>FAILED: InsufficientFundsException: …</code> — and now the
+        important part. Call <code>?action=all</code> and check <em>both</em> accounts. They are exactly
+        as they were: Ada <code>1650.00</code>, Grace <code>350.00</code>. Not a penny moved in either
+        direction.</p>
+    </li>
+
+    <li>
+      <h4>Open a brand-new account</h4>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=open&amp;holder=Your%20Name&amp;balance=500.00</code></pre>
+      <p><strong>You should see:</strong></p>
+      <pre><code>Opened: Account 2001 | Your Name | balance 500.00 | @Version 0</code></pre>
+      <p>Where did <code>2001</code> come from? Nowhere in the servlet — the servlet has no idea what an
+        account number is. It came from <code>AccountNumberGenerator</code>, the single
+        <code>@Singleton</code> counter. Open a second one and you will get <code>2002</code>.</p>
+      <p>Note the <code>%20</code> in the address. A URL cannot contain a space, so a space is written
+        <code>%20</code>. Type a plain space and the browser may cope; other tools will not.</p>
+    </li>
+  </ol>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>Read the server window while you click</b>
+      <code>persistence.xml</code> sets <code>hibernate.show_sql=true</code>, so WildFly prints the SQL it
+      generated. Do a transfer and look: you will see two <code>update accounts …</code> statements
+      appear <em>after</em> your Java method has already returned its answer. That is the commit
+      happening — the moment your in-memory changes became permanent.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you break something on purpose</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>What exactly did <code>@Version</code> prove when it went from 0 to 1?</li>
+      <li>The failed withdrawal printed <code>FAILED:</code>. Why is that better than an empty page or a
+        generic "error"?</li>
+      <li>In the failed transfer, was any money ever debited? Explain how you know.</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>That the row <strong>actually changed in the database</strong> — not just in memory. The
+          counter is bumped by the framework when it writes the <code>UPDATE</code>, so seeing it rise is
+          evidence that a write reached the database and committed.</li>
+        <li>Because it tells you <em>which rule</em> refused, <em>why</em>, and <em>with what numbers</em>.
+          You can act on it. "Error 500" makes you go hunting through log files.</li>
+        <li>No. <code>?action=all</code> afterwards showed both balances unchanged. The debit and the
+          credit were part of one transaction, and the transaction was rolled back as a unit.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 4 — BREAK IT ON PURPOSE
+       ===================================================================== -->
+
+  <span class="eyebrow">lab</span>
+  <h2>Part 4 · Break it on purpose, and learn why the rule exists</h2>
+
+  <p>In Part 3 a refusal left the ledger untouched. It is tempting to think that is automatic — that a
+    thrown exception stops everything. It is not, and this part proves it. You are going to remove one
+    word from one file, and watch the difference.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Look at the refusal first</h4>
+      <p>Open <code>src/main/java/com/globalbank/ejb/InsufficientFundsException.java</code>. The class
+        itself is almost empty; the important line is above it:</p>
+      <pre><code>@ApplicationException(rollback = true)
+public class InsufficientFundsException extends Exception {</code></pre>
+
+      <div class="plainwords"><b>In plain words</b>
+        <p>The container has a rule about exceptions, and it is the opposite of what beginners expect:</p>
+        <ul>
+          <li>An <strong>unchecked</strong> exception (a <code>RuntimeException</code>) means "something
+            went wrong that nobody planned for" — the container rolls the transaction back
+            automatically.</li>
+          <li>A <strong>checked</strong> exception means "this was anticipated; the caller will handle
+            it" — and the container leaves the transaction <em>alone</em>.</li>
+        </ul>
+        <p><code>InsufficientFundsException</code> extends <code>Exception</code>, so it is checked. The
+          container would therefore assume the transfer should still be saved. <code>rollback = true</code>
+          overrides that: <em>"no — treat this refusal as a failure and undo everything."</em></p>
+      </div>
+    </li>
+
+    <li>
+      <h4>Remove the rule</h4>
+      <p>Delete <code>(rollback = true)</code> so the line becomes just:</p>
+      <pre><code>@ApplicationException
+public class InsufficientFundsException extends Exception {</code></pre>
+      <p>Rebuild and redeploy — copy the new war over the old one and WildFly will redeploy it by
+        itself:</p>
+      <pre><code>mvn clean package
+copy target\globalbank-core.war  c:\wildfly\standalone\deployments\      REM  Windows
+cp target/globalbank-core.war    ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p>Wait for <code>Deployed "globalbank-core.war"</code> in the server window. Then check what the
+        ledger holds — remember that <code>ExampleDS</code> is in memory, so you are back to the three
+        seeded accounts:</p>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=all</code></pre>
+    </li>
+
+    <li>
+      <h4>Now try the transfer that has to fail — with extra steps</h4>
+      <p>This is the interesting part. <code>AccountService.transfer()</code> checks the balance
+        <em>before</em> changing anything, so a plain refusal still leaves nothing to undo. To see the
+        difference, you have to make the failure happen <strong>after</strong> a change.</p>
+      <p>Open <code>AccountService.java</code> and find the <code>transfer</code> method. Move the balance
+        check so it happens <em>after</em> the debit:</p>
+      <pre><code>from.setBalance(from.getBalance().subtract(amount));   // debit FIRST
+to.setBalance(to.getBalance().add(amount));            // credit
+
+if (from.getBalance().compareTo(BigDecimal.ZERO) &lt; 0) {
+    throw new InsufficientFundsException(
+            "Account " + fromId + " would be overdrawn by " + from.getBalance().abs().toPlainString());
+}</code></pre>
+      <p>Yes, this is bad code. That is the point — you are building the accident on purpose, in a safe
+        place, so you recognise it later. Rebuild, redeploy, then transfer more than Grace has:</p>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=transfer&amp;id=1002&amp;to=1001&amp;amount=9000.00</code></pre>
+      <p><strong>You should see</strong> the refusal — and now check the ledger:</p>
+      <pre><code>http://localhost:8080/globalbank-core/account?action=all</code></pre>
+      <p><strong>You should see Grace's balance has gone negative</strong> and Ada's has gone up by
+        £9,000. The bank created money out of nothing. That is exactly what a missing
+        <code>rollback = true</code> costs you.</p>
+    </li>
+
+    <li>
+      <h4>Put it back</h4>
+      <p>Restore the annotation to <code>@ApplicationException(rollback = true)</code> and move the check
+        back above the two <code>setBalance</code> calls, so the method matches the original. Rebuild,
+        redeploy, and repeat the failed transfer. This time the ledger is untouched.</p>
+      <p>Do this now — do not leave the broken version in place, or Practical 2 will start from a bug.</p>
+    </li>
+  </ol>
+
+  <div class="callout callout--key"><span class="callout__i">🔑</span>
+    <div class="callout__b"><b>The lesson, in one sentence</b>
+      A transaction is not "undone because an exception was thrown" — it is undone because
+      <strong>somebody told the container to undo it</strong>. For unchecked exceptions the container
+      decides by default; for checked ones you decide, with <code>@ApplicationException(rollback = true)</code>.
+      Knowing which of the two you have is the difference between a bank and a money printer.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <p>Answer out loud, in your own words. Then open the answers.</p>
+    <ol>
+      <li>Why did removing <code>rollback = true</code> change nothing until you moved the balance
+        check?</li>
+      <li>An unchecked <code>RuntimeException</code> escapes from a bean method. Does the transaction
+        commit or roll back, and who decided?</li>
+      <li>Which of the two changes you made was the "real fix" — the annotation, or the order of the
+        statements?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>Because the original code threw <em>before</em> changing either account. With nothing changed
+          there is nothing to roll back, so the annotation had no visible effect. The bug only appears
+          once a write happens and then the refusal follows.</li>
+        <li>It <strong>rolls back</strong>. The container decided — that is the default for unchecked
+          exceptions, and you do not have to annotate anything.</li>
+        <li>Both, and that is the honest answer. The annotation guarantees that any failure inside the
+          transaction is undone; checking the balance before you write means the common case never needs
+          undoing at all. Good code does the second and relies on the first as a safety net.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       REFERENCE
+       ===================================================================== -->
+
+  <span class="eyebrow">reference</span>
+  <h2>Reference · everything on one screen</h2>
+
+  <h3>The address cheat-sheet</h3>
+  <p>Every URL this application answers, with what each one does. Bookmark this — you will come back to it
+    while doing the challenges.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Address (after <code>http://localhost:8080/globalbank-core/account</code>)</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td><code>?action=all</code></td><td>Lists every account. This is also the default if you give no action.</td></tr>
+      <tr><td><code>?action=find&amp;id=1001</code></td><td>Shows one account.</td></tr>
+      <tr><td><code>?action=open&amp;holder=Ada&amp;balance=500.00</code></td><td>Opens a new account and returns its number.</td></tr>
+      <tr><td><code>?action=deposit&amp;id=1001&amp;amount=250.00</code></td><td>Adds money.</td></tr>
+      <tr><td><code>?action=withdraw&amp;id=1001&amp;amount=100.00</code></td><td>Takes money out, or refuses.</td></tr>
+      <tr><td><code>?action=transfer&amp;id=1001&amp;to=1002&amp;amount=100.00</code></td><td>Moves money between two accounts.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>The annotations, one line each</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Annotation</th><th>What it tells the container</th><th>Seen on</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Entity</code></td><td>"This class is a table. Map its fields onto columns."</td><td><code>Account</code></td></tr>
+      <tr><td><code>@Id</code></td><td>"This field identifies the row."</td><td><code>Account.id</code></td></tr>
+      <tr><td><code>@Version</code></td><td>"Keep a change counter here, and refuse stale writes."</td><td><code>Account.version</code></td></tr>
+      <tr><td><code>@Stateless</code></td><td>"Pool these; give one to each request."</td><td><code>AccountService</code></td></tr>
+      <tr><td><code>@Singleton</code></td><td>"Create exactly one, shared by all."</td><td><code>AccountNumberGenerator</code>, <code>LedgerInitializer</code></td></tr>
+      <tr><td><code>@Lock(LockType.WRITE)</code></td><td>"One caller at a time — this method changes state."</td><td><code>AccountNumberGenerator</code></td></tr>
+      <tr><td><code>@Startup</code></td><td>"Create me now, at deployment, not on first use."</td><td><code>LedgerInitializer</code></td></tr>
+      <tr><td><code>@PostConstruct</code></td><td>"Call this once, right after injection, before I am used."</td><td><code>LedgerInitializer.seed()</code></td></tr>
+      <tr><td><code>@PersistenceContext</code></td><td>"Give me the container's database workspace."</td><td><code>AccountService</code>, <code>LedgerInitializer</code></td></tr>
+      <tr><td><code>@EJB</code></td><td>"Inject another enterprise bean — do not <code>new</code> one."</td><td><code>AccountServlet</code></td></tr>
+      <tr><td><code>@TransactionAttribute(REQUIRED)</code></td><td>"Join the caller's transaction, or start one."</td><td><code>AccountService</code></td></tr>
+      <tr><td><code>@ApplicationException(rollback = true)</code></td><td>"If this checked exception escapes, undo the transaction."</td><td><code>InsufficientFundsException</code></td></tr>
+      <tr><td><code>@WebServlet("/account")</code></td><td>"Answer HTTP requests at this path."</td><td><code>AccountServlet</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <details>
+    <summary><strong>📄 The code, in full — click any file to read it</strong></summary>
+
+    <p><strong><code>entity/Account.java</code></strong> — the shape of an account.</p>
+    <pre><code>@Entity
+@Table(name = "accounts")
+public class Account implements Serializable {
+
+    @Id
+    private int id;
+
+    @Column(name = "holder", nullable = false, length = 60)
+    private String holder;
+
+    @Column(name = "balance", nullable = false, precision = 12, scale = 2)
+    private BigDecimal balance;
+
+    @Version
+    private int version;
+
+    protected Account() { }   // JPA needs a no-arg constructor
+
+    public Account(int id, String holder, BigDecimal openingBalance) { … }
+
+    public void setBalance(BigDecimal balance) { this.balance = balance; }
+}</code></pre>
+    <p>Notice there is a setter for the balance but not for the id or the holder. An account number never
+      changes; a balance does. The class's methods describe what is allowed to happen to it. And the
+      balance is a <code>BigDecimal</code>, never a <code>double</code> — a <code>double</code> cannot
+      store <code>0.10</code> exactly, and those tiny errors add up across millions of transactions.</p>
+
+    <p><strong><code>ejb/AccountNumberGenerator.java</code></strong> — the one counter.</p>
+    <pre><code>@Singleton
+@Lock(LockType.WRITE)
+public class AccountNumberGenerator {
+
+    private int next = 2000;
+
+    public int nextAccountNumber() {
+        return ++next;
+    }
+}</code></pre>
+    <p><code>++next</code> is not one operation — it is "read, add one, write back". Two requests doing
+      that at the same instant could both read 2000 and both write 2001, handing two customers the same
+      account number. <code>@Lock(LockType.WRITE)</code> lets one caller in at a time. A plain
+      <code>int</code> is used on purpose, so the lock is visibly the only thing keeping it safe.</p>
+
+    <p><strong><code>ejb/LedgerInitializer.java</code></strong> — the setup that runs once.</p>
+    <pre><code>@Singleton
+@Startup
+public class LedgerInitializer {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @PostConstruct
+    public void seed() {
+        Long existing = em.createQuery("SELECT COUNT(a) FROM Account a", Long.class)
+                          .getSingleResult();
+        if (existing &gt; 0) {
+            System.out.println("[Ledger] " + existing + " account(s) already present - not seeding");
+            return;
+        }
+        em.persist(new Account(1001, "Ada Lovelace", new BigDecimal("1500.00")));
+        em.persist(new Account(1002, "Grace Hopper", new BigDecimal("250.00")));
+        em.persist(new Account(1003, "Alan Turing", new BigDecimal("0.00")));
+    }
+}</code></pre>
+    <p>There is no <code>commit()</code> anywhere. The container commits when the method returns. And the
+      count check at the top makes it <em>idempotent</em> — safe to run again without creating duplicates,
+      which matters the day this points at a real database instead of an in-memory one.</p>
+
+    <p><strong><code>ejb/AccountService.java</code></strong> — the bank's rules.</p>
+    <pre><code>@Stateless
+public class AccountService {
+
+    @PersistenceContext
+    private EntityManager em;
+
+    @EJB
+    private AccountNumberGenerator numbers;
+
+    public Account find(int id) {
+        Account account = em.find(Account.class, id);
+        if (account == null) throw new IllegalArgumentException("No account with id " + id);
+        return account;
+    }
+
+    public List&lt;Account&gt; findAll() {
+        return em.createQuery("SELECT a FROM Account a ORDER BY a.id", Account.class)
+                 .getResultList();
+    }
+
+    @TransactionAttribute(TransactionAttributeType.REQUIRED)
+    public Account deposit(int id, BigDecimal amount) {
+        requirePositive(amount);
+        Account account = find(id);
+        account.setBalance(account.getBalance().add(amount));   // no update() — just change it
+        return account;
+    }
+}</code></pre>
+    <p>That string in <code>findAll</code> is <strong>JPQL</strong> — SQL written against your Java
+      classes. <code>Account</code> is the class, <code>a.id</code> is the field; JPA translates it into
+      the table and column names you mapped. And in <code>deposit</code> there is no <code>update()</code>
+      call: the EntityManager is already tracking the object, so at commit time it compares the object
+      with what it loaded and writes the <code>UPDATE</code> itself.</p>
+  </details>
+
+  <details>
+    <summary><strong>🗄️ Why there is no database to install</strong></summary>
+    <p>Three files decide where your data lives, and all three are already written:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>What it says</th></tr></thead>
+      <tbody>
+        <tr><td><code>pom.xml</code></td><td>One dependency, <code>provided</code> scope. No driver, no pool — the server supplies both.</td></tr>
+        <tr><td><code>persistence.xml</code></td><td><code>&lt;jta-data-source&gt;java:jboss/datasources/ExampleDS&lt;/jta-data-source&gt;</code> — WildFly's built-in in-memory database.</td></tr>
+        <tr><td><code>beans.xml</code></td><td><code>bean-discovery-mode="all"</code> — tells CDI to look at every class. Not strictly needed yet; Practical 2 relies on it.</td></tr>
+      </tbody>
+    </table></div>
+    <p>Schema generation is switched on with
+      <code>jakarta.persistence.schema-generation.database.action=drop-and-create</code>, which is why the
+      <code>accounts</code> table appears without you writing a single <code>CREATE TABLE</code>. On a real
+      project you would never use <code>drop-and-create</code> — it destroys your data on every deploy.
+      Here it means you always start clean.</p>
+    <p>When you are ready for a real database, the change is one line in <code>persistence.xml</code>: the
+      JNDI name of a datasource you have configured, exactly as
+      <a href="session-03-resource-creation.html">Session 3</a> describes.</p>
+  </details>
+
+  <details>
+    <summary><strong>🧰 Debugging: reading a WildFly failure without panicking</strong></summary>
+    <ol>
+      <li><strong>Find the marker file.</strong> WildFly writes a small file next to your archive in
+        <code>deployments/</code>: <code>.deployed</code> means live, <code>.failed</code> means it
+        stopped. The <code>.failed</code> file <em>is</em> the error report.</li>
+      <li><strong>Read the deepest <code>Caused by:</code>.</strong> A stack trace is a chain of
+        consequences. The first lines are what broke <em>last</em>; the last <code>Caused by:</code> in
+        the chain is the root cause. Start there, not at the top.</li>
+      <li><strong>Search your own code first.</strong> If the deepest line mentions a class of yours —
+        <code>AccountService</code>, <code>Account</code> — the problem is yours. If it mentions
+        <code>Hibernate</code> or <code>Weld</code>, it is usually configuration.</li>
+      <li><strong>Then search your configuration.</strong> <code>persistence.xml</code> in the wrong
+        folder and a mistyped JNDI name cause most of the failures beginners see.</li>
+      <li><strong>Change one thing at a time.</strong> Rebuild, redeploy, check. Two changes at once and
+        you learn nothing about either.</li>
+    </ol>
+    <p>For more on this, see <a href="16-testing.html">Testing &amp; Reading Errors</a>.</p>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       QUIZ
+       ===================================================================== -->
+
+  <span class="eyebrow">check yourself</span>
+  <section class="quiz" data-quiz>
+    <h3>Practical 1 Assessment</h3>
+    <script type="application/json">
+    [
+      {
+        "q": "In this project, which class is responsible for the rule that a transfer must debit one account and credit another?",
+        "opts": [
+          "AccountServlet — it receives the transfer request",
+          "AccountService — it holds the bank's business logic",
+          "Account — it holds the balance field",
+          "LedgerInitializer — it runs at startup"
+        ],
+        "a": 1,
+        "why": "AccountService owns the business rules. The servlet only translates an HTTP request into a method call and prints the result; it has no idea a transfer touches two accounts."
+      },
+      {
+        "q": "Why is @Lock(LockType.WRITE) required on AccountNumberGenerator.nextAccountNumber()?",
+        "opts": [
+          "Because the class is a @Singleton, and singletons always require an explicit lock",
+          "Because ++next is read-modify-write, so two concurrent callers could both hand out the same account number",
+          "Because the method returns an int, which is not thread-safe",
+          "It is not required — the container serialises every singleton method by default in all cases"
+        ],
+        "a": 1,
+        "why": "++next is three operations (read, add, write). Without a write lock two requests could both read 2000 and both write 2001, giving two customers the same account number. WRITE happens to be the default for singletons, but writing it out is what makes the intent — and the exam answer — explicit."
+      },
+      {
+        "q": "After calling ?action=deposit&amp;id=1001&amp;amount=250.00, the response showed '@Version 1'. What does that tell you?",
+        "opts": [
+          "The account has been read once since the server started",
+          "The row was actually updated in the database and the change committed",
+          "The application has been deployed once",
+          "The balance is now locked against further changes"
+        ],
+        "a": 1,
+        "why": "@Version is an optimistic-lock counter the framework increments whenever it writes an UPDATE. Seeing it rise is evidence that a write reached the database and committed — not merely that an object changed in memory."
+      },
+      {
+        "q": "InsufficientFundsException extends Exception rather than RuntimeException. Without @ApplicationException(rollback = true), what would the container do when it is thrown mid-transfer?",
+        "opts": [
+          "Roll the transaction back, because all exceptions roll back by default",
+          "Commit the transaction, because checked exceptions are assumed to be handled by the caller",
+          "Throw a DeploymentException and undeploy the application",
+          "Nothing at all, because the exception type is ignored"
+        ],
+        "a": 1,
+        "why": "Checked exceptions do not trigger an automatic rollback — the container assumes the caller will handle them. That is why an explicit rollback = true is needed; without it, a debit that happened before the refusal would be committed and money would vanish."
+      },
+      {
+        "q": "The project's pom.xml declares the Jakarta EE API with scope 'provided' and lists no database driver at all. Why does it still build and run?",
+        "opts": [
+          "Maven downloads the driver at runtime instead",
+          "WildFly already provides the Jakarta EE API, an implementation of each specification, and the ExampleDS datasource",
+          "The application does not actually use a database",
+          "provided scope means the classes are generated at deploy time"
+        ],
+        "a": 1,
+        "why": "provided means 'do not package this — the runtime already has it'. WildFly ships the Jakarta EE API, implementations such as Hibernate and Weld, and the built-in ExampleDS in-memory datasource, so the war stays small and nothing clashes."
+      },
+      {
+        "q": "You removed rollback = true and moved the balance check to AFTER the debit, then ran a transfer that had to fail. What did ?action=all show?",
+        "opts": [
+          "Both balances unchanged, because the exception still rolled everything back",
+          "The source account overdrawn and the destination credited — the transaction committed despite the refusal",
+          "A 404, because the application failed to deploy",
+          "The source account unchanged but the destination credited"
+        ],
+        "a": 1,
+        "why": "With the annotation gone the container assumed the caller would handle the checked exception, so it committed the writes that had already happened: the debit stood, the credit stood, and the bank invented money. That is precisely the accident rollback = true exists to prevent."
+      }
+    ]
+    </script>
+  </section>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
+  <span class="eyebrow">recap</span>
+  <h2>One-Line Summary</h2>
+  <div class="tablewrap summary"><table><tbody>
+    <tr><td><strong>What you built</strong></td><td>GlobalBank core — a JPA entity, a stateless service bean, a locked singleton counter, a startup seeder and a servlet front door, packaged as <code>globalbank-core.war</code>.</td></tr>
+    <tr><td><strong>Where the data lives</strong></td><td>WildFly's built-in <code>ExampleDS</code> in-memory database. Nothing to install; everything resets when the server stops.</td></tr>
+    <tr><td><strong>Who creates the beans</strong></td><td>The container. There is no <code>new AccountService()</code> anywhere in the project.</td></tr>
+    <tr><td><strong>Who writes the SQL</strong></td><td>JPA. You change the object; the <code>UPDATE</code> is written at commit time.</td></tr>
+    <tr><td><strong>What <code>@Version</code> is for</strong></td><td>Optimistic locking — it refuses a write based on a stale read instead of silently overwriting somebody else's change.</td></tr>
+    <tr><td><strong>What <code>rollback = true</code> is for</strong></td><td>Checked exceptions do not roll back by default. This annotation says "undo the transaction" — the difference between a bank and a money printer.</td></tr>
+  </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Writing <code>new AccountService()</code> in the servlet</td>
+        <td>Inject it with <code>@EJB</code> (or <code>@Inject</code>). A bean you construct yourself gets no transaction, no pooling and no injected <code>EntityManager</code> — it will fail with a <code>NullPointerException</code> on <code>em</code>.</td>
+      </tr>
+      <tr>
+        <td>Using <code>double</code> or <code>float</code> for money</td>
+        <td>Use <code>BigDecimal</code>, and build it from a <code>String</code>: <code>new BigDecimal("1500.00")</code>. The <code>BigDecimal(double)</code> constructor faithfully stores the double's error.</td>
+      </tr>
+      <tr>
+        <td>Putting <code>persistence.xml</code> beside the Java files</td>
+        <td>It belongs at <code>src/main/resources/META-INF/persistence.xml</code>, so it ends up in <code>WEB-INF/classes/META-INF/</code> inside the war.</td>
+      </tr>
+      <tr>
+        <td>Throwing a checked exception and expecting a rollback</td>
+        <td>Checked exceptions commit by default. Add <code>@ApplicationException(rollback = true)</code>.</td>
+      </tr>
+      <tr>
+        <td>Guessing why the deployment failed</td>
+        <td>Open the <code>.failed</code> marker file and read the <em>deepest</em> <code>Caused by:</code> — the last one in the chain. That is the root cause.</td>
+      </tr>
+      <tr>
+        <td>Bundling the Jakarta EE API into the war</td>
+        <td>Keep <code>&lt;scope&gt;provided&lt;/scope&gt;</code>. The server already has it, and shipping a second copy causes classloading conflicts.</td>
+      </tr>
+      <tr>
+        <td>Adding business logic to the servlet because it is "easier"</td>
+        <td>Keep the servlet a doorway. The moment a rule lives in two places, the two copies drift apart.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Nothing in this practical was written for practice only — every piece returns later in the course,
+    and in Practical 2 and 3.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>What you just used</th><th>Where it comes back</th></tr></thead>
+    <tbody>
+      <tr><td><code>@Stateless</code>, <code>@EJB</code>, container-managed beans</td><td><a href="session-01-02-intro-and-beans.html">Sessions 1–2</a> and <a href="session-06-local-remote.html">Session 6</a> (remote interfaces)</td></tr>
+      <tr><td>The JPA entity, <code>@Id</code> and JPQL</td><td><a href="13-jpa-persistence.html">JPA: Storing Objects Properly</a> and <a href="session-08-connectors.html">Session 8</a> (what JPA does underneath)</td></tr>
+      <tr><td><code>@Singleton</code>, <code>@Lock</code>, <code>@Startup</code>, <code>@PostConstruct</code></td><td><a href="session-04-working-with-ejb.html">Session 4</a></td></tr>
+      <tr><td>Transactions, <code>@ApplicationException(rollback = true)</code></td><td><a href="session-10-ejb-transactions.html">Session 10</a> — and Practical 2 adds a <code>REQUIRES_NEW</code> audit log and a bean-managed transaction</td></tr>
+      <tr><td>The <code>ExampleDS</code> datasource and <code>persistence.xml</code></td><td><a href="session-03-resource-creation.html">Session 3</a> (and Practical 3, which points the same code at a real database)</td></tr>
+      <tr><td>The <code>.war</code> you built and deployed</td><td><a href="session-14-packaging.html">Session 14</a> and <a href="session-14-tiy.html">the packaging review lab</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout callout--key"><span class="callout__i">➡️</span>
+    <div class="callout__b"><b>What comes next</b>
+      Practical 2 keeps every file you just built and adds the front door: a Facelets web page instead of
+      a plain-text servlet, a remote client, a message queue, validation on the request, and a second
+      transaction that must commit independently. Do the optional challenges in the project's
+      <code>README.md</code> first — they are short, and Practical 2 assumes you can read these classes
+      without help.</div>
+  </div>
+
+  <section class="further-study">
+    <h2>Official Guides for This Practical</h2>
+    <p>These are the primary sources behind every annotation you used. You do not need them to finish the
+      practical — but they are where to look when you want the full rule rather than the summary.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Specifications &amp; documentation:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/enterprise-beans/" target="_blank" rel="noopener">Jakarta Enterprise Beans Specification</a> — <code>@Stateless</code>, <code>@Singleton</code>, <code>@Lock</code>, <code>@Startup</code>, <code>@ApplicationException</code></li>
+          <li><a href="https://jakarta.ee/specifications/persistence/" target="_blank" rel="noopener">Jakarta Persistence Specification</a> — entities, <code>@Version</code> and JPQL</li>
+          <li><a href="https://jakarta.ee/specifications/transactions/" target="_blank" rel="noopener">Jakarta Transactions Specification</a> — container-managed transactions and rollback rules</li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly Documentation</a> — datasources, the management CLI and deployment markers</li>
+        </ul>
+        <p style="margin:.6rem 0 0">
+          <a href="index.html">Course index</a> ·
+          <a href="glossary.html">Glossary</a> ·
+          project run guide: <code>lab/practical-1-core/README.md</code>
+        </p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script src="assets/js/course.js"></script>
+<script src="assets/js/runner.js"></script>
+<script src="assets/js/terminal.js"></script>

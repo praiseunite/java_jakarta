@@ -1,97 +1,238 @@
-<title>Session 14 — Packaging Jakarta Applications</title>
+<title>Session 14 — Packaging &amp; Deploying, Explained Slowly</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Session 14: Packaging Jakarta Applications: JAR, WAR, RAR, and EAR archives, application.xml, modern Skinny WARs, WildFly deployment markers, and classloading isolation.">
+<meta name="description" content="Session 14 for complete beginners: what JAR, WAR, RAR and EAR archives are, what application.xml declares, why modern apps ship a skinny WAR with provided scope, how WildFly deploys an archive and reports its status with marker files, plus a note on classloading order.">
 <link rel="stylesheet" href="assets/css/styles.css">
 <script>window.PAGE = "s14";</script>
 
 <main class="page">
 
-  <h1>Session 14 · Packaging Jakarta Applications</h1>
-  <p class="lede">Writing code is only the first step. To run in production, enterprise components must be packaged
-    into standardized archives and deployed to an application server like WildFly. Session 14 covers the anatomy of
-    <strong>JAR</strong>, <strong>WAR</strong>, <strong>RAR</strong>, and <strong>EAR</strong> bundles, the modern
-    <strong>Skinny WAR</strong> paradigm, deployment automation, and classloading architecture.</p>
+  <h1>Session 14 · Packaging &amp; Deploying, Explained Slowly</h1>
+  <p class="lede">You have written the code. This page teaches you the step that comes next: how that
+    code is <strong>wrapped into a standard package</strong> and handed to a server so it actually runs.
+    You will meet the four Jakarta EE packages — <strong>JAR</strong>, <strong>WAR</strong>,
+    <strong>RAR</strong> and <strong>EAR</strong> — learn what goes in each, why modern apps travel
+    light, and watch WildFly pick up a package and switch it on. You do not need to have packaged
+    anything before. Every new word is explained the moment it appears.</p>
 
   <div class="callout callout--key"><span class="callout__i">🎯</span>
-    <div class="callout__b"><b>Learning Objectives (from the Presenter's Manual)</b>
+    <div class="callout__b"><b>Four promises before we start</b>
       <ol style="margin:.6rem 0 0;padding-left:1.2rem">
-        <li>Identify the four standard Jakarta EE packaging archives: <code>.jar</code>, <code>.war</code>, <code>.rar</code>, and <code>.ear</code></li>
-        <li>Deconstruct the internal layout of an Enterprise Archive (<code>.ear</code>) and configure <code>application.xml</code></li>
-        <li>Explain the modern "Skinny WAR" architecture and when to choose a standalone WAR over an EAR</li>
-        <li>Deploy applications to WildFly via CLI, Admin GUI, and file marker automation (<code>.dodeploy</code>)</li>
-        <li>Master classloading isolation, parent-first vs. child-first delegation, and <code>jboss-deployment-structure.xml</code></li>
+        <li><strong>No jargon without a translation.</strong> Each new word — <em>archive, descriptor,
+          scope, marker</em> — gets a plain-English box.</li>
+        <li><strong>Nothing is assumed.</strong> If a file or a command matters, it is explained.</li>
+        <li><strong>You can practise safely.</strong> A simulated terminal lets you type the real deploy
+          commands with zero risk and nothing installed.</li>
+        <li><strong>By the end you can take a package from your build folder to a running server</strong>
+          — and read whether it worked.</li>
       </ol>
     </div>
   </div>
 
+  <h2>What you will be able to do by the end</h2>
+  <p>Not a list copied from a manual — just these, in plain words:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>By the end you can…</th><th>Where it is taught</th></tr></thead>
+    <tbody>
+      <tr><td>Name the four Jakarta EE package types and say what goes inside each</td><td>Part 1</td></tr>
+      <tr><td>Say what an EAR bundles together, and what <code>application.xml</code> is for</td><td>Part 2</td></tr>
+      <tr><td>Decide when a single WAR is enough and when you truly need an EAR</td><td>Part 3</td></tr>
+      <tr><td>Lay out a multi-module Maven project — parent pom, modules, and the EAR assembly step</td><td>Part 3</td></tr>
+      <tr><td>Build a <code>.war</code> and deploy it to WildFly in three different ways</td><td>Part 4</td></tr>
+      <tr><td>Read WildFly's deployment markers and tell "live" from "failed" at a glance</td><td>Part 4</td></tr>
+      <tr><td>Know where to look up classloading order when a library clash bites you</td><td>Reference</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><span class="callout__i">📖</span>
+    <div class="callout__b"><b>How to read this page</b>
+      The small labels on the left of each block tell you what kind of block it is.
+      <ul style="margin:.6rem 0 0">
+        <li><code>// concept</code> — an explanation to read.</li>
+        <li><code>// try it</code> — press <strong>Run</strong> and watch a real deployment replay.</li>
+        <li><code>// terminal</code> — a pretend command line. Nothing touches your computer.</li>
+        <li><code>// checkpoint</code> — a quick self-test. Answers are hidden until you ask.</li>
+        <li><code>// check yourself</code> — the quiz.</li>
+        <li><code>// recap</code> — the one-line summary of everything.</li>
+      </ul>
+      Read it top to bottom the first time. It is written in the order that makes it easiest.
+    </div>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       14.1 The Four Archive Types
+       PART 1 — THE FOUR PACKAGE TYPES
        ===================================================================== -->
-  <span class="eyebrow">session 14.1</span>
-  <h2>Part 1 · The Four Standard Jakarta EE Archive Types</h2>
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 1 · The four ways to box up your code</h2>
+
+  <h3>1.1 You cannot hand the server a pile of loose files</h3>
+  <p>When you compile a Java project you get a scattering of <code>.class</code> files, some web pages,
+    maybe a configuration file or two. A server will not accept that heap. It wants <strong>one tidy
+    package, built to a shape it recognises</strong>.</p>
+  <p>That package is called an <strong>archive</strong>. Jakarta EE defines four kinds, and the file
+    extension on the end tells the server which kind it is looking at.</p>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p>An <strong>archive</strong> is just a ZIP file with two special things: a <strong>fixed layout
+      inside</strong> (certain folders in certain places) and a <strong>known extension</strong>
+      (<code>.jar</code>, <code>.war</code>, <code>.rar</code>, <code>.ear</code>).</p>
+    <p>The server opens the ZIP, recognises the layout, and knows exactly what to do with what it finds.</p>
+  </div>
+
+  <div class="callout callout--analogy"><span class="callout__i">📦</span>
+    <div class="callout__b"><b>Analogy — four ways to post a parcel</b>
+      Think of mailing things. A small <em>jiffy bag</em> carries loose parts to another workshop. A
+      ready-to-display <em>shop-front stand</em> is sent to the showroom. A <em>travel-plug adapter</em>
+      lets your device talk to a foreign socket. And a whole <em>removal van</em> carries all of those
+      boxes to one address in a single delivery. Four containers, four jobs — picked by what is inside
+      and where it is going.</div>
+  </div>
+
+  <h3>1.2 The four, one line each</h3>
+  <p>Here is the quick version. The full, exact contents table is in the
+    <a href="#ref">Reference</a> at the end — you do not need it to follow along.</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Archive</th><th>Full Name</th><th>Primary Contents</th><th>Typical Deployment Role</th></tr></thead>
+    <thead><tr><th>Package</th><th>In the parcel analogy</th><th>One-line job</th></tr></thead>
     <tbody>
       <tr>
-        <td><strong><code>.jar</code></strong></td>
-        <td>Java Archive</td>
-        <td>Compiled <code>.class</code> files, EJB session beans, JPA entities, <code>META-INF/beans.xml</code></td>
-        <td>Reusable business logic libraries or standalone EJB modules.</td>
+        <td><strong><code>.jar</code></strong><br><em>Java Archive</em></td>
+        <td>the jiffy bag of parts</td>
+        <td>Compiled classes, EJB session beans and JPA entities — reusable business logic with
+          <strong>no web pages</strong>.</td>
       </tr>
       <tr>
-        <td><strong><code>.war</code></strong></td>
-        <td>Web Application Archive</td>
-        <td>Servlets, JSF Facelets (<code>.xhtml</code>), static web assets, <code>WEB-INF/web.xml</code>, <code>WEB-INF/classes/</code></td>
-        <td>Web user interface tier and RESTful API endpoints.</td>
+        <td><strong><code>.war</code></strong><br><em>Web Application Archive</em></td>
+        <td>the shop-front stand</td>
+        <td>The web tier: servlets, JSF Facelets (<code>.xhtml</code>), static assets and REST
+          endpoints. <strong>This is what the Session 1 lab built</strong> (<code>hello-ejb.war</code>).</td>
       </tr>
       <tr>
-        <td><strong><code>.rar</code></strong></td>
-        <td>Resource Adapter Archive</td>
-        <td>JCA connector classes, native socket libraries, <code>META-INF/ra.xml</code></td>
-        <td>Pluggable enterprise connectors (e.g., SAP, IBM CICS adapters).</td>
+        <td><strong><code>.rar</code></strong><br><em>Resource Adapter Archive</em></td>
+        <td>the travel-plug adapter</td>
+        <td>A JCA connector that lets the server talk to an outside system (SAP, IBM CICS, a mainframe).
+          Session 8 territory.</td>
       </tr>
       <tr>
-        <td><strong><code>.ear</code></strong></td>
-        <td>Enterprise Application Archive</td>
-        <td>Contains multiple WARs, EJB JARs, RARs, shared <code>lib/</code>, and <code>META-INF/application.xml</code></td>
-        <td>Top-level enterprise suite bundling web and business tiers into one unified deployment.</td>
+        <td><strong><code>.ear</code></strong><br><em>Enterprise Application Archive</em></td>
+        <td>the removal van</td>
+        <td>A big box holding several of the above — WARs, EJB JARs, RARs and shared libraries —
+          delivered as one unit.</td>
       </tr>
     </tbody>
   </table></div>
 
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      All four are the <em>same technology</em> — a ZIP file. What differs is the <strong>layout inside
+      and the extension</strong>, and the extension is the server's instruction for how to treat the
+      contents: unpack a <code>.war</code> into a web address, load a <code>.jar</code> as a library of
+      beans, and so on.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>You cannot fake it by renaming</b>
+      Renaming <code>hello.jar</code> to <code>hello.war</code> does <strong>not</strong> turn it into a
+      web app. The server looks <em>inside</em> for the required layout — a WAR must contain a
+      <code>WEB-INF/</code> folder. Wrong layout, wrong result, no matter what the extension says.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 1 · before you move on</b>
+    <p>Answer out loud, then open the answers.</p>
+    <ol>
+      <li>What <em>is</em> an archive, underneath the fancy name?</li>
+      <li>You have built servlets and JSF pages for a web front end. Which archive do you package them in?</li>
+      <li>What is a <code>.rar</code> for?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>A <strong>ZIP file with a fixed internal layout and a known extension</strong>, which the
+          server knows how to open and run.</li>
+        <li>A <strong><code>.war</code></strong> (Web Application Archive) — the home of the web tier.</li>
+        <li>A <strong>Resource Adapter Archive</strong>: a connector that plugs the server into an
+          external enterprise system.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       14.2 The Anatomy of an EAR
+       PART 2 — THE EAR AND application.xml
        ===================================================================== -->
-  <span class="eyebrow">session 14.2</span>
-  <h2>Part 2 · The Enterprise Archive (<code>.ear</code>) &amp; <code>application.xml</code></h2>
 
-  <p>An Enterprise Archive brings multiple tiers together under a single coordinated deployment context:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 2 · The big box (EAR) and its packing list (application.xml)</h2>
 
-  <div class="code-head">Physical Structure of GlobalBank.ear</div>
+  <h3>2.1 Why bundle several packages into one</h3>
+  <p>A real application often has more than one part: a <strong>web module</strong> that draws the
+    pages, a <strong>business module</strong> (an EJB JAR) that holds the rules, and some
+    <strong>shared libraries</strong> both parts use. You could deploy each separately — but then they
+    can drift out of step, and nothing guarantees they travel together.</p>
+  <p>An <strong>EAR</strong> (Enterprise Application Archive) solves that. It wraps all those modules in
+    one box so they <strong>deploy together, version together, and share libraries</strong>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🧳</span>
+    <div class="callout__b"><b>Analogy — a suitcase with a packing list</b>
+      An EAR is a <em>suitcase</em>. Inside are smaller bags: a WAR (your clothes) and an EJB JAR (your
+      shoes), plus one shared toiletry bag everything can reach (the <code>lib/</code> folder). Taped to
+      the lid is a <em>packing list</em> that tells the airport handler what each bag is and where it
+      goes. That packing list is <code>application.xml</code>.</div>
+  </div>
+
+  <h3>2.2 What an EAR looks like inside</h3>
+  <p>Now that you know the idea, here is the actual shape of one. Read the labels on the right.</p>
+
+  <div class="code-head">Physical structure of GlobalBank.ear</div>
   <pre><code>GlobalBank.ear
 ├── META-INF/
-│   ├── application.xml        &lt;!-- Master deployment descriptor --&gt;
+│   ├── application.xml        &lt;!-- the packing list (deployment descriptor) --&gt;
 │   └── MANIFEST.MF
-├── lib/                       &lt;!-- Shared third-party libraries (accessible to all modules) --&gt;
+├── lib/                       &lt;!-- shared libraries, reachable by every module --&gt;
 │   ├── commons-lang3.jar
 │   └── postgresql-driver.jar
-├── GlobalBank-EJB.jar         &lt;!-- Business logic tier --&gt;
+├── GlobalBank-EJB.jar         &lt;!-- business-logic module --&gt;
 │   ├── com/globalbank/ejb/AccountBean.class
 │   └── META-INF/beans.xml
-└── GlobalBank-Web.war         &lt;!-- Presentation tier --&gt;
+└── GlobalBank-Web.war         &lt;!-- presentation (web) module --&gt;
     ├── login.xhtml
     ├── index.xhtml
     └── WEB-INF/
         ├── web.xml
         └── beans.xml</code></pre>
 
-  <div class="code-head">META-INF/application.xml — Master Application Descriptor</div>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      A WAR and a JAR are sitting <em>inside</em> the EAR, whole and unchanged. The EAR did not melt them
+      together — it just carries them. The shared <code>lib/</code> folder is the one new idea: it holds
+      libraries that <strong>both</strong> modules can use, stored once instead of copied into each.</div>
+  </div>
+
+  <h3>2.3 The packing list: application.xml</h3>
+  <p>A <strong>deployment descriptor</strong> is a configuration file that tells the server how to treat
+    a package. The EAR's descriptor is <code>application.xml</code>, and it lives in
+    <code>META-INF/</code>. It declares three things.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>It declares…</th><th>Which means…</th></tr></thead>
+    <tbody>
+      <tr><td>each <strong>web module</strong> and its <strong>context root</strong></td><td>"this WAR answers at the URL path <code>/globalbank</code>"</td></tr>
+      <tr><td>each <strong>EJB module</strong></td><td>"this JAR holds business beans — start it as one"</td></tr>
+      <tr><td>the <strong>shared library directory</strong></td><td>"libraries in <code>lib/</code> are available to every module"</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Here is the file those three declarations produce:</p>
+
+  <div class="code-head">META-INF/application.xml — the master descriptor</div>
   <pre><code>&lt;?xml version="1.0" encoding="UTF-8"?&gt;
 &lt;application xmlns="https://jakarta.ee/xml/ns/jakartaee" version="10"&gt;
     &lt;application-name&gt;GlobalBankApp&lt;/application-name&gt;
 
-    &lt;!-- 1. Web Module Definition with Context Root --&gt;
+    &lt;!-- 1. Web module, with the URL path it answers on --&gt;
     &lt;module&gt;
         &lt;web&gt;
             &lt;web-uri&gt;GlobalBank-Web.war&lt;/web-uri&gt;
@@ -99,70 +240,424 @@
         &lt;/web&gt;
     &lt;/module&gt;
 
-    &lt;!-- 2. EJB Business Module --&gt;
+    &lt;!-- 2. EJB business module --&gt;
     &lt;module&gt;
         &lt;ejb&gt;GlobalBank-EJB.jar&lt;/ejb&gt;
     &lt;/module&gt;
 
-    &lt;!-- 3. Shared Library Directory --&gt;
+    &lt;!-- 3. Shared library directory --&gt;
     &lt;library-directory&gt;lib&lt;/library-directory&gt;
 &lt;/application&gt;</code></pre>
 
-  <!-- =====================================================================
-       14.3 The Modern "Skinny WAR"
-       ===================================================================== -->
-  <span class="eyebrow">session 14.3</span>
-  <h2>Part 3 · The Modern "Skinny WAR" Paradigm</h2>
+  <div class="plainwords"><b>In plain words</b>
+    <p>Read it top to bottom and it says: <em>"My name is GlobalBankApp. I contain a web module —
+      serve it at <code>/globalbank</code>. I contain an EJB module — start its beans. And any JAR in
+      my <code>lib/</code> folder is shared by both."</em></p>
+    <p>That is all a descriptor is: a plain file answering the server's questions in advance.</p>
+  </div>
 
-  <p>Since the introduction of EJB 3.1 in Java EE 6, <strong>Enterprise Beans (EJBs) can be packaged directly inside a WAR</strong>.
-    You no longer need to build an EAR unless you have complex multi-module requirements:</p>
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>&lt;context-root&gt;/globalbank&lt;/context-root&gt;</code> is the single most useful line.
+      It sets the <strong>web address</strong> the application answers on, so pages live under
+      <code>http://localhost:8080/globalbank/…</code> — regardless of what the WAR file happens to be
+      called.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>Do not copy the same library into every module</b>
+      It is tempting to drop <code>postgresql-driver.jar</code> into both the WAR and the EJB JAR. Don't.
+      Put it <strong>once</strong> in the EAR's <code>lib/</code> folder (named by
+      <code>library-directory</code>). Duplicated libraries waste space and can trigger confusing
+      "class loaded twice" errors.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 2 · before you move on</b>
+    <ol>
+      <li>In one sentence, what problem does an EAR solve that deploying each module separately does not?</li>
+      <li>What is a deployment descriptor, and what is the EAR's called?</li>
+      <li>Which line in <code>application.xml</code> sets the web address, and to what?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>It makes several modules <strong>deploy, version and share libraries together</strong> as one
+          unit, so they cannot drift apart.</li>
+        <li>A configuration file telling the server how to treat the package. The EAR's is
+          <strong><code>application.xml</code></strong>, in <code>META-INF/</code>.</li>
+        <li><code>&lt;context-root&gt;</code> — here it sets the path to <strong><code>/globalbank</code></strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
+  <!-- =====================================================================
+       PART 3 — THE SKINNY WAR
+       ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2>Part 3 · Travel light — the "skinny WAR"</h2>
+
+  <h3>3.1 Why you no longer stuff everything into the box</h3>
+  <p>In the old days every application was an EAR, and teams bundled <em>every</em> library their code
+    touched inside it — including the Jakarta EE API itself. The packages grew huge. Two modern changes
+    fixed that:</p>
+  <ul>
+    <li><strong>Since EJB 3.1 (Java EE 6), enterprise beans can live directly inside a WAR.</strong> A
+      single application no longer needs an EAR at all — the beans go in
+      <code>WEB-INF/classes</code> alongside the servlets.</li>
+    <li><strong>You stop bundling what the server already has.</strong> The Jakarta EE API comes with the
+      server. Shipping your own copy inside the WAR is pointless — and, as you will see, dangerous.</li>
+  </ul>
+  <p>A WAR built this way — your code only, nothing the server already provides — is called a
+    <strong>skinny WAR</strong>.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🏨</span>
+    <div class="callout__b"><b>Analogy — packing for a hotel</b>
+      You are flying to a hotel. You do <em>not</em> pack towels, a hairdryer or soap — the hotel supplies
+      them. You pack only your own clothes. A skinny WAR packs the same way: your classes go in, but the
+      Jakarta EE "towels" are left out because the <strong>server (the hotel) supplies them</strong>.</div>
+  </div>
+
+  <h3>3.2 How you say "the server will supply this"</h3>
+  <p>You tell Maven that a dependency is needed to <em>compile</em> but must <strong>not</strong> be
+    packaged, by giving it the scope <code>provided</code>. "Scope" is simply <em>when</em> a library is
+    needed.</p>
+
+  <div class="code-head">pom.xml — the Jakarta API, marked "provided"</div>
+  <pre><code>&lt;dependency&gt;
+  &lt;groupId&gt;jakarta.platform&lt;/groupId&gt;
+  &lt;artifactId&gt;jakarta.jakartaee-api&lt;/artifactId&gt;
+  &lt;version&gt;10.0.0&lt;/version&gt;
+  &lt;scope&gt;provided&lt;/scope&gt;      &lt;!-- compile against it, but the server supplies it at runtime --&gt;
+&lt;/dependency&gt;</code></pre>
+
+  <div class="plainwords"><b>In plain words</b>
+    <p><code>&lt;scope&gt;provided&lt;/scope&gt;</code> means: <em>"I need this library to compile my code,
+      but do not put a copy in my package — the application server already has it and will provide it
+      when I run."</em></p>
+  </div>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>The one thing to notice</b>
+      <code>provided</code> is the whole trick. It keeps the Jakarta API on your <em>compile</em>
+      <a href="glossary.html#C">classpath</a> — the list of places the compiler looks for classes — so
+      your code builds and the IDE is happy, while leaving it <em>out</em> of the finished
+      <code>.war</code>. That single word is the difference between a skinny WAR and a bloated one.</div>
+  </div>
+
+  <h3>3.3 So do I still need an EAR?</h3>
+  <p>Usually, no. Here is the honest decision.</p>
 
   <div class="tablewrap"><table>
-    <thead><tr><th>Architecture Model</th><th>Package Format</th><th>When to Choose</th></tr></thead>
+    <thead><tr><th>Model</th><th>What you build</th><th>Choose it when…</th></tr></thead>
     <tbody>
       <tr>
-        <td><strong>All-in-One WAR</strong><br><em>(Modern Cloud / Microservices)</em></td>
-        <td>Single <code>.war</code> file containing EJBs, JSF, and REST in <code>WEB-INF/classes</code></td>
-        <td>Ideal for modern cloud deployments, Docker containers, and microservice architectures. Simpler Maven build.</td>
+        <td><strong>All-in-one WAR</strong><br><em>(modern cloud / microservices)</em></td>
+        <td>A single <code>.war</code> holding EJBs, JSF and REST together in
+          <code>WEB-INF/classes</code></td>
+        <td>Modern cloud deployments, Docker containers and microservices. Simpler Maven build. <strong>Start
+          here.</strong></td>
       </tr>
       <tr>
-        <td><strong>Multi-Module EAR</strong><br><em>(Traditional Enterprise)</em></td>
-        <td><code>.ear</code> containing separate <code>.war</code> and <code>.jar</code> modules</td>
-        <td>Necessary when multiple separate web frontends (e.g., Customer Portal WAR + Admin Portal WAR) share the exact same EJB business JAR.</td>
+        <td><strong>Multi-module EAR</strong><br><em>(traditional enterprise)</em></td>
+        <td>An <code>.ear</code> holding separate <code>.war</code> and <code>.jar</code> modules</td>
+        <td>Several separate web front ends (say a Customer Portal WAR + an Admin Portal WAR) must share
+          the <em>exact same</em> EJB business JAR.</td>
       </tr>
     </tbody>
   </table></div>
 
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The classic trap: the "fat" WAR</b>
+      If you forget <code>provided</code> and bundle the Jakarta API inside your WAR, you now have
+      <strong>two copies</strong> of the same classes at runtime: yours and the server's. The result is
+      ugly, intermittent failures — <code>ClassCastException</code>, <code>LinkageError</code>, or
+      "<em>loaded by a different classloader</em>" — because the same class name exists twice. The fix is
+      always the same: mark server-supplied APIs <code>provided</code> and keep the WAR skinny.</div>
+  </div>
+
+  <h3>3.4 When you do need one: the multi-module Maven project</h3>
+  <p>Section 3.3 said “choose a multi-module EAR when several front ends must share one EJB JAR.” This is
+    what that actually looks like, because it is the one packaging shape a beginner cannot guess.</p>
+
+  <p>A multi-module project is <strong>one folder holding several small projects</strong>. Each is a normal
+    Maven project with its own <code>pom.xml</code>. One extra file at the top ties them together. That is
+    the whole idea.</p>
+
+  <div class="code-head">The folder layout — three modules under one parent</div>
+  <pre><code>globalbank/                       &lt;- the parent folder. Run Maven HERE.
+├── pom.xml                       &lt;- the parent pom. packaging = pom
+│
+├── globalbank-ejb/               &lt;- module 1: the business logic
+│   ├── pom.xml                   &lt;- packaging = ejb
+│   └── src/main/java/...             AccountService.java, ...
+│
+├── globalbank-web/               &lt;- module 2: the web front end
+│   ├── pom.xml                   &lt;- packaging = war
+│   ├── src/main/java/...             AccountsBean.java, ...
+│   └── src/main/webapp/...           accounts.xhtml, ...
+│
+└── globalbank-ear/               &lt;- module 3: the box that holds the other two
+    ├── pom.xml                   &lt;- packaging = ear
+    └── src/main/application/META-INF/application.xml</code></pre>
+
+  <p>The parent pom builds nothing itself. Its one job is to <em>name its children</em>:</p>
+
+  <div class="code-head">globalbank/pom.xml — the parent (aggregator)</div>
+  <pre><code>&lt;project xmlns="http://maven.apache.org/POM/4.0.0"&gt;
+  &lt;modelVersion&gt;4.0.0&lt;/modelVersion&gt;
+
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;globalbank-parent&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+
+  &lt;!-- "pom" means: this project produces no jar, war or ear of its own.
+       It exists only to hold the modules below. --&gt;
+  &lt;packaging&gt;pom&lt;/packaging&gt;
+
+  &lt;modules&gt;
+    &lt;module&gt;globalbank-ejb&lt;/module&gt;
+    &lt;module&gt;globalbank-web&lt;/module&gt;
+    &lt;module&gt;globalbank-ear&lt;/module&gt;
+  &lt;/modules&gt;
+&lt;/project&gt;</code></pre>
+
+  <p>Now each child points back at the parent, and a child that needs another child names it as an ordinary
+    dependency. The web module needs the EJB module, so it says so:</p>
+
+  <div class="code-head">globalbank-web/pom.xml — a child module that depends on its sibling</div>
+  <pre><code>&lt;parent&gt;
+  &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+  &lt;artifactId&gt;globalbank-parent&lt;/artifactId&gt;
+  &lt;version&gt;1.0.0&lt;/version&gt;
+&lt;/parent&gt;
+
+&lt;artifactId&gt;globalbank-web&lt;/artifactId&gt;
+&lt;packaging&gt;war&lt;/packaging&gt;
+
+&lt;dependencies&gt;
+  &lt;dependency&gt;
+    &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+    &lt;artifactId&gt;globalbank-ejb&lt;/artifactId&gt;
+    &lt;version&gt;1.0.0&lt;/version&gt;
+    &lt;type&gt;ejb&lt;/type&gt;      &lt;!-- note the type: this artefact is an EJB jar --&gt;
+  &lt;/dependency&gt;
+&lt;/dependencies&gt;</code></pre>
+
+  <p>Finally the EAR module assembles the other two into one <code>.ear</code>, and the
+    <code>maven-ear-plugin</code> decides where each piece lands inside it:</p>
+
+  <div class="code-head">globalbank-ear/pom.xml — the assembly step</div>
+  <pre><code>&lt;artifactId&gt;globalbank-ear&lt;/artifactId&gt;
+&lt;packaging&gt;ear&lt;/packaging&gt;
+
+&lt;dependencies&gt;
+  &lt;dependency&gt;&lt;groupId&gt;com.globalbank&lt;/groupId&gt;&lt;artifactId&gt;globalbank-ejb&lt;/artifactId&gt;&lt;version&gt;1.0.0&lt;/version&gt;&lt;type&gt;ejb&lt;/type&gt;&lt;/dependency&gt;
+  &lt;dependency&gt;&lt;groupId&gt;com.globalbank&lt;/groupId&gt;&lt;artifactId&gt;globalbank-web&lt;/artifactId&gt;&lt;version&gt;1.0.0&lt;/version&gt;&lt;type&gt;war&lt;/type&gt;&lt;/dependency&gt;
+&lt;/dependencies&gt;
+
+&lt;build&gt;
+  &lt;plugins&gt;
+    &lt;plugin&gt;
+      &lt;artifactId&gt;maven-ear-plugin&lt;/artifactId&gt;
+      &lt;version&gt;3.3.0&lt;/version&gt;
+      &lt;configuration&gt;
+        &lt;version&gt;10&lt;/version&gt;                        &lt;!-- Jakarta EE 10 application.xml --&gt;
+
+        &lt;!-- Shared jars inside the EAR go to a folder called lib/.
+             This is the &lt;library-directory&gt; you meet in application.xml. --&gt;
+        &lt;defaultLibBundleDir&gt;lib&lt;/defaultLibBundleDir&gt;
+
+        &lt;modules&gt;
+          &lt;ejbModule&gt;
+            &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+            &lt;artifactId&gt;globalbank-ejb&lt;/artifactId&gt;
+          &lt;/ejbModule&gt;
+
+          &lt;webModule&gt;
+            &lt;groupId&gt;com.globalbank&lt;/groupId&gt;
+            &lt;artifactId&gt;globalbank-web&lt;/artifactId&gt;
+            &lt;!-- The URL folder this war answers on: /globalbank --&gt;
+            &lt;contextRoot&gt;/globalbank&lt;/contextRoot&gt;
+          &lt;/webModule&gt;
+        &lt;/modules&gt;
+      &lt;/configuration&gt;
+    &lt;/plugin&gt;
+  &lt;/plugins&gt;
+&lt;/build&gt;</code></pre>
+
+  <div class="callout callout--tip"><span class="callout__i">💡</span>
+    <div class="callout__b"><b>You only ever build from the top</b>
+      Run <code>mvn clean package</code> once, in the <strong>parent</strong> folder. Maven reads the
+      <code>&lt;modules&gt;</code> list, works out the order from the dependencies, and builds the EJB jar
+      <em>before</em> the war that needs it, and both before the ear that needs them. You never have to
+      build the modules by hand or remember the sequence — that is the main thing a multi-module project
+      buys you.</div>
+  </div>
+
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The two things that go wrong first</b>
+      <p><strong>Building in the wrong folder.</strong> If you run <code>mvn clean package</code> inside
+        <code>globalbank-web/</code> you get a war and no ear, and Maven may complain it cannot find
+        <code>globalbank-ejb</code> — because it is only in the local repository if something has installed
+        it. Build from the parent.</p>
+      <p><strong>Forgetting the <code>&lt;type&gt;</code>.</strong> Maven assumes <code>jar</code> unless
+        you say otherwise. An EJB module is <code>&lt;type&gt;ejb&lt;/type&gt;</code> and a web module is
+        <code>&lt;type&gt;war&lt;/type&gt;</code>. Leave it out and the build fails with a message about a
+        missing <code>.jar</code> that was never going to exist.</p>
+    </div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 3 · before you move on</b>
+    <ol>
+      <li>What two things make a "skinny" WAR skinny?</li>
+      <li>What does <code>&lt;scope&gt;provided&lt;/scope&gt;</code> tell Maven to do?</li>
+      <li>Name one situation where you genuinely still need an EAR.</li>
+      <li>In a multi-module project, which folder do you run <code>mvn clean package</code> in, and why?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>EJBs can live <strong>inside the WAR</strong> (since EJB 3.1), and you <strong>leave out
+          server-provided APIs</strong> instead of bundling them.</li>
+        <li>Compile against the library but <strong>do not package it</strong> — the server supplies its
+          own copy at runtime.</li>
+        <li>When <strong>two or more separate web front ends must share one identical EJB business
+          JAR</strong>.</li>
+        <li>The <strong>parent</strong> folder — the one with <code>&lt;packaging&gt;pom&lt;/packaging&gt;</code>
+          and the <code>&lt;modules&gt;</code> list. Maven then works out the build order itself: the EJB
+          jar first, then the war that depends on it, then the ear that depends on both.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       14.4 WildFly Deployment Automation & Markers
+       PART 4 — DEPLOYING TO WILDFLY (HANDS-ON)
        ===================================================================== -->
-  <span class="eyebrow">session 14.4</span>
-  <h2>Part 4 · WildFly Deployment Mechanisms &amp; Status Markers</h2>
 
-  <p>WildFly supports three standard mechanisms for deploying archives:</p>
+  <span class="eyebrow">concept</span>
+  <h2>Part 4 · Handing it to the server — deploying on WildFly</h2>
 
-  <ol>
-    <li><strong>Management CLI (Production Best Practice):</strong>
-      <pre><code>$WILDFLY_HOME/bin/jboss-cli.sh --connect --command="deploy /build/GlobalBank.ear"</code></pre>
+  <p><strong>Deploying</strong> means giving your finished archive to a running server so it starts
+    serving it. WildFly offers three ways to do that.</p>
+
+  <div class="tablewrap"><table>
+    <thead><tr><th>Way</th><th>How</th><th>Best for</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Management CLI</strong></td>
+        <td>A command-line tool: <code>jboss-cli.sh --connect</code>, then <code>deploy …</code></td>
+        <td>Production and scripts — repeatable and precise.</td>
+      </tr>
+      <tr>
+        <td><strong>2. Admin web console</strong></td>
+        <td>A browser at <code>http://localhost:9990/console</code>, under <em>Deployments → Add</em></td>
+        <td>Clicking through it once to see what is deployed.</td>
+      </tr>
+      <tr>
+        <td><strong>3. File-system scanner</strong></td>
+        <td>Copy the archive into <code>$WILDFLY_HOME/standalone/deployments/</code></td>
+        <td>Learning and fast local testing — no tool, no menus.</td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <p><strong>About <code>$WILDFLY_HOME</code>:</strong> it is the folder you unzipped WildFly into —
+    <code>C:\wildfly</code> if you followed Session 1. Substitute your own path wherever it appears.</p>
+  <p>The one-line CLI form used in production looks like this:</p>
+  <pre><code>$WILDFLY_HOME/bin/jboss-cli.sh --connect --command="deploy /build/GlobalBank.ear"</code></pre>
+
+  <h3>The folder WildFly watches</h3>
+  <p>Way 3 is the easiest to understand, so start there. WildFly keeps an eye on one special folder:</p>
+  <pre><code>$WILDFLY_HOME/standalone/deployments/</code></pre>
+  <p>Anything you drop into that folder, WildFly tries to deploy — automatically, with no further
+    command. A background part of the server called the <strong>deployment scanner</strong> is the thing
+    doing the watching.</p>
+
+  <div class="callout callout--analogy"><span class="callout__i">🚦</span>
+    <div class="callout__b"><b>Analogy — a parcel-locker status light</b>
+      The <code>deployments/</code> folder is like a parcel locker with a status light. You place your
+      parcel and press "deliver" (that is the <code>.dodeploy</code> marker). The light turns amber —
+      <em>"preparing"</em> (<code>.isdeploying</code>). Then it goes <strong>green, "delivered"</strong>
+      (<code>.deployed</code>) — or <strong>red, "failed — see the note"</strong>
+      (<code>.failed</code>). Take the parcel back and it shows <em>"returned"</em>
+      (<code>.undeployed</code>). The marker files <em>are</em> that status light.</div>
+  </div>
+
+  <h3>Rehearse the commands safely</h3>
+  <p>Before touching a real server, practise in the simulated terminal below. It runs nothing and
+    touches nothing on your computer. Type <code>help</code> first, then rehearse the real deploy flow:
+    <code>mvn clean package</code>, then
+    <code>copy target\hello-ejb.war c:\wildfly\standalone\deployments\</code>, then
+    <code>dir c:\wildfly\standalone\deployments</code> to see the markers appear. To try the grown-up
+    command line instead, use <code>deploy target/hello-ejb.war</code>, and
+    <code>undeploy hello-ejb.war</code> to take it back down again.</p>
+
+  <div class="terminal" data-terminal="deploy"></div>
+
+  <h3>Now do it for real</h3>
+  <p>Follow these steps against a running WildFly. (Need to install it first? See
+    <a href="01-setup.html">Set up your workshop</a>.) We will deploy the same
+    <code>hello-ejb.war</code> you met in Session 1.</p>
+
+  <ol class="steps">
+
+    <li>
+      <h4>Build the archive</h4>
+      <p>In the project folder, build the WAR:</p>
+      <pre><code>mvn clean package</code></pre>
+      <p>Wait for <code>BUILD SUCCESS</code>. You now have a real, deployable file at
+        <code>target/hello-ejb.war</code>.</p>
     </li>
-    <li><strong>Admin Web Console:</strong> Upload the archive via <code>http://localhost:9990/console</code> under <em>Deployments $\to$ Add</em>.</li>
-    <li><strong>File-System Auto-Deployment Scanner:</strong> Copying the archive into <code>$WILDFLY_HOME/standalone/deployments/</code>.</li>
+
+    <li>
+      <h4>Drop it into the watched folder</h4>
+      <p>Copy the WAR into WildFly's <code>deployments/</code> folder. That is the whole "deploy" —
+        no menus, no configuration:</p>
+      <pre><code>copy target\hello-ejb.war  c:\wildfly\standalone\deployments\      REM  Windows
+cp   target/hello-ejb.war  ~/wildfly/standalone/deployments/       #    macOS / Linux</code></pre>
+      <p>The deployment scanner notices the new file within a second or two and starts deploying it.</p>
+    </li>
+
+    <li>
+      <h4>Check the status light</h4>
+      <p>Look at what appeared next to your archive:</p>
+      <pre><code>dir c:\wildfly\standalone\deployments</code></pre>
+      <p>A second file has shown up — <code>hello-ejb.war.deployed</code>. That green-light marker is the
+        server telling you the application is <strong>live and serving requests</strong>. If you saw
+        <code>hello-ejb.war.failed</code> instead, open that file: it holds the stack trace explaining
+        exactly what went wrong.</p>
+    </li>
+
+    <li>
+      <h4>Deploy the production way instead (optional)</h4>
+      <p>In production nobody copies files by hand. They use the management CLI. Connect to it, then
+        deploy:</p>
+      <pre><code>deploy target/hello-ejb.war</code></pre>
+      <p>The console confirms <code>Deployed "hello-ejb.war"</code> and registers the web context
+        <code>/hello-ejb</code>. The Admin console at <code>http://localhost:9990/console</code> would do
+        the same job through a browser.</p>
+    </li>
+
+    <li>
+      <h4>Take it back down</h4>
+      <p>When you are done, undeploy it:</p>
+      <pre><code>undeploy hello-ejb.war</code></pre>
+      <p>The application stops, and WildFly marks it <code>hello-ejb.war.undeployed</code>. (With the
+        file-system method, simply deleting the WAR from <code>deployments/</code> undeploys it too.)</p>
+    </li>
+
   </ol>
 
-  <h3>WildFly Deployment Marker Files</h3>
-  <p>When using file-system deployment, WildFly creates empty marker files in the <code>deployments/</code> directory
-    to report deployment status:</p>
-
-  <div class="tablewrap"><table>
-    <thead><tr><th>Marker File</th><th>Status Meaning</th></tr></thead>
-    <tbody>
-      <tr><td><code>myapp.ear.dodeploy</code></td><td>User touches/creates this file to trigger WildFly to start deploying <code>myapp.ear</code>.</td></tr>
-      <tr><td><code>myapp.ear.isdeploying</code></td><td>WildFly is currently unpacking and parsing the archive.</td></tr>
-      <tr><td><code>myapp.ear.deployed</code></td><td>Deployment succeeded! Application is active and ready to accept traffic.</td></tr>
-      <tr><td><code>myapp.ear.failed</code></td><td>Deployment failed! Contains the stack trace describing why deployment aborted.</td></tr>
-      <tr><td><code>myapp.ear.undeployed</code></td><td>Application was successfully undeployed and stopped.</td></tr>
-    </tbody>
-  </table></div>
+  <h3>Watch a full EAR deployment play out</h3>
+  <p>The replay below traces what the server actually does when a larger archive — the
+    <code>GlobalBank.ear</code> from Part 2 — lands in the folder: it spots the <code>.dodeploy</code>
+    marker, unpacks the EAR, reads <code>application.xml</code>, starts each module, binds the beans, and
+    finally flips the marker to <code>.deployed</code>. Press <strong>Run</strong>.</p>
 
   <!-- Interactive Simulation Bench -->
   <div class="bench" data-run="canned">
@@ -192,87 +687,217 @@ Registers /globalbank Web Context -> Binds EJBs in JNDI</code></pre>
     <pre class="bench__out" aria-live="polite"></pre>
   </div>
 
+  <div class="callout callout--mistake"><span class="callout__i">⚠️</span>
+    <div class="callout__b"><b>The markers are the server's controls, not scratch files</b>
+      Do not hand-edit or casually delete marker files. Deleting <code>hello-ejb.war.deployed</code>
+      tells WildFly to <strong>undeploy</strong> the application. The markers are how you and the server
+      talk to each other — treat them as buttons, not litter.</div>
+  </div>
+
+  <div class="checkpoint"><b>Checkpoint 4 · before the quiz</b>
+    <ol>
+      <li>Name WildFly's three ways to deploy an archive.</li>
+      <li>You copied a WAR into <code>deployments/</code> and a <code>.failed</code> file appeared. What
+        does it mean, and where do you look?</li>
+      <li>What does the <code>.deployed</code> marker tell you?</li>
+    </ol>
+    <details>
+      <summary><strong>Show answers</strong></summary>
+      <ol>
+        <li>The <strong>management CLI</strong>, the <strong>Admin web console</strong>, and the
+          <strong>file-system scanner</strong> (dropping the file into <code>deployments/</code>).</li>
+        <li>Deployment <strong>failed</strong>. Open the <code>.failed</code> file — it contains the
+          <strong>stack trace</strong> describing why it aborted.</li>
+        <li>The archive deployed successfully and is <strong>live and serving requests</strong>.</li>
+      </ol>
+    </details>
+  </div>
+
+  <hr>
+
   <!-- =====================================================================
-       Knowledge Check Quiz
+       QUIZ
        ===================================================================== -->
+
   <span class="eyebrow">check yourself</span>
   <section class="quiz" data-quiz>
-    <h3>Session 14 · Knowledge Check</h3>
+    <h3>Check yourself — Session 14</h3>
     <script type="application/json">
     [
-      {
-        "q": "Which deployment descriptor serves as the master configuration file for an Enterprise Archive (.ear)?",
-        "opts": [
-          "web.xml",
-          "ejb-jar.xml",
-          "application.xml",
-          "beans.xml"
-        ],
-        "a": 2,
-        "why": "application.xml in META-INF defines the web modules, EJB modules, and shared library paths for an EAR."
-      },
-      {
-        "q": "What is the primary benefit of the modern 'Skinny WAR' approach over traditional EAR files?",
-        "opts": [
-          "WAR files can run without an operating system",
-          "EJBs and web components can be packaged together in a single archive, simplifying build scripts and Docker containerization",
-          "Skinny WARs delete the database",
-          "Skinny WARs do not use Java"
-        ],
-        "a": 1,
-        "why": "Since EJB 3.1, enterprise beans can reside directly inside a WAR, eliminating the complexity of multi-module EARs for single-app services."
-      },
-      {
-        "q": "In WildFly, which marker file indicates that an archive has been successfully deployed and is serving requests?",
-        "opts": [
-          "app.ear.dodeploy",
-          "app.ear.deployed",
-          "app.ear.isdeploying",
-          "app.ear.ok"
-        ],
-        "a": 1,
-        "why": "WildFly replaces the .dodeploy marker with .deployed when the deployment succeeds."
-      },
-      {
-        "q": "Where should shared third-party utility JARs (like Apache Commons) be placed inside an EAR file?",
-        "opts": [
-          "In the root of the EAR",
-          "In the lib/ directory specified by <library-directory> in application.xml",
-          "Inside web.xml",
-          "On the desktop"
-        ],
-        "a": 1,
-        "why": "JARs placed in the EAR's lib/ directory are automatically added to the shared classpath for all sub-modules."
-      },
-      {
-        "q": "Which archive packaging is specifically used to deploy JCA resource adapters for external enterprise backends?",
-        "opts": [
-          ".jar",
-          ".war",
-          ".rar (Resource Adapter Archive)",
-          ".ear"
-        ],
-        "a": 2,
-        "why": ".rar (Resource Adapter Archive) packages JCA connectors, configuration (ra.xml), and native libraries."
-      }
+      {"q":"Your team has built servlets, JSF pages and a REST endpoint for a web front end. Which single archive do you package them in?","opts":[".jar — Java Archive",".war — Web Application Archive",".rar — Resource Adapter Archive",".ear — Enterprise Application Archive"],"a":1,"why":"The .war (Web Application Archive) is the home of servlets, JSF Facelets, static assets and REST endpoints — the web tier."},
+      {"q":"Which file is the master packing list of an EAR, and where does it live?","opts":["web.xml, in WEB-INF","application.xml, in META-INF — it names each module and the shared library folder","beans.xml, in the EJB jar","pom.xml, in the project root"],"a":1,"why":"application.xml sits in the EAR's META-INF and declares the web modules, the EJB modules and the shared library-directory."},
+      {"q":"Inside an EAR, where do you put shared third-party JARs (like Apache Commons) so every module can use them?","opts":["In the root of the EAR","In the lib/ folder named by the library-directory entry in application.xml","Inside each module's web.xml","Nowhere — libraries cannot be shared"],"a":1,"why":"JARs placed in the EAR's lib/ directory are added to a shared classpath available to all sub-modules."},
+      {"q":"What makes a skinny WAR skinny, and why is it safe?","opts":["It removes your business logic","It leaves out the Jakarta EE API jars (marked provided) because the server supplies its own copy","It is zipped twice to save space","It drops the database driver"],"a":1,"why":"With provided scope the Jakarta API is used only to compile; at runtime the server supplies it, so you ship a lighter archive and avoid version clashes."},
+      {"q":"In WildFly's deployments folder, which marker means the archive is live and serving requests?","opts":["app.war.dodeploy","app.war.isdeploying","app.war.deployed","app.war.ok"],"a":2,"why":"WildFly renames the marker to .deployed once deployment succeeds; .dodeploy requests it and .isdeploying means it is still in progress."},
+      {"q":"Which archive type is built specifically to plug an external enterprise system (such as SAP or IBM CICS) into the server?","opts":[".jar",".war",".rar — Resource Adapter Archive",".ear"],"a":2,"why":"A .rar (Resource Adapter Archive) packages JCA connector classes, native libraries and META-INF/ra.xml."},
+      {"q":"In a multi-module Maven project, what does the parent pom's packaging value tell you?","opts":["That it produces a jar","That it produces no artefact of its own — packaging=pom means it exists only to hold and order its &lt;modules> list","That it produces an ear","That it must be deployed to WildFly"],"a":1,"why":"The parent is an aggregator: packaging=pom, a &lt;modules> list, and nothing to deploy. You run mvn clean package once in that folder and Maven orders the children itself from their dependencies."},
+      {"q":"Two modules are named as dependencies but the build fails saying a .jar cannot be found. What is the most likely cause?","opts":["Maven is not installed","The &lt;type> element is missing, so Maven looked for a .jar instead of the .ejb or .war that module actually builds","The modules are in the wrong order","The parent pom is missing its &lt;version>"],"a":1,"why":"Maven defaults a dependency's type to jar. An EJB module is &lt;type>ejb&lt;/type> and a web module is &lt;type>war&lt;/type>; without it Maven hunts for an artefact that was never built."}
     ]
     </script>
   </section>
 
+  <hr>
+
   <!-- =====================================================================
-       Summary
+       REFERENCE — optional depth, collapsed by default
        ===================================================================== -->
+
+  <span class="eyebrow">concept</span>
+  <h2 id="ref">Reference — the parts you can look up later</h2>
+  <p>None of this is needed to understand the session. It is here because exam questions and the
+    textbook use these exact terms, and you will want somewhere to check them. Open only what you need.</p>
+
+  <details>
+    <summary><strong>📦 The four archive types — full contents table</strong></summary>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Archive</th><th>Full Name</th><th>Primary Contents</th><th>Typical Deployment Role</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong><code>.jar</code></strong></td>
+          <td>Java Archive</td>
+          <td>Compiled <code>.class</code> files, EJB session beans, JPA entities, <code>META-INF/beans.xml</code></td>
+          <td>Reusable business logic libraries or standalone EJB modules.</td>
+        </tr>
+        <tr>
+          <td><strong><code>.war</code></strong></td>
+          <td>Web Application Archive</td>
+          <td>Servlets, JSF Facelets (<code>.xhtml</code>), static web assets, <code>WEB-INF/web.xml</code>, <code>WEB-INF/classes/</code></td>
+          <td>Web user interface tier and RESTful API endpoints.</td>
+        </tr>
+        <tr>
+          <td><strong><code>.rar</code></strong></td>
+          <td>Resource Adapter Archive</td>
+          <td>JCA connector classes, native socket libraries, <code>META-INF/ra.xml</code></td>
+          <td>Pluggable enterprise connectors (e.g., SAP, IBM CICS adapters).</td>
+        </tr>
+        <tr>
+          <td><strong><code>.ear</code></strong></td>
+          <td>Enterprise Application Archive</td>
+          <td>Contains multiple WARs, EJB JARs, RARs, shared <code>lib/</code>, and <code>META-INF/application.xml</code></td>
+          <td>Top-level enterprise suite bundling web and business tiers into one unified deployment.</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🗂️ application.xml — element reference</strong></summary>
+    <p>Every element you can expect in an EAR descriptor, and what it declares:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Element</th><th>What it declares</th></tr></thead>
+      <tbody>
+        <tr><td><code>&lt;application-name&gt;</code></td><td>A logical name for the whole application (used in JNDI names).</td></tr>
+        <tr><td><code>&lt;module&gt;&lt;web&gt;</code></td><td>A web module. Holds <code>&lt;web-uri&gt;</code> (the WAR file) and <code>&lt;context-root&gt;</code> (its URL path).</td></tr>
+        <tr><td><code>&lt;web-uri&gt;</code></td><td>The name of the WAR file inside the EAR.</td></tr>
+        <tr><td><code>&lt;context-root&gt;</code></td><td>The URL path the web module answers on, e.g. <code>/globalbank</code>.</td></tr>
+        <tr><td><code>&lt;module&gt;&lt;ejb&gt;</code></td><td>An EJB module — names the EJB JAR file to start.</td></tr>
+        <tr><td><code>&lt;library-directory&gt;</code></td><td>The folder (usually <code>lib</code>) whose JARs are shared by every module.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🚦 WildFly deployment marker files — the complete list</strong></summary>
+    <p>When you use file-system deployment, WildFly creates empty marker files in the
+      <code>deployments/</code> directory to report status:</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Marker File</th><th>Status Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>myapp.ear.dodeploy</code></td><td>User touches/creates this file to trigger WildFly to start deploying <code>myapp.ear</code>.</td></tr>
+        <tr><td><code>myapp.ear.isdeploying</code></td><td>WildFly is currently unpacking and parsing the archive.</td></tr>
+        <tr><td><code>myapp.ear.deployed</code></td><td>Deployment succeeded! Application is active and ready to accept traffic.</td></tr>
+        <tr><td><code>myapp.ear.failed</code></td><td>Deployment failed! Contains the stack trace describing why deployment aborted.</td></tr>
+        <tr><td><code>myapp.ear.undeployed</code></td><td>Application was successfully undeployed and stopped.</td></tr>
+      </tbody>
+    </table></div>
+  </details>
+
+  <details>
+    <summary><strong>🧬 Classloading isolation — where to look when libraries clash</strong></summary>
+    <p>Not covered in the Parts above, but listed in the objectives, and the first thing you reach for
+      when a "fat WAR" clash (Part 3) bites. The ideas in plain words:</p>
+    <ul>
+      <li><strong>Classloading isolation.</strong> Each deployment gets its own classloader, so one
+        application's libraries do not leak into another's. Two apps can safely use different versions of
+        the same library.</li>
+      <li><strong>Parent-first vs. child-first delegation.</strong> When a class is needed, which
+        classloader is asked first? <em>Parent-first</em> (WildFly's default) asks the server's modules
+        first; <em>child-first</em> asks your deployment's own copy first. The wrong order is what causes
+        the "loaded by a different classloader" errors.</li>
+      <li><strong><code>jboss-deployment-structure.xml</code>.</strong> A WildFly-specific descriptor
+        (placed in <code>META-INF/</code> or <code>WEB-INF/</code>) where you fine-tune this: add a
+        dependency on a server module, exclude one, or flip the delegation order for a troublesome
+        library.</li>
+    </ul>
+  </details>
+
+  <hr>
+
+  <!-- =====================================================================
+       RECAP
+       ===================================================================== -->
+
   <span class="eyebrow">recap</span>
-  <h2>One-Line Summary</h2>
+  <h2>One-line summary of everything</h2>
   <div class="tablewrap summary"><table><tbody>
-    <tr><td><strong>JAR, WAR, RAR</strong></td><td>Module-level archives: JAR for EJBs, WAR for Web UI/REST, RAR for JCA adapters.</td></tr>
-    <tr><td><strong>EAR Archive</strong></td><td>Top-level enterprise bundle containing WARs and JARs coordinated via <code>application.xml</code>.</td></tr>
-    <tr><td><strong>Skinny WAR</strong></td><td>Modern practice packaging EJBs, REST, and JSF into one single deployable WAR.</td></tr>
-    <tr><td><strong>Shared Libraries</strong></td><td>Stored inside the EAR's <code>lib/</code> folder and accessible across all packaged modules.</td></tr>
-    <tr><td><strong>Deployment Markers</strong></td><td>WildFly uses <code>.dodeploy</code>, <code>.isdeploying</code>, <code>.deployed</code>, and <code>.failed</code> status flags.</td></tr>
+    <tr><td>JAR / WAR / RAR</td><td>Module archives: <strong>JAR</strong> for business logic/EJBs, <strong>WAR</strong> for the web UI and REST, <strong>RAR</strong> for JCA connectors.</td></tr>
+    <tr><td>EAR</td><td>A top-level bundle of several modules plus a shared <code>lib/</code>, coordinated by <code>application.xml</code>.</td></tr>
+    <tr><td><code>application.xml</code></td><td>The EAR's packing list in <code>META-INF/</code>: names each module (and the web module's <code>context-root</code>) and the shared library folder.</td></tr>
+    <tr><td>Skinny WAR</td><td>Don't bundle what the server provides — mark the Jakarta API <code>provided</code>, and (since EJB 3.1) put EJBs right inside the WAR.</td></tr>
+    <tr><td>Three ways to deploy</td><td>WildFly CLI, the Admin console, or drop the file into <code>standalone/deployments/</code>.</td></tr>
+    <tr><td>Marker files</td><td><code>.dodeploy</code> requests, <code>.isdeploying</code> in progress, <code>.deployed</code> live, <code>.failed</code> broken (holds the trace), <code>.undeployed</code> removed.</td></tr>
+    <tr><td>Classloading (Reference)</td><td>Each deployment is isolated; WildFly is parent-first by default; tune it with <code>jboss-deployment-structure.xml</code>.</td></tr>
   </tbody></table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Common mistakes to avoid</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>❌ The mistake</th><th>✅ The fix</th></tr></thead>
+    <tbody>
+      <tr><td>Renaming a <code>.jar</code> to <code>.war</code> to "make it a web app"</td><td>Build the right archive — the server checks the inside layout (<code>WEB-INF</code>), not just the extension.</td></tr>
+      <tr><td>Bundling the Jakarta EE API inside your WAR</td><td>Mark it <code>&lt;scope&gt;provided&lt;/scope&gt;</code> — the server supplies its own copy at runtime.</td></tr>
+      <tr><td>Copying the same shared JAR into every module of an EAR</td><td>Put it once in the EAR's <code>lib/</code> folder (named by <code>library-directory</code>).</td></tr>
+      <tr><td>Building an EAR for a single, simple application</td><td>Since EJB 3.1 one skinny WAR holds EJBs + web — keep it simple.</td></tr>
+      <tr><td>Hand-editing or deleting the <code>.deployed</code> marker</td><td>Treat markers as the server's controls — deleting <code>.deployed</code> undeploys the app.</td></tr>
+      <tr><td>Ignoring a <code>.failed</code> marker</td><td>Open it — it holds the stack trace telling you exactly why deployment aborted.</td></tr>
+    </tbody>
+  </table></div>
+
+  <span class="eyebrow">concept</span>
+  <h2>Where you will meet this again</h2>
+  <p>Packaging and deployment underpin every other session — this is how all of their code reaches a
+    server:</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>From this session</th><th>Comes back in</th></tr></thead>
+    <tbody>
+      <tr><td>The <code>.war</code> you build and deploy</td><td><a href="session-01-02-intro-and-beans.html">Session 1 &amp; 2 — the hello-ejb.war lab</a></td></tr>
+      <tr><td>Servlets &amp; JSF Facelets that fill a WAR</td><td><a href="session-05-facelets.html">Session 5 — Facelets</a></td></tr>
+      <tr><td>REST endpoints inside a WAR</td><td><a href="15-rest-jaxrs.html">the REST unit</a></td></tr>
+      <tr><td><code>.rar</code> resource adapters (JCA)</td><td><a href="session-08-connectors.html">Session 8 — Connectors</a></td></tr>
+      <tr><td><code>beans.xml</code> and CDI inside archives</td><td><a href="session-11-cdi-part1.html">Session 11 — CDI Part 1</a></td></tr>
+      <tr><td>Installing the WildFly you deploy to</td><td><a href="01-setup.html">Set up your workshop</a></td></tr>
+    </tbody>
+  </table></div>
+
+  <!-- ===== GO DEEPER: OFFICIAL DOCUMENTATION ===== -->
+  <section class="further-study">
+    <h2>📖 Go deeper — the official documentation</h2>
+    <p class="fs-intro">This course explains the ideas; the specifications are where you check the exact rules. Every link below is the authoritative source. They are also stable: unlike a video, a specification page does not quietly disappear or turn out to be about something else.</p>
+
+    <div class="callout callout--docs">
+      <span class="callout__i">📖</span>
+      <div class="callout__b">
+        <strong>Official Guides &amp; Specifications:</strong>
+        <ul>
+          <li><a href="https://jakarta.ee/specifications/platform/" target="_blank" rel="noopener">Jakarta EE Platform Specification — packaging</a></li>
+          <li><a href="https://docs.wildfly.org/" target="_blank" rel="noopener">WildFly — official documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
 
 </main>
 
 <script src="assets/js/course.js"></script>
 <script src="assets/js/runner.js"></script>
+<script src="assets/js/terminal.js"></script>
