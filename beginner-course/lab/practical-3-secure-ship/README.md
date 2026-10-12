@@ -142,8 +142,8 @@ the container will not run two of them.
 Then, from WildFly's `bin` folder:
 
 ```
-standalone.bat        (Windows)
-./standalone.sh       (macOS / Linux)
+standalone.bat -c standalone-full.xml        (Windows)
+./standalone.sh -c standalone-full.xml       (macOS / Linux)
 ```
 
 Leave it running. Wait for `WildFly Full 30.0.1.Final started in …`.
@@ -368,8 +368,8 @@ file to forget.
 Add a system property to WildFly's start-up and restart it:
 
 ```
-standalone.bat -Dglobalbank.auditDepth=5        (Windows)
-./standalone.sh -Dglobalbank.auditDepth=5       (macOS / Linux)
+standalone.bat -c standalone-full.xml -Dglobalbank.auditDepth=5        (Windows)
+./standalone.sh -c standalone-full.xml -Dglobalbank.auditDepth=5       (macOS / Linux)
 ```
 
 Sign in as the manager and make a few transfers: the audit table now shows five

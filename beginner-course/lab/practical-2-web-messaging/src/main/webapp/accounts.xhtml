@@ -4,12 +4,12 @@
 
      Read this file as a list of four questions, because that is all it is:
 
-       WHAT do I show?      -> #{bank.accounts}      (the getter on AccountsBean)
-       WHAT is on the form?  -> #{bank.transfer.xxx} (the TransferRequest fields)
-       WHAT happens on click? -> #{bank.submit}      (the method on AccountsBean)
+       WHAT do I show?      -> &#35;{bank.accounts}      (the getter on AccountsBean)
+       WHAT is on the form?  -> &#35;{bank.transfer.xxx} (the TransferRequest fields)
+       WHAT happens on click? -> &#35;{bank.submit}      (the method on AccountsBean)
        WHAT went wrong?      -> h:message / h:messages
 
-     There is no loop, no lookup and no Java in here. JSF turns each #{...} into
+     There is no loop, no lookup and no Java in here. JSF turns each &#35;{...} into
      a getter or setter call and builds the page from what comes back.
 
      Session 5's taglib table applies exactly:

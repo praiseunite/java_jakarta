@@ -45,7 +45,7 @@ import java.math.BigDecimal;
  * server. Mixing them up is the single most common messaging mistake.</p>
  */
 @JMSDestinationDefinition(
-        name = "java:jboss/exported/jms/queue/TransferQueue",
+        name = "java:/jms/queue/TransferQueue",
         interfaceName = "jakarta.jms.Queue",
         destinationName = "TransferQueue",
         description = "Transfers waiting to be carried out in the background")

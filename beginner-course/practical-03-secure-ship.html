@@ -1219,8 +1219,8 @@ String bankName = "GlobalBank";</code></pre>
     <li>
       <h4>Change the audit depth without touching the code</h4>
       <p>Restart WildFly with a system property:</p>
-      <pre><code>standalone.bat -Dglobalbank.auditDepth=5        REM  Windows
-./standalone.sh -Dglobalbank.auditDepth=5       #    macOS / Linux</code></pre>
+      <pre><code>standalone.bat -c standalone-full.xml -Dglobalbank.auditDepth=5        REM  Windows
+./standalone.sh -c standalone-full.xml -Dglobalbank.auditDepth=5       #    macOS / Linux</code></pre>
       <p>Sign in as the manager and make a few transfers. <strong>You should see</strong> the audit table
         show five lines instead of twenty-five. Remove the property and it returns to the default.</p>
       <p>Read <code>BankConfiguration.auditDepth()</code> — this is the <code>@Produces</code>

@@ -108,8 +108,8 @@ If any are missing, work through [Set up your workshop](../../01-setup.html).
 From WildFly's `bin` folder:
 
 ```
-standalone.bat        (Windows)
-./standalone.sh       (macOS / Linux)
+standalone.bat -c standalone-full.xml        (Windows)
+./standalone.sh -c standalone-full.xml       (macOS / Linux)
 ```
 
 Leave it running. Wait for `WildFly Full 30.0.1.Final started in …`.

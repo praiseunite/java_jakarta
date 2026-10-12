@@ -7,6 +7,7 @@ import jakarta.annotation.security.DeclareRoles;
 import jakarta.annotation.security.PermitAll;
 import jakarta.annotation.security.RolesAllowed;
 import jakarta.ejb.EJB;
+import jakarta.ejb.LocalBean;
 import jakarta.ejb.Stateless;
 import jakarta.ejb.TransactionAttribute;
 import jakarta.ejb.TransactionAttributeType;
@@ -60,6 +61,7 @@ import java.util.List;
  * and mean something completely different to the next person reading the file.
  * Say what you mean.</p>
  */
+@LocalBean
 @Stateless
 @Logged
 @DeclareRoles({"CUSTOMER", "BANK_MANAGER"})

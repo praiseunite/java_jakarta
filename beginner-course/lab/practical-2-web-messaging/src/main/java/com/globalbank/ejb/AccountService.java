@@ -2,6 +2,7 @@ package com.globalbank.ejb;
 
 import com.globalbank.entity.Account;
 import jakarta.ejb.EJB;
+import jakarta.ejb.LocalBean;
 import jakarta.ejb.Stateless;
 import jakarta.ejb.TransactionAttribute;
 import jakarta.ejb.TransactionAttributeType;
@@ -23,6 +24,7 @@ import java.util.List;
  * write SQL</strong>. You load an object, change it, and the container writes
  * the UPDATE when the transaction commits.</p>
  */
+@LocalBean
 @Stateless
 public class AccountService implements AccountServiceRemote {
 
